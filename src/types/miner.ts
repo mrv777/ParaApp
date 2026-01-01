@@ -19,6 +19,16 @@ export type MinerWarningType =
 export type WarningSeverity = 'caution' | 'danger';
 
 /**
+ * Sort options for miners list
+ */
+export type MinerSortOption = 'name' | 'hashrate' | 'temp' | 'status';
+
+/**
+ * Filter options for miners list
+ */
+export type MinerFilterOption = 'all' | 'online' | 'offline' | 'warning';
+
+/**
  * Miner warning state
  */
 export interface MinerWarning {

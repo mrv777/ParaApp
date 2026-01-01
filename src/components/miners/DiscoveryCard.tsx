@@ -32,6 +32,7 @@ export interface DiscoveryCardProps {
   onStopScan: () => void;
   onAddManualIp: (ip: string) => Promise<boolean>;
   onScanRange: (subnet: string, start: number, end: number) => void;
+  onClose?: () => void;
   className?: string;
 }
 
@@ -43,6 +44,7 @@ export function DiscoveryCard({
   onStopScan,
   onAddManualIp,
   onScanRange,
+  onClose,
   className = '',
 }: DiscoveryCardProps) {
   const [manualIp, setManualIp] = useState('');
@@ -151,6 +153,18 @@ export function DiscoveryCard({
         <Text variant="subtitle" className="ml-2 flex-1">
           Discover Miners
         </Text>
+        {onClose && !isDiscovering && (
+          <Pressable
+            onPress={() => {
+              haptics.light();
+              onClose();
+            }}
+            className="p-1 -mr-1"
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={20} color={colors.textMuted} />
+          </Pressable>
+        )}
       </View>
 
       {/* Auto-scan section */}

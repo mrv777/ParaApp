@@ -16,10 +16,26 @@ import {
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { tempThresholds } from '@/constants/theme';
-import type { LocalMiner } from '@/types';
+import type { LocalMiner, MinerWarning, MinerWarningType } from '@/types';
+
+/**
+ * Get short label for warning type
+ */
+function getWarningLabel(type: MinerWarningType): string {
+  const labels: Record<MinerWarningType, string> = {
+    temp_caution: 'Warm',
+    temp_danger: 'Hot!',
+    overheat: 'Overheat',
+    power_fault: 'Power',
+    low_hashrate: 'Low HR',
+    offline: 'Offline',
+  };
+  return labels[type] || type;
+}
 
 export interface MinerRowProps {
   miner: LocalMiner;
+  warnings?: MinerWarning[];
   onPress?: () => void;
   onDelete: () => void;
   isLoading?: boolean;
@@ -28,6 +44,7 @@ export interface MinerRowProps {
 
 export function MinerRow({
   miner,
+  warnings,
   onPress,
   onDelete,
   isLoading = false,
@@ -93,6 +110,26 @@ export function MinerRow({
           )}
         </View>
 
+        {/* Warning badges */}
+        {warnings && warnings.length > 0 && (
+          <View className="flex-row gap-1 mt-1">
+            {warnings.slice(0, 2).map((w, i) => (
+              <Badge
+                key={i}
+                variant={w.severity === 'danger' ? 'danger' : 'warning'}
+                size="sm"
+              >
+                {getWarningLabel(w.type)}
+              </Badge>
+            ))}
+            {warnings.length > 2 && (
+              <Badge variant="default" size="sm">
+                +{warnings.length - 2}
+              </Badge>
+            )}
+          </View>
+        )}
+
         {/* Stats row */}
         {miner.isOnline ? (
           <View className="flex-row items-center gap-4 mt-1">
@@ -106,6 +143,10 @@ export function MinerRow({
               {formatPower(miner.power)}
             </Text>
           </View>
+        ) : isLoading ? (
+          <Text variant="caption" color="muted" className="mt-1">
+            Connecting...
+          </Text>
         ) : (
           <Text variant="caption" color="muted" className="mt-1">
             Offline
