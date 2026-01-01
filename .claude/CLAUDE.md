@@ -17,11 +17,12 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 **Key Directories:**
 - `/src/screens/` - Screen components
 - `/src/components/` - Reusable UI components
+- `/src/components/miners/` - Miner discovery & list components
 - `/src/navigation/` - Stack navigators (HomeStack)
 - `/src/store/` - Zustand stores (pool, user, miner, settings)
 - `/src/api/` - API clients (parasite, bitaxe, mempool)
 - `/src/hooks/` - Custom hooks (polling, app state)
-- `/src/utils/` - Utilities (formatting, validation, haptics)
+- `/src/utils/` - Utilities (formatting, validation, discovery, haptics)
 - `/src/types/` - TypeScript interfaces
 - `/src/constants/` - Theme, colors, config
 
@@ -36,8 +37,16 @@ pnpm exec expo install --fix  # Fix package versions
 
 ## Current Phase
 
-**Phase:** 2 - Complete
-**Status:** Ready for Phase 3 (Miner Management)
+**Phase:** 3A - Complete (Miner Discovery)
+**Status:** Ready for Phase 3B (Miners List Screen)
+
+**Phase 3A Completed:**
+- Miner auto-discovery with 50 concurrent connections
+- Manual IP entry with validation
+- Custom IP range scanning
+- Real-time progress indicator
+- Swipe-to-delete functionality
+- Miners persisted in Zustand + AsyncStorage
 
 See `IMPLEMENTATION.md` for phase details and prompts.
 

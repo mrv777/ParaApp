@@ -12,8 +12,11 @@ import type {
   MinerSettings,
   SavedMiner,
   BitaxeSystemInfo,
+  DiscoveryProgress,
+  DiscoveryOptions,
 } from '@/types';
 import { bitaxe, isSuccess } from '@/api';
+import { scanSubnet } from '@/utils/discovery';
 import { tempThresholds } from '@/constants/theme';
 
 interface MinerState {
@@ -23,10 +26,11 @@ interface MinerState {
   // Saved miners (persisted)
   savedMiners: SavedMiner[];
 
-  // Discovery state (structure only - scanning logic in Phase 3)
+  // Discovery state
   isDiscovering: boolean;
-  discoveryProgress: number;
+  discoveryProgress: DiscoveryProgress | null;
   discoveredIps: string[];
+  discoveryError: string | null;
 
   // Loading states
   isLoading: boolean;
@@ -55,11 +59,11 @@ interface MinerActions {
   // Warning helpers
   getWarnings: (miner: LocalMiner) => MinerWarning[];
 
-  // Discovery stubs (actual scanning in Phase 3)
-  startDiscovery: (subnet?: string) => void;
+  // Discovery actions
+  startDiscovery: (options?: DiscoveryOptions) => void;
   stopDiscovery: () => void;
   addDiscoveredIp: (ip: string) => void;
-  clearDiscoveredIps: () => void;
+  clearDiscovery: () => void;
 
   // Error handling
   clearError: () => void;
@@ -69,12 +73,16 @@ const initialState: MinerState = {
   miners: [],
   savedMiners: [],
   isDiscovering: false,
-  discoveryProgress: 0,
+  discoveryProgress: null,
   discoveredIps: [],
+  discoveryError: null,
   isLoading: false,
   loadingMiners: new Set(),
   error: null,
 };
+
+// Module-level reference for discovery abort controller
+let discoveryController: AbortController | null = null;
 
 /**
  * Parse Bitaxe system info into LocalMiner format
@@ -313,13 +321,55 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         return warnings;
       },
 
-      // Discovery stubs (Phase 3)
-      startDiscovery: () => {
-        set({ isDiscovering: true, discoveryProgress: 0, discoveredIps: [] });
-        // Actual scanning logic will be added in Phase 3
+      // Discovery actions
+      startDiscovery: (options) => {
+        // Stop any existing discovery
+        if (discoveryController) {
+          discoveryController.abort();
+        }
+
+        // Reset discovery state
+        set({
+          isDiscovering: true,
+          discoveryProgress: { scanned: 0, total: 254, found: 0 },
+          discoveredIps: [],
+          discoveryError: null,
+        });
+
+        const { addMiner } = get();
+
+        // Start the subnet scan
+        discoveryController = scanSubnet(
+          {
+            onProgress: (progress) => {
+              set({ discoveryProgress: progress });
+            },
+            onFound: async (ip) => {
+              // Add to discovered list immediately for UI
+              set((state) => ({
+                discoveredIps: [...state.discoveredIps, ip],
+              }));
+              // Auto-save the miner
+              await addMiner(ip);
+            },
+            onComplete: () => {
+              set({ isDiscovering: false });
+              discoveryController = null;
+            },
+            onError: (error) => {
+              set({ isDiscovering: false, discoveryError: error });
+              discoveryController = null;
+            },
+          },
+          options
+        );
       },
 
       stopDiscovery: () => {
+        if (discoveryController) {
+          discoveryController.abort();
+          discoveryController = null;
+        }
         set({ isDiscovering: false });
       },
 
@@ -329,8 +379,12 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         }));
       },
 
-      clearDiscoveredIps: () => {
-        set({ discoveredIps: [], discoveryProgress: 0 });
+      clearDiscovery: () => {
+        set({
+          discoveredIps: [],
+          discoveryProgress: null,
+          discoveryError: null,
+        });
       },
 
       clearError: () => set({ error: null }),
@@ -379,6 +433,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
 // Selectors
 export const selectMiners = (state: MinerState) => state.miners;
+export const selectSavedMiners = (state: MinerState) => state.savedMiners;
 export const selectOnlineMiners = (state: MinerState) =>
   state.miners.filter((m) => m.isOnline);
 export const selectOfflineMiners = (state: MinerState) =>
@@ -391,6 +446,9 @@ export const selectMinersWithWarnings = (state: MinerState) =>
 export const selectIsDiscovering = (state: MinerState) => state.isDiscovering;
 export const selectDiscoveryProgress = (state: MinerState) =>
   state.discoveryProgress;
+export const selectDiscoveryError = (state: MinerState) => state.discoveryError;
+export const selectDiscoveredIps = (state: MinerState) => state.discoveredIps;
 export const selectMinerError = (state: MinerState) => state.error;
+export const selectIsLoading = (state: MinerState) => state.isLoading;
 export const selectIsMinerLoading = (state: MinerState, ip: string) =>
   state.loadingMiners.has(ip);

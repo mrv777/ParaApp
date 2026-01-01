@@ -148,3 +148,29 @@ export interface SavedMiner {
   /** Last known best diff (shown when offline) */
   lastBestDiff?: number;
 }
+
+/**
+ * Discovery progress state
+ */
+export interface DiscoveryProgress {
+  /** Number of IPs scanned so far */
+  scanned: number;
+  /** Total number of IPs to scan */
+  total: number;
+  /** Number of miners found */
+  found: number;
+}
+
+/**
+ * Discovery options for subnet scanning
+ */
+export interface DiscoveryOptions {
+  /** Override auto-detected subnet (e.g., "192.168.1") */
+  subnet?: string;
+  /** Start of IP range (1-254), default: 1 */
+  startIp?: number;
+  /** End of IP range (1-254), default: 254 */
+  endIp?: number;
+  /** Concurrent connections, default: 50 */
+  concurrency?: number;
+}

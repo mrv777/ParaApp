@@ -55,15 +55,20 @@ If issues are found, run `pnpm expo install --fix` to automatically update packa
 
 ```
 src/
-  screens/      # Screen components (Home, Pool, Miners, Settings)
-  components/   # Reusable UI components
-  store/        # Zustand stores
-  api/          # API clients (Parasite Pool, Bitaxe, Mempool)
-  types/        # TypeScript interfaces
-  hooks/        # Custom React hooks
-  utils/        # Utility functions
-  i18n/         # Internationalization
-  constants/    # Theme, colors, config values
+  screens/        # Screen components (Home, Pool, Miners, Settings)
+  components/     # Reusable UI components
+    charts/       # Chart components (HashrateChart, etc.)
+    home/         # Home screen components
+    miners/       # Miner management components (DiscoveryCard, MinerRow)
+    pool/         # Pool screen components
+    navigation/   # Navigation components (TabBar)
+  store/          # Zustand stores (pool, user, miner, settings)
+  api/            # API clients (Parasite Pool, Bitaxe, Mempool)
+  types/          # TypeScript interfaces
+  hooks/          # Custom React hooks (polling, app state)
+  utils/          # Utility functions (formatting, validation, discovery)
+  i18n/           # Internationalization
+  constants/      # Theme, colors, config values
 ```
 
 ## Documentation

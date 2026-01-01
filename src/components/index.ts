@@ -40,3 +40,6 @@ export * from './pool';
 
 // Home components
 export * from './home';
+
+// Miner components
+export * from './miners';

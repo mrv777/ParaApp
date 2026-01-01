@@ -397,7 +397,7 @@ git tag phase-2-complete
 
 **Duration:** ~4-5 sessions
 
-### Session 3A: Miner Discovery
+### Session 3A: Miner Discovery ✅ COMPLETE
 
 #### Prompt
 
@@ -420,12 +420,20 @@ Reference SPEC.md Discovery & Setup section.
 ```
 
 #### Deliverables
-- [ ] Subnet detection
-- [ ] Background network scan with progress
-- [ ] Real-time miner discovery display
-- [ ] Manual IP entry
-- [ ] Miner persistence
-- [ ] Remove miner function
+- [x] Subnet detection
+- [x] Background network scan with progress
+- [x] Real-time miner discovery display
+- [x] Manual IP entry
+- [x] Miner persistence
+- [x] Remove miner function
+
+#### Implementation Notes
+- Created `/src/utils/discovery.ts` with worker pool pattern (50 concurrent connections)
+- Created `/src/components/miners/` with DiscoveryCard, MinerRow, EmptyMinersState
+- Updated `/src/store/minerStore.ts` with full discovery implementation
+- Implemented `/src/screens/MinersScreen.tsx` with inline discovery UI
+- Added swipe-to-delete via react-native-gesture-handler
+- Custom IP range parsing in `/src/utils/validation.ts`
 
 ### Session 3B: Miners List Screen
 

@@ -94,3 +94,69 @@ export function extractSubnet(ip: string): string | null {
   const parts = ip.split('.');
   return `${parts[0]}.${parts[1]}.${parts[2]}`;
 }
+
+/**
+ * Parse IP range string into components for discovery
+ * Supports formats:
+ * - "192.168.1.1-100" (same subnet shorthand)
+ * - "192.168.1.1 - 192.168.1.100" (full range)
+ * - "192.168.1.50-192.168.1.150" (no spaces)
+ * @param rangeStr - IP range string
+ * @returns Parsed range object or null if invalid
+ */
+export function parseIpRange(rangeStr: string): {
+  subnet: string;
+  start: number;
+  end: number;
+} | null {
+  if (!rangeStr || typeof rangeStr !== 'string') return null;
+
+  // Normalize: remove extra spaces, trim
+  const normalized = rangeStr.replace(/\s+/g, '').trim();
+
+  // Check for shorthand format: "192.168.1.1-100"
+  const shorthandMatch = normalized.match(
+    /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})-(\d{1,3})$/
+  );
+  if (shorthandMatch) {
+    const subnet = shorthandMatch[1];
+    const start = parseInt(shorthandMatch[2], 10);
+    const end = parseInt(shorthandMatch[3], 10);
+
+    // Validate subnet parts
+    const subnetParts = subnet.split('.').map(Number);
+    if (subnetParts.some((p) => p < 0 || p > 255)) return null;
+
+    // Validate range
+    if (start < 1 || start > 254 || end < 1 || end > 254) return null;
+    if (start > end) return null;
+
+    return { subnet, start, end };
+  }
+
+  // Check for full format: "192.168.1.1-192.168.1.100"
+  const fullMatch = normalized.match(
+    /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})-(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})$/
+  );
+  if (fullMatch) {
+    const subnet1 = fullMatch[1];
+    const start = parseInt(fullMatch[2], 10);
+    const subnet2 = fullMatch[3];
+    const end = parseInt(fullMatch[4], 10);
+
+    // Subnets must match
+    if (subnet1 !== subnet2) return null;
+
+    // Validate subnet parts
+    const subnetParts = subnet1.split('.').map(Number);
+    if (subnetParts.some((p) => p < 0 || p > 255)) return null;
+
+    // Validate range
+    if (start < 1 || start > 254 || end < 1 || end > 254) return null;
+    if (start > end) return null;
+
+    return { subnet: subnet1, start, end };
+  }
+
+  return null;
+}
