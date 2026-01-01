@@ -1,4 +1,5 @@
 import './global.css';
+import '@/i18n'; // Initialize i18n
 
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';

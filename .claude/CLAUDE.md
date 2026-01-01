@@ -40,9 +40,9 @@ pnpm expo install --fix  # Fix package versions to match Expo SDK
 
 ## Current Phase
 
-**Phase:** 1A - Complete
-**Session:** Navigation Structure
-**Status:** Ready for Phase 1B (Base UI Components)
+**Phase:** 1B - Complete
+**Session:** State & API Foundation
+**Status:** Ready for Phase 2 (Pool Monitoring)
 
 ## Implementation Phases
 
@@ -124,6 +124,24 @@ pnpm expo install --fix  # Fix package versions to match Expo SDK
 - Dark theme navigation configuration
 - Fallback icons for unknown routes (defensive coding)
 
+### Phase 1B (Complete)
+- API client layer with timeout/retry logic:
+  - `client.ts` - Base fetch with timeout, retries, exponential backoff
+  - `parasite.ts` - Parasite Pool API (stats, historical, leaderboard, user)
+  - `bitaxe.ts` - Local Bitaxe miner API (system info, settings, controls)
+  - `mempool.ts` - Mempool.space API (BTC price, fees, block height)
+- Zustand stores with persistence:
+  - `poolStore.ts` - Pool stats, leaderboard, historical data
+  - `userStore.ts` - User stats, worker data, visibility
+  - `minerStore.ts` - Local miner management, warnings, discovery stubs
+  - `settingsStore.ts` - App preferences, Bitcoin address, persistence
+- TypeScript types for all API responses and data models
+- i18n infrastructure with English translations
+- Utility functions:
+  - `formatting.ts` - Hashrate, difficulty, temperature, timestamps
+  - `validation.ts` - Bitcoin address validation (all formats)
+- New dependency: `bitcoinjs-lib` for address validation
+
 ## Verification Notes
 
 ### Phase 0
@@ -137,3 +155,9 @@ pnpm expo install --fix  # Fix package versions to match Expo SDK
 - ESLint: passes (`pnpm lint`)
 - Navigation works between all 4 tabs
 - Custom TabBar renders with correct icons
+
+### Phase 1B
+- TypeScript: passes (`pnpm typecheck`)
+- ESLint: passes (`pnpm lint`)
+- All stores properly typed with actions and selectors
+- API clients have consistent error handling via ApiResult<T>
