@@ -2,19 +2,18 @@
  * HomeMainScreen - Main home screen with user stats or pool preview
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
-import { PoolSummaryCard } from '@/components/home/PoolSummaryCard';
+import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
 import { usePoolPolling, useUserPolling } from '@/hooks';
 import {
   usePoolStore,
-  selectPoolStats,
   selectPoolError,
 } from '@/store/poolStore';
 import {
@@ -24,7 +23,8 @@ import {
   selectIsUserLoading,
   selectUserError,
 } from '@/store/userStore';
-import { useSettingsStore, selectHasAddress } from '@/store/settingsStore';
+import { useSettingsStore, selectHasAddress, selectWorkerSortOrder } from '@/store/settingsStore';
+import { sortWorkers } from '@/utils/sorting';
 import { colors } from '@/constants/colors';
 import type { HomeStackScreenProps } from '@/types/navigation';
 
@@ -35,9 +35,9 @@ export function HomeMainScreen({ navigation }: Props) {
 
   // Settings store
   const hasAddress = useSettingsStore(selectHasAddress);
+  const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
 
-  // Pool store (for preview when no address)
-  const poolStats = usePoolStore(selectPoolStats);
+  // Pool store
   const poolError = usePoolStore(selectPoolError);
   const isPoolLoading = usePoolStore((s) => s.isLoading);
   const refreshPool = usePoolStore((s) => s.refreshAll);
@@ -50,6 +50,12 @@ export function HomeMainScreen({ navigation }: Props) {
   const userError = useUserStore(selectUserError);
   const refreshUser = useUserStore((s) => s.refreshAll);
   const clearUserError = useUserStore((s) => s.clearError);
+
+  // Sort workers based on user preference (memoized for referential equality)
+  const sortedWorkers = useMemo(
+    () => sortWorkers(workers, workerSortOrder),
+    [workers, workerSortOrder]
+  );
 
   // Initialize polling
   usePoolPolling();
@@ -85,6 +91,9 @@ export function HomeMainScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+      {/* Pool Stats Bar - Always visible at top */}
+      <PoolStatsBar />
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -104,31 +113,27 @@ export function HomeMainScreen({ navigation }: Props) {
             message={error.message}
             onRetry={handleRefresh}
             onDismiss={clearError}
-            className="mx-4 mt-4"
+            className="mx-4 mt-2"
           />
         )}
 
         {hasAddress ? (
           /* With Address: Show user stats and workers */
-          <View className="px-4 pt-4 gap-4">
+          <View className="px-4 pt-3 gap-3">
             <UserStatsCard
               stats={userStats ?? null}
               isLoading={isUserLoading}
             />
             <WorkersPreviewCard
-              workers={workers}
+              workers={sortedWorkers}
               onViewAll={handleViewAllWorkers}
               isLoading={isUserLoading}
               connectionStatus={connectionStatus}
             />
           </View>
         ) : (
-          /* Without Address: Show pool preview and add address CTA */
-          <View className="px-4 pt-4 gap-4">
-            <PoolSummaryCard
-              stats={poolStats ?? null}
-              isLoading={isPoolLoading}
-            />
+          /* Without Address: Show add address CTA */
+          <View className="px-4 pt-3 gap-3">
             <AddAddressPrompt onPress={handleAddAddress} />
           </View>
         )}

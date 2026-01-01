@@ -20,13 +20,13 @@ export function UserStatsCard({ stats, isLoading = false, className = '' }: User
   const showSkeleton = isLoading && !stats;
 
   return (
-    <Card className={className}>
-      <Text variant="subtitle" className="mb-4">
-        Your Mining Stats
+    <Card padding="sm" className={className}>
+      <Text variant="subtitle" className="mb-2 text-base">
+        Mining Stats
       </Text>
 
       {showSkeleton ? (
-        <View className="gap-4">
+        <View className="gap-3">
           <SkeletonStatItem />
           <View className="flex-row gap-3">
             <View className="flex-1">
@@ -41,7 +41,7 @@ export function UserStatsCard({ stats, isLoading = false, className = '' }: User
           </View>
         </View>
       ) : (
-        <View className="gap-4">
+        <View className="gap-3">
           {/* Primary hashrate */}
           <StatItem
             icon="speedometer-outline"

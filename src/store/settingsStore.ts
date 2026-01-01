@@ -8,11 +8,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { TemperatureUnit } from '@/utils/formatting';
 
 export type PollingInterval = 5000 | 10000 | 20000 | 30000;
+export type WorkerSortOrder = 'hashrate' | 'name' | 'bestDiff';
 
 interface SettingsState {
   // User preferences
   temperatureUnit: TemperatureUnit;
   pollingInterval: PollingInterval;
+  workerSortOrder: WorkerSortOrder;
 
   // User Bitcoin address (persisted)
   bitcoinAddress: string | null;
@@ -31,6 +33,7 @@ interface SettingsState {
 interface SettingsActions {
   setTemperatureUnit: (unit: TemperatureUnit) => void;
   setPollingInterval: (interval: PollingInterval) => void;
+  setWorkerSortOrder: (order: WorkerSortOrder) => void;
   setBitcoinAddress: (address: string | null) => void;
   setPublicOnLeaderboard: (isPublic: boolean) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
@@ -40,6 +43,7 @@ interface SettingsActions {
 const initialState: SettingsState = {
   temperatureUnit: 'celsius',
   pollingInterval: 10000,
+  workerSortOrder: 'hashrate',
   bitcoinAddress: null,
   isPublicOnLeaderboard: true,
   lastPoolFetch: null,
@@ -55,6 +59,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setTemperatureUnit: (unit) => set({ temperatureUnit: unit }),
 
       setPollingInterval: (interval) => set({ pollingInterval: interval }),
+
+      setWorkerSortOrder: (order) => set({ workerSortOrder: order }),
 
       setBitcoinAddress: (address) => set({ bitcoinAddress: address }),
 
@@ -78,6 +84,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       partialize: (state) => ({
         temperatureUnit: state.temperatureUnit,
         pollingInterval: state.pollingInterval,
+        workerSortOrder: state.workerSortOrder,
         bitcoinAddress: state.bitcoinAddress,
         isPublicOnLeaderboard: state.isPublicOnLeaderboard,
       }),
@@ -98,3 +105,5 @@ export const selectBitcoinAddress = (state: SettingsState) =>
 export const selectIsHydrated = (state: SettingsState) => state.isHydrated;
 export const selectHasAddress = (state: SettingsState) =>
   state.bitcoinAddress !== null && state.bitcoinAddress.length > 0;
+export const selectWorkerSortOrder = (state: SettingsState) =>
+  state.workerSortOrder;

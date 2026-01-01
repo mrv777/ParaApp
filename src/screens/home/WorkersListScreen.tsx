@@ -2,7 +2,7 @@
  * WorkersListScreen - Full list of workers with expandable details
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, FlatList, Pressable, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,10 +10,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
 import { WorkerRow } from '@/components/home/WorkerRow';
 import { useUserStore, selectUserWorkers, selectIsUserLoading } from '@/store/userStore';
+import {
+  useSettingsStore,
+  selectWorkerSortOrder,
+  type WorkerSortOrder,
+} from '@/store/settingsStore';
 import { haptics } from '@/utils/haptics';
+import { sortWorkers, getSortOrderLabel } from '@/utils/sorting';
 import { colors } from '@/constants/colors';
 import type { HomeStackScreenProps } from '@/types/navigation';
 import type { UserWorker } from '@/types';
+
+/** Sort order cycle: hashrate -> name -> bestDiff -> hashrate */
+const SORT_ORDER_CYCLE: WorkerSortOrder[] = ['hashrate', 'name', 'bestDiff'];
 
 type Props = HomeStackScreenProps<'WorkersList'>;
 
@@ -21,10 +30,18 @@ export function WorkersListScreen({ navigation }: Props) {
   const [expandedWorker, setExpandedWorker] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Store
+  // Stores
   const workers = useUserStore(selectUserWorkers);
   const isLoading = useUserStore(selectIsUserLoading);
   const refreshAll = useUserStore((s) => s.refreshAll);
+  const sortOrder = useSettingsStore(selectWorkerSortOrder);
+  const setWorkerSortOrder = useSettingsStore((s) => s.setWorkerSortOrder);
+
+  // Sort workers (memoized for referential equality)
+  const sortedWorkers = useMemo(
+    () => sortWorkers(workers, sortOrder),
+    [workers, sortOrder]
+  );
 
   // Toggle expanded worker
   const handleToggleExpand = useCallback((workerName: string) => {
@@ -36,6 +53,14 @@ export function WorkersListScreen({ navigation }: Props) {
     haptics.light();
     navigation.goBack();
   }, [navigation]);
+
+  // Cycle through sort orders
+  const handleCycleSort = useCallback(() => {
+    haptics.selection();
+    const currentIndex = SORT_ORDER_CYCLE.indexOf(sortOrder);
+    const nextIndex = (currentIndex + 1) % SORT_ORDER_CYCLE.length;
+    setWorkerSortOrder(SORT_ORDER_CYCLE[nextIndex]);
+  }, [sortOrder, setWorkerSortOrder]);
 
   // Pull-to-refresh
   const handleRefresh = useCallback(async () => {
@@ -91,14 +116,25 @@ export function WorkersListScreen({ navigation }: Props) {
         <Text variant="title" className="flex-1">
           All Workers
         </Text>
+        {/* Sort button */}
+        <Pressable
+          onPress={handleCycleSort}
+          className="flex-row items-center px-2 py-1 bg-secondary rounded-lg mr-2 active:opacity-70"
+          hitSlop={4}
+        >
+          <Ionicons name="swap-vertical" size={14} color={colors.textSecondary} />
+          <Text variant="caption" color="muted" className="ml-1">
+            {getSortOrderLabel(sortOrder)}
+          </Text>
+        </Pressable>
         <Text variant="caption" color="muted">
-          {workers.length} total
+          {workers.length}
         </Text>
       </View>
 
       {/* Workers List */}
       <FlatList
-        data={workers}
+        data={sortedWorkers}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}

@@ -35,13 +35,13 @@ export function WorkersPreviewCard({
   return (
     <Card padding="none" className={className}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-        <Text variant="subtitle">Workers</Text>
+      <View className="flex-row items-center justify-between px-3 pt-3 pb-1">
+        <Text variant="subtitle" className="text-base">Workers</Text>
         <ConnectionStatus status={connectionStatus} />
       </View>
 
       {/* Workers list */}
-      <View className="px-4">
+      <View className="px-3">
         {showSkeleton ? (
           <View className="py-4 gap-4">
             {[1, 2, 3].map((i) => (
@@ -73,7 +73,7 @@ export function WorkersPreviewCard({
 
       {/* Footer with View All button */}
       {safeWorkers.length > 0 && (
-        <View className="px-4 pb-4 pt-2">
+        <View className="px-3 pb-3 pt-1">
           <Button
             variant="ghost"
             icon="list-outline"

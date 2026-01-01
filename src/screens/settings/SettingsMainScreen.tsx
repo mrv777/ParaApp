@@ -21,7 +21,9 @@ import {
   selectBitcoinAddress,
   selectTemperatureUnit,
   selectPollingInterval,
+  selectWorkerSortOrder,
   type PollingInterval,
+  type WorkerSortOrder,
 } from '@/store/settingsStore';
 import { isValidBitcoinAddress } from '@/utils/validation';
 import { truncateAddress } from '@/utils/formatting';
@@ -45,6 +47,13 @@ const TEMP_OPTIONS = [
   { value: 'fahrenheit' as const, label: 'F' },
 ];
 
+/** Worker sort order options */
+const SORT_OPTIONS: { value: WorkerSortOrder; label: string }[] = [
+  { value: 'hashrate', label: 'Hashrate' },
+  { value: 'name', label: 'Name' },
+  { value: 'bestDiff', label: 'Best Diff' },
+];
+
 /** External links */
 const LINKS = {
   parasite: 'https://parasite.space',
@@ -55,12 +64,14 @@ export function SettingsMainScreen({ navigation }: Props) {
   const bitcoinAddress = useSettingsStore(selectBitcoinAddress);
   const temperatureUnit = useSettingsStore(selectTemperatureUnit);
   const pollingInterval = useSettingsStore(selectPollingInterval);
+  const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
   const isPublic = useSettingsStore((s) => s.isPublicOnLeaderboard);
 
   // Actions
   const setBitcoinAddress = useSettingsStore((s) => s.setBitcoinAddress);
   const setTemperatureUnit = useSettingsStore((s) => s.setTemperatureUnit);
   const setPollingInterval = useSettingsStore((s) => s.setPollingInterval);
+  const setWorkerSortOrder = useSettingsStore((s) => s.setWorkerSortOrder);
   const setPublicOnLeaderboard = useSettingsStore((s) => s.setPublicOnLeaderboard);
 
   // Local state
@@ -128,6 +139,14 @@ export function SettingsMainScreen({ navigation }: Props) {
       setPollingInterval(interval);
     },
     [setPollingInterval]
+  );
+
+  const handleSortSelect = useCallback(
+    (order: WorkerSortOrder) => {
+      haptics.selection();
+      setWorkerSortOrder(order);
+    },
+    [setWorkerSortOrder]
   );
 
   const handleVisibilityToggle = useCallback(
@@ -262,7 +281,7 @@ export function SettingsMainScreen({ navigation }: Props) {
             </View>
 
             {/* Polling Interval */}
-            <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center justify-between mb-4">
               <Text variant="body">Polling Interval</Text>
               <View className="flex-row bg-secondary rounded-lg overflow-hidden">
                 {POLLING_OPTIONS.map((opt) => (
@@ -277,6 +296,33 @@ export function SettingsMainScreen({ navigation }: Props) {
                       variant="body"
                       className={
                         pollingInterval === opt.value
+                          ? 'text-background font-medium'
+                          : ''
+                      }
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Worker Sort Order */}
+            <View className="flex-row items-center justify-between">
+              <Text variant="body">Worker Sort</Text>
+              <View className="flex-row bg-secondary rounded-lg overflow-hidden">
+                {SORT_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => handleSortSelect(opt.value)}
+                    className={`px-3 py-2 ${
+                      workerSortOrder === opt.value ? 'bg-primary' : ''
+                    }`}
+                  >
+                    <Text
+                      variant="body"
+                      className={
+                        workerSortOrder === opt.value
                           ? 'text-background font-medium'
                           : ''
                       }

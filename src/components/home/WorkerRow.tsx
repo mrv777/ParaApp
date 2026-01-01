@@ -47,7 +47,7 @@ export function WorkerRow({
   const isOnline = worker.status === 'online';
 
   const content = (
-    <View className={`py-3 ${className}`}>
+    <View className={`py-2 ${className}`}>
       {/* Main row */}
       <View className="flex-row items-center justify-between">
         <View className="flex-1 mr-2">
