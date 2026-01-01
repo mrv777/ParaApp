@@ -42,13 +42,36 @@ export interface PoolHistoricalPoint {
 }
 
 /**
- * Leaderboard entry from /api/highest-diff
+ * Leaderboard entry from /api/highest-diff (legacy)
  */
 export interface LeaderboardEntry {
   block_height: number;
   top_diff_address: string;
   difficulty: number;
   block_timestamp: number;
+}
+
+/**
+ * Leaderboard type for new API
+ */
+export type LeaderboardType = 'difficulty' | 'loyalty';
+
+/**
+ * Difficulty leaderboard entry from /api/leaderboard?type=difficulty
+ */
+export interface DifficultyLeaderboardEntry {
+  id: number;
+  address: string;
+  diff: number;
+}
+
+/**
+ * Loyalty leaderboard entry from /api/leaderboard?type=loyalty
+ */
+export interface LoyaltyLeaderboardEntry {
+  id: number;
+  address: string;
+  total_blocks: number;
 }
 
 /**

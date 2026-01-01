@@ -50,9 +50,11 @@ const en = {
     btcPrice: 'BTC Price',
     leaderboard: 'Leaderboard',
     topDifficulty: 'Top Difficulty',
+    topLoyalty: 'Top Loyalty',
     yourRank: 'Your Rank',
     chartExpand: 'Tap to expand',
     noEntries: 'No entries yet',
+    addAddressHint: 'Add your address in Settings to see your rank',
   },
 
   miners: {

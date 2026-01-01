@@ -8,6 +8,8 @@ import type {
   PoolStats,
   PoolHistoricalPoint,
   LeaderboardEntry,
+  DifficultyLeaderboardEntry,
+  LoyaltyLeaderboardEntry,
   UserStats,
   UserHistoricalPoint,
   HistoricalPeriod,
@@ -76,10 +78,10 @@ export async function toggleUserVisibility(
 
 /**
  * Get top difficulty leaderboard
- * @param limit - Number of entries to return (default: 50)
+ * @param limit - Number of entries to return (default: 100)
  */
 export async function getLeaderboard(
-  limit: number = 50
+  limit: number = 100
 ): Promise<ApiResult<LeaderboardEntry[]>> {
   const params = new URLSearchParams({ limit: limit.toString() });
   return fetchWithTimeout<LeaderboardEntry[]>(
@@ -103,5 +105,37 @@ export async function getUserDiffs(
   });
   return fetchWithTimeout<LeaderboardEntry[]>(
     `${BASE_URL}/api/highest-diff?${params}`
+  );
+}
+
+/**
+ * Get difficulty leaderboard (new API)
+ * @param limit - Number of entries to return (default: 100)
+ */
+export async function getDifficultyLeaderboard(
+  limit: number = 100
+): Promise<ApiResult<DifficultyLeaderboardEntry[]>> {
+  const params = new URLSearchParams({
+    type: 'difficulty',
+    limit: limit.toString(),
+  });
+  return fetchWithTimeout<DifficultyLeaderboardEntry[]>(
+    `${BASE_URL}/api/leaderboard?${params}`
+  );
+}
+
+/**
+ * Get loyalty leaderboard
+ * @param limit - Number of entries to return (default: 100)
+ */
+export async function getLoyaltyLeaderboard(
+  limit: number = 100
+): Promise<ApiResult<LoyaltyLeaderboardEntry[]>> {
+  const params = new URLSearchParams({
+    type: 'loyalty',
+    limit: limit.toString(),
+  });
+  return fetchWithTimeout<LoyaltyLeaderboardEntry[]>(
+    `${BASE_URL}/api/leaderboard?${params}`
   );
 }
