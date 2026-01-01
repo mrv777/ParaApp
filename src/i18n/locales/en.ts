@@ -40,6 +40,8 @@ const en = {
   pool: {
     hashrate: 'Pool Hashrate',
     blocks: 'Blocks Found',
+    blocksFound: 'Blocks Found',
+    noBlocks: 'No blocks found yet',
     users: 'Users',
     workers: 'Workers',
     lastBlock: 'Last Block',
@@ -49,6 +51,8 @@ const en = {
     leaderboard: 'Leaderboard',
     topDifficulty: 'Top Difficulty',
     yourRank: 'Your Rank',
+    chartExpand: 'Tap to expand',
+    noEntries: 'No entries yet',
   },
 
   miners: {

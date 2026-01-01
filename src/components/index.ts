@@ -31,3 +31,9 @@ export {
   type SwipeToConfirmProps,
   type SwipeToConfirmVariant,
 } from './SwipeToConfirm';
+
+// Chart components
+export * from './charts';
+
+// Pool components
+export * from './pool';

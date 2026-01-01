@@ -10,3 +10,8 @@ export {
 } from './usePolling';
 export { usePoolPolling } from './usePoolPolling';
 export { useUserPolling } from './useUserPolling';
+export {
+  useOrientation,
+  type Orientation,
+  type UseOrientationReturn,
+} from './useOrientation';
