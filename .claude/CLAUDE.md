@@ -8,6 +8,7 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 
 **Tech Stack:**
 - React Native + Expo (TypeScript)
+- NativeWind + Tailwind CSS v3 (styling)
 - Zustand (state management)
 - React Navigation (bottom tabs)
 - react-native-reanimated (animations)
@@ -31,9 +32,10 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 **Commands:**
 ```bash
 pnpm start          # Start Expo dev server
-pnpm test           # Run Jest tests
 pnpm lint           # ESLint check
 pnpm typecheck      # TypeScript check
+pnpx expo-doctor    # Diagnose project issues (package versions, config, etc.)
+pnpm expo install --fix  # Fix package versions to match Expo SDK
 ```
 
 ## Current Phase
@@ -71,10 +73,18 @@ pnpm typecheck      # TypeScript check
 - Cache responses with timestamps
 - Stop polling when backgrounded
 
-### Styling
+### Styling (NativeWind)
+- Use Tailwind utility classes with `className` prop
+- Colors match Parasite Pool website (from [parastats repo](https://github.com/parasitepool/parastats))
 - Dark theme only (v1)
-- Match Parasite Pool website aesthetic
-- Yellow (68°C) / Red (70°C+) for warnings
+- Key classes:
+  - Background: `bg-background` (#0a0a0a)
+  - Text: `text-foreground` (#ededed)
+  - Cards/surfaces: `bg-secondary` (#222222)
+  - Borders: `border-border` (#444444)
+  - Muted text: `text-muted` (#666666)
+  - Temp warnings: `text-warning` (68°C), `text-danger` (70°C+)
+- For complex/dynamic styles, use `clsx` or `tailwind-merge`
 - Haptic feedback on key actions
 
 ### Numbers & Formatting
@@ -97,26 +107,18 @@ pnpm typecheck      # TypeScript check
 - Folder structure created under /src
 - TypeScript path aliases configured (@/*, @components/*, etc.)
 - ESLint (flat config) + Prettier configured
-- Theme constants extracted from parasite.space:
-  - Background: #0a0a0a
-  - Text: #ededed
-  - Warning: #facc15 (68°C)
-  - Danger: #ef4444 (70°C+)
+- NativeWind + Tailwind CSS v3 configured:
+  - Colors extracted from [parasitepool/parastats](https://github.com/parasitepool/parastats)
+  - `tailwind.config.js` with Parasite Pool color palette
+  - `global.css`, `metro.config.js`, `nativewind-env.d.ts` created
+  - Babel preset updated for NativeWind
 - Babel configured with reanimated plugin and module-resolver
-- Jest configured with jest-expo preset (v29)
 - App runs successfully on iOS simulator
 
-## Known Issues
-
-- Package version warnings for Expo compatibility (non-blocking):
-  - @shopify/react-native-skia, react-native-gesture-handler,
-    react-native-reanimated, react-native-screens
-  - Can be addressed later if issues arise
-
-## Testing Notes
+## Verification Notes
 
 ### Phase 0
 - TypeScript: passes (`pnpm typecheck`)
 - ESLint: passes (`pnpm lint`)
-- Jest: 8 tests passing (`pnpm test`)
+- Expo Doctor: 17/17 checks pass (`pnpx expo-doctor`)
 - iOS Simulator: App loads successfully with dark theme
