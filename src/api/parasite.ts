@@ -11,13 +11,118 @@ import type {
   DifficultyLeaderboardEntry,
   LoyaltyLeaderboardEntry,
   UserStats,
+  UserStatsApiResponse,
+  UserWorkerApiResponse,
+  UserWorker,
   UserHistoricalPoint,
+  UserHistoricalPointApiResponse,
+  Account,
+  AccountApiResponse,
   HistoricalPeriod,
   HistoricalInterval,
 } from '@/types';
 import { fetchWithTimeout, patchJson } from './client';
 
 const BASE_URL = 'https://parasite.space';
+
+// ============================================
+// Transformation Helpers
+// ============================================
+
+/**
+ * Parse difficulty string like "1.12T" or "88.2G" to raw number
+ */
+function parseDifficulty(diffStr: string): number {
+  if (!diffStr || diffStr === 'N/A') return 0;
+
+  const match = diffStr.match(/^([\d.]+)([KMGTP]?)$/i);
+  if (!match) {
+    // Try parsing as plain number
+    const num = parseFloat(diffStr);
+    return isNaN(num) ? 0 : num;
+  }
+
+  const value = parseFloat(match[1]);
+  const suffix = match[2].toUpperCase();
+
+  const multipliers: Record<string, number> = {
+    '': 1,
+    K: 1e3,
+    M: 1e6,
+    G: 1e9,
+    T: 1e12,
+    P: 1e15,
+  };
+
+  return value * (multipliers[suffix] || 1);
+}
+
+/**
+ * Determine worker status based on hashrate
+ */
+function getWorkerStatus(hashrate: number): 'online' | 'offline' {
+  return hashrate > 0 ? 'online' : 'offline';
+}
+
+/**
+ * Transform raw worker API response to app format
+ */
+function transformWorker(raw: UserWorkerApiResponse): UserWorker {
+  const hashrate = parseFloat(raw.hashrate) || 0;
+  // API returns Unix timestamp in seconds, convert to milliseconds
+  const lastSubmissionSeconds = parseInt(raw.lastSubmission, 10) || 0;
+  return {
+    id: raw.id,
+    name: raw.name,
+    hashrate,
+    bestDifficulty: parseFloat(raw.bestDifficulty) || 0,
+    lastSubmission: lastSubmissionSeconds * 1000,
+    status: getWorkerStatus(hashrate),
+  };
+}
+
+/**
+ * Transform raw user stats API response to app format
+ */
+function transformUserStats(raw: UserStatsApiResponse): UserStats {
+  return {
+    hashrate: raw.hashrate,
+    workerCount: raw.workers,
+    workers: (raw.workerData || []).map(transformWorker),
+    bestDifficulty: parseDifficulty(raw.bestDifficulty),
+    bestDifficultyFormatted: raw.bestDifficulty,
+    lastSubmission: raw.lastSubmission,
+    uptime: raw.uptime,
+    isPublic: raw.isPublic,
+    // hashrate1h and hashrate24h will be computed from historical data
+  };
+}
+
+/**
+ * Transform raw account API response to app format
+ */
+function transformAccount(raw: AccountApiResponse): Account {
+  return {
+    btcAddress: raw.account.btc_address,
+    lnAddress: raw.account.ln_address,
+    totalDiff: raw.account.total_diff,
+    lastUpdated: raw.account.last_updated,
+    blockCount: raw.account.metadata.block_count,
+    highestBlockHeight: raw.account.metadata.highest_blockheight,
+  };
+}
+
+/**
+ * Transform raw historical point to app format
+ */
+function transformHistoricalPoint(
+  raw: UserHistoricalPointApiResponse
+): UserHistoricalPoint {
+  return {
+    timestamp: new Date(raw.timestamp).getTime(),
+    hashrate: raw.hashrate,
+  };
+}
 
 /**
  * Get pool-wide statistics
@@ -42,11 +147,33 @@ export async function getPoolHistorical(
 }
 
 /**
+ * Get account data by Bitcoin address
+ * @param address - Bitcoin address
+ */
+export async function getAccount(address: string): Promise<ApiResult<Account>> {
+  const result = await fetchWithTimeout<AccountApiResponse>(
+    `${BASE_URL}/api/account/${address}`
+  );
+
+  if (result.success && result.data) {
+    return { success: true, data: transformAccount(result.data) };
+  }
+  return result as ApiResult<Account>;
+}
+
+/**
  * Get user data by Bitcoin address
  * @param address - Bitcoin address
  */
 export async function getUser(address: string): Promise<ApiResult<UserStats>> {
-  return fetchWithTimeout<UserStats>(`${BASE_URL}/api/user/${address}`);
+  const result = await fetchWithTimeout<UserStatsApiResponse>(
+    `${BASE_URL}/api/user/${address}`
+  );
+
+  if (result.success && result.data) {
+    return { success: true, data: transformUserStats(result.data) };
+  }
+  return result as ApiResult<UserStats>;
 }
 
 /**
@@ -61,9 +188,14 @@ export async function getUserHistorical(
   interval: HistoricalInterval
 ): Promise<ApiResult<UserHistoricalPoint[]>> {
   const params = new URLSearchParams({ period, interval });
-  return fetchWithTimeout<UserHistoricalPoint[]>(
+  const result = await fetchWithTimeout<UserHistoricalPointApiResponse[]>(
     `${BASE_URL}/api/user/${address}/historical?${params}`
   );
+
+  if (result.success && result.data) {
+    return { success: true, data: result.data.map(transformHistoricalPoint) };
+  }
+  return result as ApiResult<UserHistoricalPoint[]>;
 }
 
 /**

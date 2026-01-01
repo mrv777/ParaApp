@@ -7,7 +7,7 @@ import { Card } from '../Card';
 import { Text } from '../Text';
 import { StatItem } from '../StatItem';
 import { SkeletonStatItem } from '../SkeletonLoader';
-import { formatHashrate, formatDifficulty } from '@/utils/formatting';
+import { formatHashrate } from '@/utils/formatting';
 import type { UserStats } from '@/types';
 
 export interface UserStatsCardProps {
@@ -69,7 +69,7 @@ export function UserStatsCard({ stats, isLoading = false, className = '' }: User
             <View className="flex-1">
               <StatItem
                 label="Best Diff"
-                value={stats?.bestDifficulty ? formatDifficulty(stats.bestDifficulty) : '--'}
+                value={stats?.bestDifficultyFormatted || '--'}
                 size="sm"
               />
             </View>

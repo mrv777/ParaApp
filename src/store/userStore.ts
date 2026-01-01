@@ -9,6 +9,7 @@ import type {
   UserStats,
   UserHistoricalPoint,
   LeaderboardEntry,
+  Account,
   HistoricalPeriod,
   HistoricalInterval,
 } from '@/types';
@@ -18,6 +19,7 @@ import { useSettingsStore } from './settingsStore';
 interface UserState {
   // Cached data
   stats: CachedData<UserStats> | null;
+  account: CachedData<Account> | null;
   historical: CachedData<UserHistoricalPoint[]> | null;
   userDiffs: CachedData<LeaderboardEntry[]> | null;
 
@@ -34,6 +36,7 @@ interface UserState {
 
 interface UserActions {
   fetchUserStats: () => Promise<void>;
+  fetchAccount: () => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
     interval?: HistoricalInterval
@@ -48,6 +51,7 @@ interface UserActions {
 
 const initialState: UserState = {
   stats: null,
+  account: null,
   historical: null,
   userDiffs: null,
   historicalPeriod: '24h',
@@ -55,6 +59,28 @@ const initialState: UserState = {
   isLoadingHistorical: false,
   error: null,
 };
+
+/**
+ * Calculate average hashrate from historical data points
+ */
+function calculateAverageHashrate(
+  data: UserHistoricalPoint[],
+  durationMs: number
+): number | undefined {
+  if (!data || data.length === 0) return undefined;
+
+  const now = Date.now();
+  const cutoff = now - durationMs;
+
+  // Filter data points within the duration
+  const relevantPoints = data.filter((point) => point.timestamp >= cutoff);
+
+  if (relevantPoints.length === 0) return undefined;
+
+  // Calculate average
+  const sum = relevantPoints.reduce((acc, point) => acc + point.hashrate, 0);
+  return sum / relevantPoints.length;
+}
 
 /**
  * Get appropriate interval for a given period
@@ -74,6 +100,10 @@ function getIntervalForPeriod(period: HistoricalPeriod): HistoricalInterval {
   }
 }
 
+// Duration constants
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
 export const useUserStore = create<UserState & UserActions>()((set, get) => ({
   ...initialState,
 
@@ -86,15 +116,52 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
 
     set({ isLoading: true, error: null });
 
-    const result = await parasite.getUser(address);
+    // Fetch user stats and historical data in parallel
+    const [userResult, historicalResult] = await Promise.all([
+      parasite.getUser(address),
+      parasite.getUserHistorical(address, '24h', '5m'),
+    ]);
 
-    if (isSuccess(result)) {
+    if (isSuccess(userResult)) {
+      let statsWithAverages = userResult.data;
+
+      // Compute averages from historical data
+      if (isSuccess(historicalResult) && historicalResult.data.length > 0) {
+        const hashrate1h = calculateAverageHashrate(
+          historicalResult.data,
+          ONE_HOUR_MS
+        );
+        const hashrate24h = calculateAverageHashrate(
+          historicalResult.data,
+          TWENTY_FOUR_HOURS_MS
+        );
+
+        statsWithAverages = {
+          ...userResult.data,
+          hashrate1h,
+          hashrate24h,
+        };
+      }
+
       set({
-        stats: { data: result.data, timestamp: Date.now() },
+        stats: { data: statsWithAverages, timestamp: Date.now() },
         isLoading: false,
       });
     } else {
-      set({ error: result.error, isLoading: false });
+      set({ error: userResult.error, isLoading: false });
+    }
+  },
+
+  fetchAccount: async () => {
+    const address = useSettingsStore.getState().bitcoinAddress;
+    if (!address) return;
+
+    const result = await parasite.getAccount(address);
+
+    if (isSuccess(result)) {
+      set({
+        account: { data: result.data, timestamp: Date.now() },
+      });
     }
   },
 
@@ -160,6 +227,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
   clearUserData: () =>
     set({
       stats: null,
+      account: null,
       historical: null,
       userDiffs: null,
       error: null,
@@ -169,8 +237,8 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const { fetchUserStats, fetchUserDiffs } = get();
-    await Promise.all([fetchUserStats(), fetchUserDiffs()]);
+    const { fetchUserStats, fetchAccount, fetchUserDiffs } = get();
+    await Promise.all([fetchUserStats(), fetchAccount(), fetchUserDiffs()]);
   },
 }));
 
@@ -179,6 +247,7 @@ const EMPTY_WORKERS: import('@/types').UserWorker[] = [];
 
 // Selectors
 export const selectUserStats = (state: UserState) => state.stats?.data;
+export const selectUserAccount = (state: UserState) => state.account?.data;
 export const selectUserWorkers = (state: UserState) =>
   state.stats?.data?.workers ?? EMPTY_WORKERS;
 export const selectUserHistorical = (state: UserState) =>

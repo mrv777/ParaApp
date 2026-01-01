@@ -7,10 +7,71 @@
  */
 export type WorkerStatus = 'online' | 'offline';
 
+// ============================================
+// Raw API Response Types
+// ============================================
+
 /**
- * Individual worker connected to the pool
+ * Account metadata from /api/account/{address}
+ */
+export interface AccountMetadata {
+  block_count: number;
+  highest_blockheight: number;
+}
+
+/**
+ * Account data from /api/account/{address}
+ */
+export interface AccountApiResponse {
+  account: {
+    btc_address: string;
+    ln_address: string | null;
+    past_ln_addresses: string[];
+    total_diff: number;
+    last_updated: string;
+    metadata: AccountMetadata;
+  };
+  lightning: unknown | null;
+}
+
+// ============================================
+// Raw API Response Types (from /api/user/{address})
+// ============================================
+
+/**
+ * Raw worker data from API response
+ */
+export interface UserWorkerApiResponse {
+  id: string;
+  name: string;
+  hashrate: string; // API returns string
+  bestDifficulty: string; // API returns string
+  lastSubmission: string; // Unix timestamp as string
+  uptime: string;
+}
+
+/**
+ * Raw user stats from /api/user/{address}
+ */
+export interface UserStatsApiResponse {
+  hashrate: number;
+  workers: number; // This is a COUNT, not an array
+  workerData: UserWorkerApiResponse[];
+  lastSubmission: string; // "1m ago"
+  bestDifficulty: string; // "1.12T" - formatted string
+  uptime: string; // "256d 1h"
+  isPublic: boolean;
+}
+
+// ============================================
+// App Types (transformed for use in app)
+// ============================================
+
+/**
+ * Individual worker connected to the pool (transformed)
  */
 export interface UserWorker {
+  id: string;
   name: string;
   hashrate: number;
   bestDifficulty: number;
@@ -20,30 +81,57 @@ export interface UserWorker {
 }
 
 /**
- * User statistics from /api/user/{address}
+ * User statistics (transformed from API response)
  */
 export interface UserStats {
-  address: string;
-  /** Current hashrate */
+  /** Current hashrate in H/s */
   hashrate: number;
-  /** 1-hour average hashrate */
-  hashrate1h: number;
-  /** 24-hour average hashrate */
-  hashrate24h: number;
-  /** Best difficulty achieved */
-  bestDifficulty: number;
-  sharesAccepted: number;
-  sharesRejected: number;
+  /** Number of workers */
+  workerCount: number;
+  /** Worker details */
   workers: UserWorker[];
+  /** Best difficulty achieved (raw number) */
+  bestDifficulty: number;
+  /** Best difficulty formatted string from API (e.g., "1.12T") */
+  bestDifficultyFormatted: string;
+  /** Last submission (e.g., "1m ago") */
+  lastSubmission: string;
+  /** Uptime string (e.g., "256d 1h") */
+  uptime: string;
   /** Whether user is visible on leaderboards */
   isPublic: boolean;
+  /** 1-hour average hashrate (computed from historical) */
+  hashrate1h?: number;
+  /** 24-hour average hashrate (computed from historical) */
+  hashrate24h?: number;
 }
 
 /**
- * User historical data point
+ * Account info (transformed from AccountApiResponse)
+ */
+export interface Account {
+  btcAddress: string;
+  lnAddress: string | null;
+  totalDiff: number;
+  lastUpdated: string;
+  blockCount: number;
+  highestBlockHeight: number;
+}
+
+/**
+ * User historical data point (from /api/user/{address}/historical)
+ * Note: API returns timestamp as ISO string, we convert to number
  */
 export interface UserHistoricalPoint {
   timestamp: number;
+  hashrate: number;
+}
+
+/**
+ * Raw historical point from API
+ */
+export interface UserHistoricalPointApiResponse {
+  timestamp: string; // ISO date string
   hashrate: number;
 }
 
