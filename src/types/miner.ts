@@ -63,8 +63,10 @@ export interface LocalMiner {
   voltage: number;
   /** Fan speed (%) */
   fanSpeed: number;
-  /** Best difficulty achieved */
+  /** Best difficulty ever achieved */
   bestDiff: number;
+  /** Best difficulty this session (since restart) */
+  bestSessionDiff: number;
   sharesAccepted: number;
   sharesRejected: number;
   /** Stratum user (worker name) */

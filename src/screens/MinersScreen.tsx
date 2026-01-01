@@ -26,7 +26,7 @@ import {
   selectDiscoveryError,
 } from '@/store/minerStore';
 import { colors } from '@/constants/colors';
-import type { MainTabScreenProps } from '@/types/navigation';
+import type { MinersStackScreenProps } from '@/types/navigation';
 import type {
   LocalMiner,
   DiscoveryOptions,
@@ -35,9 +35,9 @@ import type {
   MinerWarning,
 } from '@/types';
 
-type Props = MainTabScreenProps<'Miners'>;
+type Props = MinersStackScreenProps<'MinersMain'>;
 
-export function MinersScreen(_props: Props) {
+export function MinersScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
 
   // Sort and filter state
@@ -178,10 +178,12 @@ export function MinersScreen(_props: Props) {
     [startDiscovery]
   );
 
-  const handleMinerPress = useCallback((_miner: LocalMiner) => {
-    // Future: Navigate to MinerDetailScreen
-    // navigation.navigate('MinerDetail', { ip: miner.ip });
-  }, []);
+  const handleMinerPress = useCallback(
+    (miner: LocalMiner) => {
+      navigation.navigate('MinerDetail', { ip: miner.ip });
+    },
+    [navigation]
+  );
 
   const handleDeleteMiner = useCallback(
     (ip: string) => {

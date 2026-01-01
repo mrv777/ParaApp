@@ -7,9 +7,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { PoolScreen, MinersScreen, SettingsScreen } from '@/screens';
+import { PoolScreen, SettingsScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
-import { HomeStack } from '@/navigation';
+import { HomeStack, MinersStack } from '@/navigation';
 import { colors } from '@/constants/colors';
 import type { MainTabParamList } from '@/types/navigation';
 
@@ -43,7 +43,7 @@ export default function App() {
           >
             <Tab.Screen name="Home" component={HomeStack} />
             <Tab.Screen name="Pool" component={PoolScreen} />
-            <Tab.Screen name="Miners" component={MinersScreen} />
+            <Tab.Screen name="Miners" component={MinersStack} />
             <Tab.Screen name="Settings" component={SettingsScreen} />
           </Tab.Navigator>
         </NavigationContainer>

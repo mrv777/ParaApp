@@ -18,7 +18,7 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 - `/src/screens/` - Screen components
 - `/src/components/` - Reusable UI components
 - `/src/components/miners/` - Miner discovery & list components
-- `/src/navigation/` - Stack navigators (HomeStack)
+- `/src/navigation/` - Stack navigators (HomeStack, MinersStack)
 - `/src/store/` - Zustand stores (pool, user, miner, settings)
 - `/src/api/` - API clients (parasite, bitaxe, mempool)
 - `/src/hooks/` - Custom hooks (polling, app state)
@@ -37,17 +37,19 @@ pnpm exec expo install --fix  # Fix package versions
 
 ## Current Phase
 
-**Phase:** 3B - Complete (Miners List Screen)
-**Status:** Ready for Phase 3C (Miner Detail Screen)
+**Phase:** 3C - Complete (Miner Detail Screen)
+**Status:** Ready for Phase 3D (Miner Controls)
 
-**Phase 3B Completed:**
-- Sort options (name, hashrate, temp, status)
-- Filter options (all, online, offline, warning)
-- Warning badges on miners with issues
-- Network connectivity banner when all offline
-- Header buttons for add/scan/sort-filter
-- Discovery card close button for UX
-- Memoized ListHeader for performance
+**Phase 3C Completed:**
+- MinersStack navigator wrapping MinersScreen
+- MinerDetailScreen with continuous scroll layout
+- MinerStatsSection (2-column grid: hashrate, temp, power, voltage, shares, uptime, best diff, fan)
+- DeviceInfoSection (model, ASIC, firmware, IP, hostname, pool, worker, WiFi)
+- LinkedWorkerSection (matches stratumUser with pool workers)
+- AliasEditSheet (bottom sheet modal for alias editing)
+- Polling with usePolling hook (settings interval, pauses when offline)
+- Offline state (last seen, last best diff)
+- Temperature color thresholds (warning 68°C, danger 70°C+)
 
 See `IMPLEMENTATION.md` for phase details and prompts.
 

@@ -27,6 +27,14 @@ export type HomeStackParamList = {
 };
 
 /**
+ * Miners tab stack navigator param list
+ */
+export type MinersStackParamList = {
+  MinersMain: undefined;
+  MinerDetail: { ip: string };
+};
+
+/**
  * Helper type for screen component props
  * Usage: MainTabScreenProps<'Home'>
  */
@@ -42,6 +50,16 @@ export type MainTabScreenProps<T extends keyof MainTabParamList> = BottomTabScre
  */
 export type HomeStackScreenProps<T extends keyof HomeStackParamList> = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
+>;
+
+/**
+ * Helper type for Miners stack screen props
+ * Composite type for screens that are nested in Miners tab
+ * Usage: MinersStackScreenProps<'MinersMain'>
+ */
+export type MinersStackScreenProps<T extends keyof MinersStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<MinersStackParamList, T>,
   BottomTabScreenProps<MainTabParamList>
 >;
 

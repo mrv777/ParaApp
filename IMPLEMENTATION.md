@@ -476,7 +476,7 @@ Reference SPEC.md Miners screen and Warning conditions.
 - Memoized `ListHeader` in MinersScreen for performance
 - Added `onClose` prop to DiscoveryCard for better UX
 
-### Session 3C: Miner Detail Screen
+### Session 3C: Miner Detail Screen ✅ COMPLETE
 
 #### Prompt
 
@@ -500,13 +500,26 @@ Reference SPEC.md Miner Detail and Typography sections.
 ```
 
 #### Deliverables
-- [ ] Miner detail continuous scroll
-- [ ] All stats displayed
-- [ ] Alias editing
-- [ ] Proper number formatting
-- [ ] Linked worker display
-- [ ] Offline state handling
-- [ ] Live polling
+- [x] Miner detail continuous scroll
+- [x] All stats displayed
+- [x] Alias editing
+- [x] Proper number formatting
+- [x] Linked worker display
+- [x] Offline state handling
+- [x] Live polling
+
+#### Implementation Notes
+- Created `/src/navigation/MinersStack.tsx` wrapping MinersScreen with MinerDetail route
+- Created `/src/screens/miners/MinerDetailScreen.tsx` with continuous scroll layout
+- Created `/src/components/miners/AliasEditSheet.tsx` - bottom sheet modal for alias editing
+- Created `/src/components/miners/MinerStatsSection.tsx` - 2-column grid (hashrate, temp, power, voltage, shares, uptime, best diff, fan speed)
+- Created `/src/components/miners/DeviceInfoSection.tsx` - list layout for device info
+- Created `/src/components/miners/LinkedWorkerSection.tsx` - conditional section matching stratumUser with pool workers
+- Added `MinersStackParamList` and `MinersStackScreenProps` to navigation types
+- Updated `App.tsx` to use `MinersStack` instead of direct `MinersScreen`
+- Polling uses `usePolling` hook with settings interval, pauses when offline
+- Offline state shows last seen timestamp and last best diff
+- Temperature colors based on thresholds (yellow 68°C, red 70°C+)
 
 ### Session 3D: Miner Controls
 
