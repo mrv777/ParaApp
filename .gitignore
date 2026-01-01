@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native builds
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# iOS
+ios/Pods/
+ios/.xcode.env.local
+
+# Android
+android/app/debug/
+android/app/release/
+*.apk
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Claude Code local files
+.claude/CLAUDE.local.md
+.claude/plans/
