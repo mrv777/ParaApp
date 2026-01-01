@@ -4,6 +4,8 @@
  */
 
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 /**
  * Main bottom tab navigator param list
@@ -17,12 +19,30 @@ export type MainTabParamList = {
 };
 
 /**
+ * Home tab stack navigator param list
+ */
+export type HomeStackParamList = {
+  HomeMain: undefined;
+  WorkersList: undefined;
+};
+
+/**
  * Helper type for screen component props
  * Usage: MainTabScreenProps<'Home'>
  */
 export type MainTabScreenProps<T extends keyof MainTabParamList> = BottomTabScreenProps<
   MainTabParamList,
   T
+>;
+
+/**
+ * Helper type for Home stack screen props
+ * Composite type for screens that are nested in Home tab
+ * Usage: HomeStackScreenProps<'HomeMain'>
+ */
+export type HomeStackScreenProps<T extends keyof HomeStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<HomeStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
 >;
 
 /**

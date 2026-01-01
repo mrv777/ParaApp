@@ -174,10 +174,13 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
   },
 }));
 
+// Stable empty array for selectors (prevents infinite loops)
+const EMPTY_WORKERS: import('@/types').UserWorker[] = [];
+
 // Selectors
 export const selectUserStats = (state: UserState) => state.stats?.data;
 export const selectUserWorkers = (state: UserState) =>
-  state.stats?.data?.workers || [];
+  state.stats?.data?.workers ?? EMPTY_WORKERS;
 export const selectUserHistorical = (state: UserState) =>
   state.historical?.data;
 export const selectUserDiffs = (state: UserState) => state.userDiffs?.data;

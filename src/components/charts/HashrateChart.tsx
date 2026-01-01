@@ -4,26 +4,40 @@
 
 import { useRef, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { SvgChart, SVGRenderer } from '@wuba/react-native-echarts';
-import * as echarts from 'echarts/core';
-import { LineChart } from 'echarts/charts';
-import {
-  GridComponent,
-  TooltipComponent,
-} from 'echarts/components';
 
 import { ChartSkeleton } from './ChartSkeleton';
 import { colors } from '@/constants/colors';
 import { formatHashrate } from '@/utils/formatting';
 import type { PoolHistoricalPoint, HistoricalPeriod } from '@/types';
 
-// Register ECharts components
-echarts.use([
-  SVGRenderer,
-  LineChart,
-  GridComponent,
-  TooltipComponent,
-]);
+// Lazy-loaded ECharts modules
+let echarts: typeof import('echarts/core') | null = null;
+let SvgChart: React.ComponentType<{ ref: React.Ref<unknown> }> | null = null;
+let isEchartsRegistered = false;
+
+async function initEcharts() {
+  if (isEchartsRegistered) return echarts!;
+
+  const [echartsCore, svgChartModule, lineChartModule, componentsModule] = await Promise.all([
+    import('echarts/core'),
+    import('@wuba/react-native-echarts/svgChart'),
+    import('echarts/charts'),
+    import('echarts/components'),
+  ]);
+
+  echarts = echartsCore;
+  SvgChart = svgChartModule.default;
+
+  echarts.use([
+    svgChartModule.SVGRenderer,
+    lineChartModule.LineChart,
+    componentsModule.GridComponent,
+    componentsModule.TooltipComponent,
+  ]);
+
+  isEchartsRegistered = true;
+  return echarts;
+}
 
 export interface HashrateChartProps {
   data: PoolHistoricalPoint[];
@@ -79,9 +93,17 @@ export function HashrateChart({
   onDataPointSelect,
   className = '',
 }: HashrateChartProps) {
-  const chartRef = useRef<typeof SvgChart>(null);
-  const chartInstanceRef = useRef<echarts.ECharts | null>(null);
+  const chartRef = useRef<unknown>(null);
+  const chartInstanceRef = useRef<ReturnType<typeof import('echarts/core').init> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 300, height });
+  const [isReady, setIsReady] = useState(isEchartsRegistered);
+
+  // Initialize ECharts lazily
+  useEffect(() => {
+    if (!isReady) {
+      initEcharts().then(() => setIsReady(true));
+    }
+  }, [isReady]);
 
   // Calculate chart data
   const chartData = useMemo(() => {
@@ -204,10 +226,9 @@ export function HashrateChart({
 
   // Initialize chart
   useEffect(() => {
-    if (!chartRef.current || !option) return;
+    if (!chartRef.current || !option || !isReady || !echarts) return;
 
-    // @ts-expect-error - accessing ref for echarts init
-    const chart = echarts.init(chartRef.current, 'dark', {
+    const chart = echarts.init(chartRef.current as HTMLElement, 'dark', {
       renderer: 'svg',
       width: dimensions.width,
       height: dimensions.height,
@@ -229,7 +250,7 @@ export function HashrateChart({
       chart.dispose();
       chartInstanceRef.current = null;
     };
-  }, [option, dimensions, onDataPointSelect, data]);
+  }, [option, dimensions, onDataPointSelect, data, isReady]);
 
   // Update chart on resize
   useEffect(() => {
@@ -241,8 +262,8 @@ export function HashrateChart({
     }
   }, [dimensions]);
 
-  // Show skeleton when loading with no data
-  if (isLoading && (!data || data.length === 0)) {
+  // Show skeleton when loading or echarts not ready
+  if (!isReady || (isLoading && (!data || data.length === 0))) {
     return <ChartSkeleton height={height} className={className} />;
   }
 
@@ -256,6 +277,12 @@ export function HashrateChart({
     );
   }
 
+  // SvgChart should be loaded by now
+  const ChartComponent = SvgChart;
+  if (!ChartComponent) {
+    return <ChartSkeleton height={height} className={className} />;
+  }
+
   return (
     <View
       className={`bg-secondary rounded-xl overflow-hidden ${className}`}
@@ -267,7 +294,7 @@ export function HashrateChart({
         }
       }}
     >
-      <SvgChart ref={chartRef} />
+      <ChartComponent ref={chartRef as React.Ref<unknown>} />
     </View>
   );
 }

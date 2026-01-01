@@ -37,3 +37,6 @@ export * from './charts';
 
 // Pool components
 export * from './pool';
+
+// Home components
+export * from './home';
