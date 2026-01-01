@@ -6,6 +6,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 import { PoolScreen, SettingsScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
@@ -34,18 +35,20 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <NavigationContainer theme={navigationTheme}>
-          <Tab.Navigator
-            tabBar={(props) => <TabBar {...props} />}
-            screenOptions={{
-              headerShown: false,
-              animation: 'fade',
-            }}
-          >
-            <Tab.Screen name="Home" component={HomeStack} />
-            <Tab.Screen name="Pool" component={PoolScreen} />
-            <Tab.Screen name="Miners" component={MinersStack} />
-            <Tab.Screen name="Settings" component={SettingsScreen} />
-          </Tab.Navigator>
+          <BottomSheetModalProvider>
+            <Tab.Navigator
+              tabBar={(props) => <TabBar {...props} />}
+              screenOptions={{
+                headerShown: false,
+                animation: 'fade',
+              }}
+            >
+              <Tab.Screen name="Home" component={HomeStack} />
+              <Tab.Screen name="Pool" component={PoolScreen} />
+              <Tab.Screen name="Miners" component={MinersStack} />
+              <Tab.Screen name="Settings" component={SettingsScreen} />
+            </Tab.Navigator>
+          </BottomSheetModalProvider>
         </NavigationContainer>
         <StatusBar style="light" />
       </SafeAreaProvider>

@@ -2,10 +2,17 @@
  * SortFilterModal - Bottom sheet for miner sort and filter options
  */
 
-import { useCallback } from 'react';
-import { View, Modal, Pressable, ScrollView } from 'react-native';
+import { useCallback, useRef, useMemo, useEffect } from 'react';
+import { View, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import {
+  BottomSheetModal,
+  BottomSheetView,
+  BottomSheetScrollView,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -70,8 +77,19 @@ export function SortFilterModal({
   filterBy,
   onFilterChange,
 }: SortFilterModalProps) {
-  const handleClose = useCallback(() => {
-    haptics.light();
+  const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const insets = useSafeAreaInsets();
+  const snapPoints = useMemo(() => ['60%'], []);
+
+  useEffect(() => {
+    if (visible) {
+      bottomSheetRef.current?.present();
+    } else {
+      bottomSheetRef.current?.dismiss();
+    }
+  }, [visible]);
+
+  const handleDismiss = useCallback(() => {
     onClose();
   }, [onClose]);
 
@@ -89,40 +107,35 @@ export function SortFilterModal({
     [onFilterChange]
   );
 
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        pressBehavior="close"
+      />
+    ),
+    []
+  );
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-      statusBarTranslucent
+    <BottomSheetModal
+      ref={bottomSheetRef}
+      snapPoints={snapPoints}
+      onDismiss={handleDismiss}
+      backdropComponent={renderBackdrop}
+      handleIndicatorStyle={{ backgroundColor: colors.textMuted }}
+      backgroundStyle={{ backgroundColor: colors.surface }}
     >
-      {/* Backdrop */}
-      <Pressable
-        className="flex-1 bg-black/60"
-        onPress={handleClose}
-      >
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(200)}
-          className="flex-1"
-        />
-      </Pressable>
-
-      {/* Bottom sheet content */}
-      <View className="bg-secondary rounded-t-2xl pb-8">
-        {/* Handle bar */}
-        <View className="items-center py-3">
-          <View className="w-10 h-1 bg-muted/30 rounded-full" />
-        </View>
-
+      <BottomSheetView style={{ flex: 1 }}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 pb-2">
           <Text variant="subtitle" className="font-semibold">
             Sort & Filter
           </Text>
           <Pressable
-            onPress={handleClose}
+            onPress={handleDismiss}
             className="p-2 -mr-2"
             hitSlop={8}
           >
@@ -130,7 +143,10 @@ export function SortFilterModal({
           </Pressable>
         </View>
 
-        <ScrollView className="max-h-96">
+        <BottomSheetScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
+        >
           {/* Sort section */}
           <View className="mt-2">
             <Text
@@ -143,9 +159,7 @@ export function SortFilterModal({
             <View className="bg-background mx-4 rounded-lg overflow-hidden">
               {SORT_OPTIONS.map((option, index) => (
                 <View key={option.value}>
-                  {index > 0 && (
-                    <View className="h-px bg-border mx-4" />
-                  )}
+                  {index > 0 && <View className="h-px bg-border mx-4" />}
                   <OptionRow
                     label={option.label}
                     selected={sortBy === option.value}
@@ -168,9 +182,7 @@ export function SortFilterModal({
             <View className="bg-background mx-4 rounded-lg overflow-hidden">
               {FILTER_OPTIONS.map((option, index) => (
                 <View key={option.value}>
-                  {index > 0 && (
-                    <View className="h-px bg-border mx-4" />
-                  )}
+                  {index > 0 && <View className="h-px bg-border mx-4" />}
                   <OptionRow
                     label={option.label}
                     selected={filterBy === option.value}
@@ -180,8 +192,8 @@ export function SortFilterModal({
               ))}
             </View>
           </View>
-        </ScrollView>
-      </View>
-    </Modal>
+        </BottomSheetScrollView>
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }

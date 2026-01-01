@@ -2,17 +2,17 @@
  * AliasEditSheet - Bottom sheet for editing miner alias
  */
 
-import { useState, useCallback, useEffect } from 'react';
-import {
-  View,
-  Modal,
-  Pressable,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { View, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import {
+  BottomSheetModal,
+  BottomSheetView,
+  BottomSheetTextInput,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -32,17 +32,22 @@ export function AliasEditSheet({
   onSave,
   onClose,
 }: AliasEditSheetProps) {
+  const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const insets = useSafeAreaInsets();
   const [alias, setAlias] = useState(currentAlias);
+  const snapPoints = useMemo(() => ['40%'], []);
 
   // Reset alias when modal opens
   useEffect(() => {
     if (visible) {
       setAlias(currentAlias);
+      bottomSheetRef.current?.present();
+    } else {
+      bottomSheetRef.current?.dismiss();
     }
   }, [visible, currentAlias]);
 
-  const handleClose = useCallback(() => {
-    haptics.light();
+  const handleDismiss = useCallback(() => {
     onClose();
   }, [onClose]);
 
@@ -56,109 +61,113 @@ export function AliasEditSheet({
     setAlias('');
   }, []);
 
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        pressBehavior="close"
+      />
+    ),
+    []
+  );
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-      statusBarTranslucent
+    <BottomSheetModal
+      ref={bottomSheetRef}
+      snapPoints={snapPoints}
+      onDismiss={handleDismiss}
+      backdropComponent={renderBackdrop}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
+      handleIndicatorStyle={{ backgroundColor: colors.textMuted }}
+      backgroundStyle={{ backgroundColor: colors.surface }}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-end"
+      <BottomSheetView
+        style={{
+          flex: 1,
+          paddingHorizontal: 16,
+          paddingBottom: Math.max(insets.bottom, 16),
+        }}
       >
-        {/* Backdrop */}
-        <Pressable className="flex-1 bg-black/60" onPress={handleClose}>
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            className="flex-1"
-          />
-        </Pressable>
-
-        {/* Bottom sheet content */}
-        <View className="bg-secondary rounded-t-2xl pb-8">
-          {/* Handle bar */}
-          <View className="items-center py-3">
-            <View className="w-10 h-1 bg-muted/30 rounded-full" />
-          </View>
-
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-4 pb-4">
-            <Text variant="subtitle" className="font-semibold">
-              Edit Alias
-            </Text>
-            <Pressable
-              onPress={handleClose}
-              className="p-2 -mr-2"
-              hitSlop={8}
-            >
-              <Ionicons name="close" size={24} color={colors.text} />
-            </Pressable>
-          </View>
-
-          {/* Input section */}
-          <View className="px-4">
-            <Text variant="caption" color="muted" className="mb-2">
-              Custom name for this miner
-            </Text>
-            <View className="flex-row items-center bg-background rounded-lg border border-border">
-              <TextInput
-                value={alias}
-                onChangeText={setAlias}
-                placeholder={hostname || 'Enter alias'}
-                placeholderTextColor={colors.textMuted}
-                className="flex-1 px-4 py-3 text-foreground text-base"
-                autoFocus
-                maxLength={32}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleSave}
-              />
-              {alias.length > 0 && (
-                <Pressable
-                  onPress={handleClear}
-                  className="p-3"
-                  hitSlop={8}
-                >
-                  <Ionicons
-                    name="close-circle"
-                    size={20}
-                    color={colors.textMuted}
-                  />
-                </Pressable>
-              )}
-            </View>
-            <Text variant="caption" color="muted" className="mt-1">
-              Leave empty to use hostname
-            </Text>
-          </View>
-
-          {/* Buttons */}
-          <View className="flex-row gap-3 px-4 mt-6">
-            <Pressable
-              onPress={handleClose}
-              className="flex-1 py-3 rounded-lg bg-background border border-border items-center"
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            >
-              <Text variant="body" className="font-medium">
-                Cancel
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleSave}
-              className="flex-1 py-3 rounded-lg bg-foreground items-center"
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-            >
-              <Text variant="body" className="font-medium text-background">
-                Save
-              </Text>
-            </Pressable>
-          </View>
+        {/* Header */}
+        <View className="flex-row items-center justify-between pb-4">
+          <Text variant="subtitle" className="font-semibold">
+            Edit Alias
+          </Text>
+          <Pressable
+            onPress={handleDismiss}
+            className="p-2 -mr-2"
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={24} color={colors.text} />
+          </Pressable>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+
+        {/* Input section */}
+        <View>
+          <Text variant="caption" color="muted" className="mb-2">
+            Custom name for this miner
+          </Text>
+          <View className="flex-row items-center bg-background rounded-lg border border-border">
+            <BottomSheetTextInput
+              value={alias}
+              onChangeText={setAlias}
+              placeholder={hostname || 'Enter alias'}
+              placeholderTextColor={colors.textMuted}
+              style={{
+                flex: 1,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                color: colors.text,
+                fontSize: 16,
+              }}
+              autoFocus
+              maxLength={32}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleSave}
+            />
+            {alias.length > 0 && (
+              <Pressable onPress={handleClear} className="p-3" hitSlop={8}>
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            )}
+          </View>
+          <Text variant="caption" color="muted" className="mt-1">
+            Leave empty to use hostname
+          </Text>
+        </View>
+
+        {/* Buttons */}
+        <View className="flex-row gap-3 mt-6">
+          <Pressable
+            onPress={handleDismiss}
+            className="flex-1 py-3 rounded-lg bg-background border border-border items-center"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <Text variant="body" className="font-medium">
+              Cancel
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleSave}
+            className="flex-1 py-3 rounded-lg bg-foreground items-center"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <Text variant="body" className="font-medium text-background">
+              Save
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheetView>
+    </BottomSheetModal>
   );
 }
