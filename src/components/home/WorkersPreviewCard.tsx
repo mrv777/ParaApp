@@ -12,7 +12,7 @@ import { WorkerRow } from './WorkerRow';
 import type { UserWorker } from '@/types';
 
 export interface WorkersPreviewCardProps {
-  workers: UserWorker[];
+  workers?: UserWorker[];
   maxItems?: number;
   onViewAll: () => void;
   isLoading?: boolean;
@@ -21,15 +21,16 @@ export interface WorkersPreviewCardProps {
 }
 
 export function WorkersPreviewCard({
-  workers,
+  workers = [],
   maxItems = 5,
   onViewAll,
   isLoading = false,
   connectionStatus = 'connected',
   className = '',
 }: WorkersPreviewCardProps) {
-  const displayWorkers = workers.slice(0, maxItems);
-  const showSkeleton = isLoading && workers.length === 0;
+  const safeWorkers = Array.isArray(workers) ? workers : [];
+  const displayWorkers = safeWorkers.slice(0, maxItems);
+  const showSkeleton = isLoading && safeWorkers.length === 0;
 
   return (
     <Card padding="none" className={className}>
@@ -50,7 +51,7 @@ export function WorkersPreviewCard({
               </View>
             ))}
           </View>
-        ) : workers.length === 0 ? (
+        ) : safeWorkers.length === 0 ? (
           <View className="py-8 items-center">
             <Text variant="body" color="muted">
               No workers found
@@ -71,7 +72,7 @@ export function WorkersPreviewCard({
       </View>
 
       {/* Footer with View All button */}
-      {workers.length > 0 && (
+      {safeWorkers.length > 0 && (
         <View className="px-4 pb-4 pt-2">
           <Button
             variant="ghost"
@@ -79,7 +80,7 @@ export function WorkersPreviewCard({
             iconPosition="left"
             onPress={onViewAll}
           >
-            View all workers ({workers.length})
+            View all workers ({safeWorkers.length})
           </Button>
         </View>
       )}

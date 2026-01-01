@@ -36,6 +36,14 @@ export type MinersStackParamList = {
 };
 
 /**
+ * Settings tab stack navigator param list
+ */
+export type SettingsStackParamList = {
+  SettingsMain: undefined;
+  QRScanner: undefined;
+};
+
+/**
  * Helper type for screen component props
  * Usage: MainTabScreenProps<'Home'>
  */
@@ -61,6 +69,16 @@ export type HomeStackScreenProps<T extends keyof HomeStackParamList> = Composite
  */
 export type MinersStackScreenProps<T extends keyof MinersStackParamList> = CompositeScreenProps<
   NativeStackScreenProps<MinersStackParamList, T>,
+  BottomTabScreenProps<MainTabParamList>
+>;
+
+/**
+ * Helper type for Settings stack screen props
+ * Composite type for screens that are nested in Settings tab
+ * Usage: SettingsStackScreenProps<'SettingsMain'>
+ */
+export type SettingsStackScreenProps<T extends keyof SettingsStackParamList> = CompositeScreenProps<
+  NativeStackScreenProps<SettingsStackParamList, T>,
   BottomTabScreenProps<MainTabParamList>
 >;
 

@@ -8,9 +8,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
-import { PoolScreen, SettingsScreen } from '@/screens';
+import { PoolScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
-import { HomeStack, MinersStack } from '@/navigation';
+import { HomeStack, MinersStack, SettingsStack } from '@/navigation';
 import { colors } from '@/constants/colors';
 import type { MainTabParamList } from '@/types/navigation';
 
@@ -46,7 +46,7 @@ export default function App() {
               <Tab.Screen name="Home" component={HomeStack} />
               <Tab.Screen name="Pool" component={PoolScreen} />
               <Tab.Screen name="Miners" component={MinersStack} />
-              <Tab.Screen name="Settings" component={SettingsScreen} />
+              <Tab.Screen name="Settings" component={SettingsStack} />
             </Tab.Navigator>
           </BottomSheetModalProvider>
         </NavigationContainer>
