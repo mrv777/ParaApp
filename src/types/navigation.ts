@@ -32,6 +32,7 @@ export type HomeStackParamList = {
 export type MinersStackParamList = {
   MinersMain: undefined;
   MinerDetail: { ip: string };
+  MinerSettings: { ip: string };
 };
 
 /**

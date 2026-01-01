@@ -78,6 +78,11 @@ export function MinerDetailScreen({ route, navigation }: Props) {
     setAliasSheetVisible(true);
   }, []);
 
+  const handleOpenSettings = useCallback(() => {
+    haptics.light();
+    navigation.navigate('MinerSettings', { ip });
+  }, [navigation, ip]);
+
   const handleSaveAlias = useCallback(
     (alias: string) => {
       updateMinerAlias(ip, alias);
@@ -132,6 +137,15 @@ export function MinerDetailScreen({ route, navigation }: Props) {
             </Text>
           )}
         </View>
+        {miner.isOnline && (
+          <Pressable
+            onPress={handleOpenSettings}
+            className="p-2 mr-1"
+            hitSlop={8}
+          >
+            <Ionicons name="settings-outline" size={20} color={colors.textMuted} />
+          </Pressable>
+        )}
         <Pressable
           onPress={handleEditAlias}
           className="p-2 -mr-2"

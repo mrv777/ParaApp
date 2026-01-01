@@ -3,3 +3,4 @@
  */
 
 export { MinerDetailScreen } from './MinerDetailScreen';
+export { MinerSettingsScreen } from './MinerSettingsScreen';

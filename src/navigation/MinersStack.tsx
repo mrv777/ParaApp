@@ -4,7 +4,7 @@
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MinersScreen } from '@/screens';
-import { MinerDetailScreen } from '@/screens/miners';
+import { MinerDetailScreen, MinerSettingsScreen } from '@/screens/miners';
 import { colors } from '@/constants/colors';
 import type { MinersStackParamList } from '@/types/navigation';
 
@@ -21,6 +21,7 @@ export function MinersStack() {
     >
       <Stack.Screen name="MinersMain" component={MinersScreen} />
       <Stack.Screen name="MinerDetail" component={MinerDetailScreen} />
+      <Stack.Screen name="MinerSettings" component={MinerSettingsScreen} />
     </Stack.Navigator>
   );
 }

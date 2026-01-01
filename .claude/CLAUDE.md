@@ -37,17 +37,22 @@ pnpm exec expo install --fix  # Fix package versions
 
 ## Current Phase
 
-**Phase:** 3D - Complete (Miner Controls)
-**Status:** Ready for Phase 3E (Miner Settings)
+**Phase:** 3E - Complete (Miner Settings)
+**Status:** Ready for Phase 3F (Worker Linking)
 
-**Phase 3D Completed:**
-- MinerControlsSection with Identify LED and Restart controls
-- Identify LED: Tap to flash, pulsing animation for 15 seconds
-- Restart: SwipeToConfirm (danger variant) with reconnecting state
-- Inline error banner with auto-dismiss
-- Fixed restart API to handle connection drop (miner reboots immediately)
-- Controls section between Device Info and Linked Worker
-- Hidden when miner offline (unless reconnecting)
+**Phase 3E Completed:**
+- MinerSettingsScreen: Full-screen settings for hardware and pool config
+- Hardware settings: Frequency, Voltage, Fan Speed selectors
+- Uses API options from `/api/system/asic` with custom input option
+- Pool config: URL, Port, Worker, Password text inputs
+- "Set to Parasite" preset button for quick pool setup
+- Pending changes summary shows what will be modified
+- SwipeToConfirm (danger variant) to apply changes
+- Warnings for values exceeding recommended limits
+- Settings button (gear icon) in MinerDetail header
+- Added `frequency` field to LocalMiner for current value display
+- Added `AsicConfig` type for ASIC settings response
+- Fixed `PARASITE_STRATUM_PRESET.stratumUrl` (removed protocol prefix)
 
 See `IMPLEMENTATION.md` for phase details and prompts.
 

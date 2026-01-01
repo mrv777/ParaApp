@@ -61,6 +61,8 @@ export interface LocalMiner {
   temp: number;
   /** Core voltage (mV) */
   voltage: number;
+  /** Core frequency (MHz) */
+  frequency: number;
   /** Fan speed (%) */
   fanSpeed: number;
   /** Best difficulty ever achieved */
@@ -189,4 +191,29 @@ export interface DiscoveryOptions {
   endIp?: number;
   /** Concurrent connections, default: 50 */
   concurrency?: number;
+}
+
+/**
+ * ASIC configuration from /api/system/asic
+ * Provides available options for hardware settings
+ */
+export interface AsicConfig {
+  /** ASIC model (e.g., "BM1370") */
+  ASICModel: string;
+  /** Device model (e.g., "NerdQAxe++") */
+  deviceModel: string;
+  /** Number of ASIC chips */
+  asicCount?: number;
+  /** Available frequency options (MHz) */
+  frequencyOptions: number[];
+  /** Available voltage options (mV) */
+  voltageOptions: number[];
+  /** Default frequency (MHz) */
+  defaultFrequency: number;
+  /** Default voltage (mV) */
+  defaultVoltage: number;
+  /** Absolute maximum frequency (MHz) */
+  absMaxFrequency: number;
+  /** Absolute maximum voltage (mV) */
+  absMaxVoltage: number;
 }

@@ -557,7 +557,7 @@ Reference SPEC.md Miner Controls section.
 - Controls section appears after Device Info, before Linked Worker section
 - Controls hidden when miner is offline (unless reconnecting after restart)
 
-### Session 3E: Miner Settings
+### Session 3E: Miner Settings ✅ COMPLETE
 
 #### Prompt
 
@@ -581,11 +581,28 @@ Reference SPEC.md Miner Settings section.
 ```
 
 #### Deliverables
-- [ ] Settings screen with sliders
-- [ ] Pool config fields
-- [ ] Parasite preset button
-- [ ] Preview + apply flow
-- [ ] Extreme value warnings
+- [x] Settings screen with value selectors
+- [x] Pool config fields
+- [x] Parasite preset button
+- [x] Preview + apply flow
+- [x] Extreme value warnings
+
+#### Implementation Notes
+- Created `/src/screens/miners/MinerSettingsScreen.tsx` - Full-screen settings (not bottom sheet)
+- Uses API options from `/api/system/asic` (frequencyOptions, voltageOptions arrays)
+- Hardware settings: Frequency, Voltage with option chips + "Custom" unlock for manual entry
+- Fan speed: 0-100% in 10% steps (0 = Auto)
+- Pool config: TextInputs for stratumUrl, stratumPort, stratumUser, stratumPassword
+- "Set to Parasite" button fills preset values (uses bitcoin address from settings for worker)
+- Pending changes summary shows field-by-field comparison (from → to)
+- SwipeToConfirm (danger variant) to apply settings via PATCH /api/system
+- Warning badges when custom values exceed recommended options or absMax limits
+- Added `AsicConfig` interface to `/src/types/miner.ts`
+- Added `frequency` field to `LocalMiner` interface for current value display
+- Updated `getAsicSettings()` in `/src/api/bitaxe.ts` with proper return type
+- Fixed `PARASITE_STRATUM_PRESET.stratumUrl` to `stratum.parasite.space` (removed protocol prefix)
+- Settings button (gear icon) in MinerDetailScreen header (only shown when online)
+- Added `MinerSettings` route to MinersStack navigation
 
 ### Session 3F: Worker Linking
 

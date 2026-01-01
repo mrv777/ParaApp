@@ -3,7 +3,7 @@
  * Base URL: http://{miner_ip}
  */
 
-import type { ApiResult, BitaxeSystemInfo, MinerSettings } from '@/types';
+import type { ApiResult, AsicConfig, BitaxeSystemInfo, MinerSettings } from '@/types';
 import { fetchWithTimeout, postJson, patchJson, MINER_TIMEOUT } from './client';
 
 /**
@@ -32,8 +32,8 @@ export async function getSystemInfo(
  */
 export async function getAsicSettings(
   ip: string
-): Promise<ApiResult<Record<string, unknown>>> {
-  return fetchWithTimeout<Record<string, unknown>>(
+): Promise<ApiResult<AsicConfig>> {
+  return fetchWithTimeout<AsicConfig>(
     `${minerUrl(ip)}/api/system/asic`,
     { timeout: MINER_TIMEOUT }
   );
@@ -122,7 +122,7 @@ export const PARASITE_STRATUM_PRESET: Pick<
   MinerSettings,
   'stratumUrl' | 'stratumPort'
 > = {
-  stratumUrl: 'stratum+tcp://parasite.space',
+  stratumUrl: 'stratum.parasite.space',
   stratumPort: 3333,
 };
 
