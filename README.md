@@ -59,7 +59,7 @@ src/
   components/     # Reusable UI components
     charts/       # Chart components (HashrateChart, etc.)
     home/         # Home screen components
-    miners/       # Miner management components (DiscoveryCard, MinerRow)
+    miners/       # Miner management components (DiscoveryCard, MinerRow, HeaderButtons, NetworkBanner, SortFilterModal)
     pool/         # Pool screen components
     navigation/   # Navigation components (TabBar)
   store/          # Zustand stores (pool, user, miner, settings)

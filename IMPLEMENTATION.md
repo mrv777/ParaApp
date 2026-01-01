@@ -435,7 +435,7 @@ Reference SPEC.md Discovery & Setup section.
 - Added swipe-to-delete via react-native-gesture-handler
 - Custom IP range parsing in `/src/utils/validation.ts`
 
-### Session 3B: Miners List Screen
+### Session 3B: Miners List Screen ✅ COMPLETE
 
 #### Prompt
 
@@ -460,12 +460,21 @@ Reference SPEC.md Miners screen and Warning conditions.
 ```
 
 #### Deliverables
-- [ ] Miners list with sort/filter
-- [ ] Warning badges (two-tier)
-- [ ] Problem miners pushed to top
-- [ ] Network availability banner
-- [ ] Add/Scan buttons
-- [ ] Graceful offline handling
+- [x] Miners list with sort/filter
+- [x] Warning badges (two-tier)
+- [x] Problem miners pushed to top
+- [x] Network availability banner
+- [x] Add/Scan buttons
+- [x] Graceful offline handling
+
+#### Implementation Notes
+- Created `/src/components/miners/HeaderButtons.tsx` with Add, Scan, and Sort/Filter buttons
+- Created `/src/components/miners/NetworkBanner.tsx` for offline warning with dismiss
+- Created `/src/components/miners/SortFilterModal.tsx` with sort (name, hashrate, temp, status) and filter (all, online, offline, warning) options
+- Enhanced `MinerRow` with warning badges using `getWarningLabel()` helper
+- Added `MinerSortOption` and `MinerFilterOption` types to `/src/types/miner.ts`
+- Memoized `ListHeader` in MinersScreen for performance
+- Added `onClose` prop to DiscoveryCard for better UX
 
 ### Session 3C: Miner Detail Screen
 

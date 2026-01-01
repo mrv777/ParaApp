@@ -37,16 +37,17 @@ pnpm exec expo install --fix  # Fix package versions
 
 ## Current Phase
 
-**Phase:** 3A - Complete (Miner Discovery)
-**Status:** Ready for Phase 3B (Miners List Screen)
+**Phase:** 3B - Complete (Miners List Screen)
+**Status:** Ready for Phase 3C (Miner Detail Screen)
 
-**Phase 3A Completed:**
-- Miner auto-discovery with 50 concurrent connections
-- Manual IP entry with validation
-- Custom IP range scanning
-- Real-time progress indicator
-- Swipe-to-delete functionality
-- Miners persisted in Zustand + AsyncStorage
+**Phase 3B Completed:**
+- Sort options (name, hashrate, temp, status)
+- Filter options (all, online, offline, warning)
+- Warning badges on miners with issues
+- Network connectivity banner when all offline
+- Header buttons for add/scan/sort-filter
+- Discovery card close button for UX
+- Memoized ListHeader for performance
 
 See `IMPLEMENTATION.md` for phase details and prompts.
 
