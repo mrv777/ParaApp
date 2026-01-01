@@ -55,13 +55,17 @@ If issues are found, run `pnpm expo install --fix` to automatically update packa
 
 ```
 src/
-  screens/        # Screen components (Home, Pool, Miners, Settings)
+  screens/        # Screen components
+    home/         # Home tab screens (HomeMainScreen, WorkersListScreen)
+    miners/       # Miners tab screens (MinerDetailScreen, MinerSettingsScreen)
+    settings/     # Settings tab screens (SettingsMainScreen, QRScannerScreen)
   components/     # Reusable UI components
     charts/       # Chart components (HashrateChart, etc.)
     home/         # Home screen components (UserStatsCard, WorkersPreviewCard, WorkerRow, LinkedMinersIndicator, LinkedMinersExpandedSection, PoolSummaryCard, AddAddressPrompt)
-    miners/       # Miner management components (DiscoveryCard, MinerRow, MinerStatsSection, DeviceInfoSection, LinkedWorkerSection, MultiMinerSection, MinerControlsSection, MinerSettingsScreen, AliasEditSheet, HeaderButtons, NetworkBanner, SortFilterModal)
+    miners/       # Miner management components (DiscoveryCard, MinerRow, MinerStatsSection, DeviceInfoSection, LinkedWorkerSection, MultiMinerSection, MinerControlsSection, AliasEditSheet, HeaderButtons, NetworkBanner, SortFilterModal)
     pool/         # Pool screen components
     navigation/   # Navigation components (TabBar)
+  navigation/     # Stack navigators (HomeStack, MinersStack, SettingsStack)
   store/          # Zustand stores (pool, user, miner, settings)
   api/            # API clients (Parasite Pool, Bitaxe, Mempool)
   types/          # TypeScript interfaces

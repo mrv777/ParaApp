@@ -16,9 +16,10 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 
 **Key Directories:**
 - `/src/screens/` - Screen components
+- `/src/screens/settings/` - Settings tab screens (SettingsMainScreen, QRScannerScreen)
 - `/src/components/` - Reusable UI components
 - `/src/components/miners/` - Miner discovery & list components
-- `/src/navigation/` - Stack navigators (HomeStack, MinersStack)
+- `/src/navigation/` - Stack navigators (HomeStack, MinersStack, SettingsStack)
 - `/src/store/` - Zustand stores (pool, user, miner, settings)
 - `/src/api/` - API clients (parasite, bitaxe, mempool)
 - `/src/hooks/` - Custom hooks (polling, app state)
@@ -37,22 +38,20 @@ pnpm exec expo install --fix  # Fix package versions
 
 ## Current Phase
 
-**Phase:** 3E - Complete (Miner Settings)
-**Status:** Ready for Phase 3F (Worker Linking)
+**Phase:** 4A - Complete (Settings Screen)
+**Status:** Ready for Phase 4B (Onboarding & Empty States)
 
-**Phase 3E Completed:**
-- MinerSettingsScreen: Full-screen settings for hardware and pool config
-- Hardware settings: Frequency, Voltage, Fan Speed selectors
-- Uses API options from `/api/system/asic` with custom input option
-- Pool config: URL, Port, Worker, Password text inputs
-- "Set to Parasite" preset button for quick pool setup
-- Pending changes summary shows what will be modified
-- SwipeToConfirm (danger variant) to apply changes
-- Warnings for values exceeding recommended limits
-- Settings button (gear icon) in MinerDetail header
-- Added `frequency` field to LocalMiner for current value display
-- Added `AsicConfig` type for ASIC settings response
-- Fixed `PARASITE_STRATUM_PRESET.stratumUrl` (removed protocol prefix)
+**Phase 4A Completed:**
+- SettingsStack navigator with QRScanner modal
+- SettingsMainScreen with all preference controls
+- Bitcoin address input with QR scan button and validation
+- QRScannerScreen: Full-screen camera with expo-camera, BIP21 parsing
+- Visibility toggle (leaderboard public/private)
+- Temperature unit selector (C/F)
+- Polling interval selector (5s, 10s, 20s, 30s)
+- About section with version, Parasite Pool link, GitHub link
+- Camera permission handling with request/denied states
+- All preferences persist via Zustand settings store
 
 See `IMPLEMENTATION.md` for phase details and prompts.
 

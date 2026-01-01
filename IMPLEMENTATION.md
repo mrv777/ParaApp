@@ -676,7 +676,7 @@ git tag phase-3-complete
 
 **Duration:** ~2 sessions
 
-### Session 4A: Settings Screen
+### Session 4A: Settings Screen ✅ COMPLETE
 
 #### Prompt
 
@@ -697,13 +697,28 @@ Reference SPEC.md Settings screen section.
 ```
 
 #### Deliverables
-- [ ] Settings screen layout
-- [ ] Bitcoin address input + validation
-- [ ] QR code scanning
-- [ ] Visibility toggle (PATCH API)
-- [ ] Temperature unit preference
-- [ ] Polling interval selector
-- [ ] About section
+- [x] Settings screen layout
+- [x] Bitcoin address input + validation
+- [x] QR code scanning
+- [x] Visibility toggle (PATCH API)
+- [x] Temperature unit preference
+- [x] Polling interval selector
+- [x] About section
+
+#### Implementation Notes
+- Created `/src/navigation/SettingsStack.tsx` - Stack navigator with QRScanner modal
+- Created `/src/screens/settings/SettingsMainScreen.tsx` - Main settings UI with all preference controls
+- Created `/src/screens/settings/QRScannerScreen.tsx` - Full-screen camera modal with expo-camera
+- Uses existing `isValidBitcoinAddress()` from `/src/utils/validation.ts` (bitcoinjs-lib)
+- Bitcoin address input: TextInput with QR scan button, validation feedback (checkmark/error)
+- Visibility toggle: Switch component for leaderboard public/private preference
+- Temperature unit: Horizontal segmented selector (C/F)
+- Polling interval: Horizontal segmented selector (5s, 10s, 20s, 30s)
+- About section: Version display, Parasite Pool link, GitHub link (opens via Linking.openURL)
+- QR scanner: Permission handling with request/denied states, BIP21 URI parsing
+- All preferences persisted via existing Zustand settings store with AsyncStorage
+- Added `SettingsStackParamList` and `SettingsStackScreenProps` to navigation types
+- Updated `app.json` with expo-camera plugin for camera permission message
 
 ### Session 4B: Onboarding & Empty States
 
