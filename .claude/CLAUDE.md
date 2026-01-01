@@ -141,6 +141,13 @@ pnpm expo install --fix  # Fix package versions to match Expo SDK
   - `formatting.ts` - Hashrate, difficulty, temperature, timestamps
   - `validation.ts` - Bitcoin address validation (all formats)
 - New dependency: `bitcoinjs-lib` for address validation
+- Polling infrastructure with background awareness:
+  - `useAppState.ts` - App foreground/background state tracking
+  - `usePolling.ts` - Generic polling hook with configurable interval
+  - `usePoolPolling.ts` - Pool stats, leaderboard, historical data polling
+  - `useUserPolling.ts` - User stats and worker data polling
+- Updated pool types to match actual Parasite Pool API responses
+- Removed `getPoolBlocks` stub (data available via leaderboard endpoint)
 
 ## Verification Notes
 

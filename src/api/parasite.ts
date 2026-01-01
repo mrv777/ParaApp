@@ -6,7 +6,6 @@
 import type {
   ApiResult,
   PoolStats,
-  PoolBlock,
   PoolHistoricalPoint,
   LeaderboardEntry,
   UserStats,
@@ -38,16 +37,6 @@ export async function getPoolHistorical(
   return fetchWithTimeout<PoolHistoricalPoint[]>(
     `${BASE_URL}/api/pool-stats/historical?${params}`
   );
-}
-
-/**
- * Get blocks found by the pool
- * Note: This may be included in pool-stats or a separate endpoint
- */
-export async function getPoolBlocks(): Promise<ApiResult<PoolBlock[]>> {
-  // Pool blocks are typically included in pool stats or via the highest-diff endpoint
-  // Adjust this based on actual API response structure
-  return fetchWithTimeout<PoolBlock[]>(`${BASE_URL}/api/pool-stats`);
 }
 
 /**

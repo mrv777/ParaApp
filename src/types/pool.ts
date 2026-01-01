@@ -26,20 +26,29 @@ export interface PoolBlock {
 }
 
 /**
- * Historical data point for charts
+ * Historical data point for charts from /api/pool-stats/historical
  */
 export interface PoolHistoricalPoint {
   timestamp: number;
-  hashrate: number;
+  users: number;
+  workers: number;
+  idle: number;
+  disconnected: number;
+  hashrate15m: number;
+  hashrate1hr: number;
+  hashrate6hr: number;
+  hashrate1d: number;
+  hashrate7d: number;
 }
 
 /**
- * Leaderboard entry for top difficulty or loyalty
+ * Leaderboard entry from /api/highest-diff
  */
 export interface LeaderboardEntry {
-  address: string;
+  block_height: number;
+  top_diff_address: string;
   difficulty: number;
-  rank: number;
+  block_timestamp: number;
 }
 
 /**
