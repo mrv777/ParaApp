@@ -7,6 +7,8 @@ import { View, Pressable, LayoutAnimation, Platform, UIManager } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
 import { Badge } from '../Badge';
+import { LinkedMinersIndicator } from './LinkedMinersIndicator';
+import { LinkedMinersExpandedSection } from './LinkedMinersExpandedSection';
 import { formatHashrate, formatDifficulty, formatTimestamp } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -22,6 +24,7 @@ export interface WorkerRowProps {
   expanded?: boolean;
   onToggle?: () => void;
   showExpandButton?: boolean;
+  showLinkedMiners?: boolean;
   className?: string;
 }
 
@@ -30,6 +33,7 @@ export function WorkerRow({
   expanded = false,
   onToggle,
   showExpandButton = false,
+  showLinkedMiners = false,
   className = '',
 }: WorkerRowProps) {
   const handlePress = () => {
@@ -75,6 +79,7 @@ export function WorkerRow({
         <Text variant="caption" color="muted">
           Last: {formatTimestamp(worker.lastSubmission)}
         </Text>
+        {showLinkedMiners && <LinkedMinersIndicator workerName={worker.name} />}
       </View>
 
       {/* Expanded details */}
@@ -83,6 +88,11 @@ export function WorkerRow({
           <Badge variant={isOnline ? 'success' : 'danger'} size="sm">
             {isOnline ? 'Online' : 'Offline'}
           </Badge>
+
+          {/* Linked miners section */}
+          {showLinkedMiners && (
+            <LinkedMinersExpandedSection workerName={worker.name} />
+          )}
         </View>
       )}
     </View>

@@ -52,6 +52,7 @@ export function WorkersListScreen({ navigation }: Props) {
         expanded={expandedWorker === item.name}
         onToggle={() => handleToggleExpand(item.name)}
         showExpandButton
+        showLinkedMiners
       />
     ),
     [expandedWorker, handleToggleExpand]

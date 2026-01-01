@@ -436,6 +436,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
   )
 );
 
+// Stable empty array for selectors (prevents infinite re-renders)
+const EMPTY_MINERS: LocalMiner[] = [];
+
 // Selectors
 export const selectMiners = (state: MinerState) => state.miners;
 export const selectSavedMiners = (state: MinerState) => state.savedMiners;
@@ -457,3 +460,15 @@ export const selectMinerError = (state: MinerState) => state.error;
 export const selectIsLoading = (state: MinerState) => state.isLoading;
 export const selectIsMinerLoading = (state: MinerState, ip: string) =>
   state.loadingMiners.has(ip);
+
+/**
+ * Select all miners that match a given stratumUser
+ * Returns a stable empty array if no matches to prevent re-renders
+ */
+export const selectMinersByStratumUser =
+  (stratumUser: string) =>
+  (state: MinerState): LocalMiner[] => {
+    if (!stratumUser) return EMPTY_MINERS;
+    const matches = state.miners.filter((m) => m.stratumUser === stratumUser);
+    return matches.length > 0 ? matches : EMPTY_MINERS;
+  };

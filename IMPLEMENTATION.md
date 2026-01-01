@@ -604,7 +604,7 @@ Reference SPEC.md Miner Settings section.
 - Settings button (gear icon) in MinerDetailScreen header (only shown when online)
 - Added `MinerSettings` route to MinersStack navigation
 
-### Session 3F: Worker Linking
+### Session 3F: Worker Linking ✅ COMPLETE
 
 #### Prompt
 
@@ -624,10 +624,28 @@ Reference SPEC.md Worker Linking section.
 ```
 
 #### Deliverables
-- [ ] Worker linking by stratumUser
-- [ ] Linked stats display
-- [ ] Aggregated view for shared workers
-- [ ] Auto-update on changes
+- [x] Worker linking by stratumUser
+- [x] Linked stats display
+- [x] Aggregated view for shared workers
+- [x] Auto-update on changes
+
+#### Implementation Notes
+- Added `selectMinersByStratumUser` selector to `/src/store/minerStore.ts` for efficient worker-to-miner lookups
+- Created `/src/utils/minerAggregation.ts` with `aggregateMinerStats()` for combining stats across multiple miners
+- Updated `/src/components/miners/LinkedWorkerSection.tsx`:
+  - Added `currentMinerIp` prop to identify current miner in multi-miner list
+  - Shows "Not linked to pool" subtle indicator when worker not found (instead of hiding section)
+  - Displays `MultiMinerSection` when multiple miners share same stratumUser
+- Created `/src/components/miners/MultiMinerSection.tsx` - expandable section showing:
+  - Combined local fleet stats (total hashrate, online/total count)
+  - List of all miners sharing the worker with navigation to detail
+  - "This" badge on current miner
+- Created `/src/components/home/LinkedMinersIndicator.tsx` - compact chip showing linked miner count + hashrate
+- Created `/src/components/home/LinkedMinersExpandedSection.tsx` - full linked miners list in expanded WorkerRow
+- Updated `/src/components/home/WorkerRow.tsx` with `showLinkedMiners` prop for bidirectional display
+- Updated `/src/screens/home/WorkersListScreen.tsx` to enable linked miners in workers list
+- Updated `/src/screens/miners/MinerDetailScreen.tsx` to pass `currentMinerIp` to LinkedWorkerSection
+- Auto-updates via Zustand selectors - changes to miners or workers trigger re-renders
 
 ### Testing Checklist (Phase 3 Complete)
 - [ ] Auto-discovery finds miners on local network

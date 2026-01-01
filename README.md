@@ -58,15 +58,15 @@ src/
   screens/        # Screen components (Home, Pool, Miners, Settings)
   components/     # Reusable UI components
     charts/       # Chart components (HashrateChart, etc.)
-    home/         # Home screen components
-    miners/       # Miner management components (DiscoveryCard, MinerRow, MinerStatsSection, DeviceInfoSection, LinkedWorkerSection, MinerControlsSection, MinerSettingsScreen, AliasEditSheet, HeaderButtons, NetworkBanner, SortFilterModal)
+    home/         # Home screen components (UserStatsCard, WorkersPreviewCard, WorkerRow, LinkedMinersIndicator, LinkedMinersExpandedSection, PoolSummaryCard, AddAddressPrompt)
+    miners/       # Miner management components (DiscoveryCard, MinerRow, MinerStatsSection, DeviceInfoSection, LinkedWorkerSection, MultiMinerSection, MinerControlsSection, MinerSettingsScreen, AliasEditSheet, HeaderButtons, NetworkBanner, SortFilterModal)
     pool/         # Pool screen components
     navigation/   # Navigation components (TabBar)
   store/          # Zustand stores (pool, user, miner, settings)
   api/            # API clients (Parasite Pool, Bitaxe, Mempool)
   types/          # TypeScript interfaces
   hooks/          # Custom React hooks (polling, app state)
-  utils/          # Utility functions (formatting, validation, discovery)
+  utils/          # Utility functions (formatting, validation, discovery, minerAggregation)
   i18n/           # Internationalization
   constants/      # Theme, colors, config values
 ```

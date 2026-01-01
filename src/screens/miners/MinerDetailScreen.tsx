@@ -225,7 +225,10 @@ export function MinerDetailScreen({ route, navigation }: Props) {
         <MinerControlsSection miner={miner} />
 
         {/* Linked worker (conditional) */}
-        <LinkedWorkerSection stratumUser={miner.stratumUser} />
+        <LinkedWorkerSection
+          stratumUser={miner.stratumUser}
+          currentMinerIp={miner.ip}
+        />
       </ScrollView>
 
       {/* Alias edit sheet */}

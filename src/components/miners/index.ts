@@ -21,3 +21,7 @@ export {
   MinerControlsSection,
   type MinerControlsSectionProps,
 } from './MinerControlsSection';
+export {
+  MultiMinerSection,
+  type MultiMinerSectionProps,
+} from './MultiMinerSection';
