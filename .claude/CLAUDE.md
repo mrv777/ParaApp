@@ -30,10 +30,10 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 
 **Commands:**
 ```bash
-npm start          # Start Expo dev server
-npm test           # Run Jest tests
-npm run lint       # ESLint check
-npm run typecheck  # TypeScript check
+pnpm start          # Start Expo dev server
+pnpm test           # Run Jest tests
+pnpm lint           # ESLint check
+pnpm typecheck      # TypeScript check
 ```
 
 ## Current Phase

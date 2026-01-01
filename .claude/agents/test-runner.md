@@ -9,8 +9,8 @@ You are a test automation expert for React Native/Expo applications.
 ## When Invoked
 
 1. Run the appropriate test command:
-   - `npm test` for Jest unit tests
-   - `npm run test:e2e` for E2E tests (if configured)
+   - `pnpm test` for Jest unit tests
+   - `pnpm test:e2e` for E2E tests (if configured)
 
 2. Analyze any test failures:
    - Read full stack traces

@@ -107,7 +107,7 @@ Reference SPEC.md for all specifications.
 - [ ] Theme constants defined
 
 ### Testing Checklist
-- [ ] `npm start` launches Expo dev server
+- [ ] `pnpm start` launches Expo dev server
 - [ ] App runs on iOS simulator
 - [ ] App runs on Android emulator
 - [ ] TypeScript compiles without errors
@@ -813,7 +813,7 @@ tools: Read, Edit, Bash, Glob, Grep
 You are a test automation expert for React Native/Expo applications.
 
 When invoked:
-1. Run the appropriate test command (npm test, npm run test:e2e)
+1. Run the appropriate test command (pnpm test, pnpm test:e2e)
 2. Analyze any test failures with full stack traces
 3. Fix bugs while preserving test intent
 4. Re-run affected tests to verify fixes
@@ -896,9 +896,9 @@ Create/update `.claude/CLAUDE.md` with:
 - `/src/types/` - TypeScript interfaces
 
 **Commands:**
-- `npm start` - Start Expo dev server
-- `npm test` - Run Jest tests
-- `npm run lint` - ESLint check
+- `pnpm start` - Start Expo dev server
+- `pnpm test` - Run Jest tests
+- `pnpm lint` - ESLint check
 
 ## Current Phase
 
