@@ -17,3 +17,7 @@ export {
   LinkedWorkerSection,
   type LinkedWorkerSectionProps,
 } from './LinkedWorkerSection';
+export {
+  MinerControlsSection,
+  type MinerControlsSectionProps,
+} from './MinerControlsSection';

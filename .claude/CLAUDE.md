@@ -37,19 +37,17 @@ pnpm exec expo install --fix  # Fix package versions
 
 ## Current Phase
 
-**Phase:** 3C - Complete (Miner Detail Screen)
-**Status:** Ready for Phase 3D (Miner Controls)
+**Phase:** 3D - Complete (Miner Controls)
+**Status:** Ready for Phase 3E (Miner Settings)
 
-**Phase 3C Completed:**
-- MinersStack navigator wrapping MinersScreen
-- MinerDetailScreen with continuous scroll layout
-- MinerStatsSection (2-column grid: hashrate, temp, power, voltage, shares, uptime, best diff, fan)
-- DeviceInfoSection (model, ASIC, firmware, IP, hostname, pool, worker, WiFi)
-- LinkedWorkerSection (matches stratumUser with pool workers)
-- AliasEditSheet (bottom sheet modal for alias editing)
-- Polling with usePolling hook (settings interval, pauses when offline)
-- Offline state (last seen, last best diff)
-- Temperature color thresholds (warning 68°C, danger 70°C+)
+**Phase 3D Completed:**
+- MinerControlsSection with Identify LED and Restart controls
+- Identify LED: Tap to flash, pulsing animation for 15 seconds
+- Restart: SwipeToConfirm (danger variant) with reconnecting state
+- Inline error banner with auto-dismiss
+- Fixed restart API to handle connection drop (miner reboots immediately)
+- Controls section between Device Info and Linked Worker
+- Hidden when miner offline (unless reconnecting)
 
 See `IMPLEMENTATION.md` for phase details and prompts.
 
@@ -91,6 +89,11 @@ If you see `Cannot read property '__extends' of undefined`:
 If selectors cause infinite re-renders:
 - Don't return `|| []` from selectors - use a const empty array instead
 - Example: `const EMPTY = []; select = (s) => s.data ?? EMPTY;`
+
+### Bitaxe Restart API
+The restart endpoint causes the miner to reboot immediately, dropping the connection before responding:
+- Set `retries: 0` (no point retrying a rebooting device)
+- Treat `NETWORK_ERROR` or `TIMEOUT` as success (expected behavior)
 
 ## Subagents
 

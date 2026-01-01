@@ -130,6 +130,35 @@ export function formatNumber(num: number, decimals?: number): string {
 }
 
 /**
+ * Parse difficulty string from Bitaxe API (e.g., "24.3G", "1.05M", "500K")
+ * @param diffStr - Difficulty string with optional unit suffix
+ * @returns Numeric difficulty value
+ */
+export function parseDifficulty(diffStr: string): number {
+  if (!diffStr) return 0;
+
+  const units: Record<string, number> = {
+    K: 1e3,
+    M: 1e6,
+    G: 1e9,
+    T: 1e12,
+    P: 1e15,
+    E: 1e18,
+  };
+
+  // Match number with optional unit suffix (e.g., "24.3G", "1.05M", "500")
+  const match = diffStr.match(/^([\d.]+)\s*([KMGTPE])?$/i);
+  if (!match) return parseFloat(diffStr) || 0;
+
+  const value = parseFloat(match[1]);
+  const unit = match[2]?.toUpperCase();
+
+  if (!Number.isFinite(value)) return 0;
+
+  return unit ? value * (units[unit] || 1) : value;
+}
+
+/**
  * Format difficulty with auto-scaling
  * @param diff - Difficulty value
  * @returns Formatted string like "1.23M" or "456K"

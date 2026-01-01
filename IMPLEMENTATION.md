@@ -521,7 +521,7 @@ Reference SPEC.md Miner Detail and Typography sections.
 - Offline state shows last seen timestamp and last best diff
 - Temperature colors based on thresholds (yellow 68°C, red 70°C+)
 
-### Session 3D: Miner Controls
+### Session 3D: Miner Controls ✅ COMPLETE
 
 #### Prompt
 
@@ -541,11 +541,21 @@ Reference SPEC.md Miner Controls section.
 ```
 
 #### Deliverables
-- [ ] Restart with swipe-to-confirm
-- [ ] Identify LED control
-- [ ] Haptic feedback
-- [ ] Loading states
-- [ ] Error handling
+- [x] Restart with swipe-to-confirm
+- [x] Identify LED control
+- [x] Haptic feedback
+- [x] Loading states
+- [x] Error handling
+
+#### Implementation Notes
+- Created `/src/components/miners/MinerControlsSection.tsx` with Identify LED and Restart controls
+- Identify LED: Tap button triggers LED flash, shows pulsing "LED Flashing..." for 15 seconds
+- Restart: Uses existing `SwipeToConfirm` component with danger variant
+- After restart success, shows "Reconnecting..." state until miner comes back online (60s timeout)
+- Inline error banner with auto-dismiss (5 seconds) and manual dismiss
+- Fixed `/src/api/bitaxe.ts` restart function to treat network errors/timeouts as success (miner reboots immediately, dropping connection)
+- Controls section appears after Device Info, before Linked Worker section
+- Controls hidden when miner is offline (unless reconnecting after restart)
 
 ### Session 3E: Miner Settings
 

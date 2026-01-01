@@ -135,6 +135,8 @@ export interface BitaxeSystemInfo {
   sharesRejected: number;
   uptimeSeconds: number;
   ASICModel: string;
+  /** Device model name (e.g., "NerdQAxe++", "Bitaxe Gamma") */
+  deviceModel?: string;
   stratumURL: string;
   stratumPort: number;
   stratumUser: string;
@@ -149,6 +151,8 @@ export interface BitaxeSystemInfo {
   autofanspeed: number;
   fanspeed: number;
   fanrpm: number;
+  /** Number of ASIC chips (multi-chip miners like Hex have 6) */
+  asicCount?: number;
 }
 
 /**

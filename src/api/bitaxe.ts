@@ -82,12 +82,27 @@ export async function updateSettings(
 
 /**
  * Restart/reboot the miner
+ * Note: The miner reboots immediately, often dropping the connection
+ * before returning a response. We treat network errors as success
+ * since the command was sent and the miner is rebooting.
  * @param ip - Miner IP address
  */
 export async function restart(ip: string): Promise<ApiResult<void>> {
-  return postJson<void>(`${minerUrl(ip)}/api/system/restart`, {}, {
+  const result = await postJson<void>(`${minerUrl(ip)}/api/system/restart`, {}, {
     timeout: MINER_TIMEOUT,
+    retries: 0, // Don't retry - miner is rebooting
   });
+
+  // If we got a network error or timeout, the miner likely rebooted
+  // before it could respond - treat this as success
+  if (!result.success) {
+    const errorCode = result.error.code;
+    if (errorCode === 'NETWORK_ERROR' || errorCode === 'TIMEOUT') {
+      return { success: true, data: undefined };
+    }
+  }
+
+  return result;
 }
 
 /**

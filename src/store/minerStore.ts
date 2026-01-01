@@ -17,6 +17,7 @@ import type {
 } from '@/types';
 import { bitaxe, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
+import { parseDifficulty } from '@/utils/formatting';
 import { tempThresholds } from '@/constants/theme';
 
 interface MinerState {
@@ -92,15 +93,15 @@ function parseSystemInfo(ip: string, info: BitaxeSystemInfo): LocalMiner {
     ip,
     hostname: info.hostname,
     ASICModel: info.ASICModel,
-    deviceModel: getDeviceModel(info.ASICModel),
-    expectedHashrate: getExpectedHashrate(info.ASICModel),
+    deviceModel: info.deviceModel || getDeviceModel(info.ASICModel),
+    expectedHashrate: getExpectedHashrate(info.ASICModel) * (info.asicCount || 1),
     hashRate: info.hashRate,
     power: info.power,
     temp: info.temp,
     voltage: info.coreVoltage,
     fanSpeed: info.fanspeed,
-    bestDiff: parseFloat(info.bestDiff) || 0,
-    bestSessionDiff: parseFloat(info.bestSessionDiff) || 0,
+    bestDiff: parseDifficulty(info.bestDiff),
+    bestSessionDiff: parseDifficulty(info.bestSessionDiff),
     sharesAccepted: info.sharesAccepted,
     sharesRejected: info.sharesRejected,
     stratumUser: info.stratumUser,

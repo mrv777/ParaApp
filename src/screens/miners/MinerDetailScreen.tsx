@@ -13,6 +13,7 @@ import {
   MinerStatsSection,
   DeviceInfoSection,
   LinkedWorkerSection,
+  MinerControlsSection,
 } from '@/components/miners';
 import {
   useMinerStore,
@@ -205,6 +206,9 @@ export function MinerDetailScreen({ route, navigation }: Props) {
 
         {/* Device info */}
         <DeviceInfoSection miner={miner} />
+
+        {/* Controls (only when online) */}
+        <MinerControlsSection miner={miner} />
 
         {/* Linked worker (conditional) */}
         <LinkedWorkerSection stratumUser={miner.stratumUser} />
