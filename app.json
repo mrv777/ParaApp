@@ -26,15 +26,23 @@
       "predictiveBackGestureEnabled": false,
       "package": "app.paraapp",
       "permissions": [
-        "android.permission.CAMERA"
-      ],
-      "usesCleartextTraffic": true
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-network-security-config",
+        {
+          "networkSecurityConfig": "./assets/network_security_config.xml",
+          "enable": true
+        }
+      ],
       "expo-font",
       [
         "expo-camera",
