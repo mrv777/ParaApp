@@ -112,6 +112,7 @@ export function HashrateChart({
         axisLabel: {
           color: colors.textMuted,
           fontSize: 10,
+          hideOverlap: true,
           formatter: (value: number) => formatXAxisLabel(value, period),
         },
         splitLine: {
