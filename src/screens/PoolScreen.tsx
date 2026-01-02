@@ -154,7 +154,6 @@ export function PoolScreen(_props: Props) {
               icon="speedometer-outline"
               label="Pool Hashrate"
               value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
-              size="lg"
             />
           )}
         </View>
