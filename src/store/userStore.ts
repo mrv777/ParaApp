@@ -35,7 +35,7 @@ interface UserState {
 }
 
 interface UserActions {
-  fetchUserStats: () => Promise<void>;
+  fetchUserStats: (options?: { silent?: boolean }) => Promise<void>;
   fetchAccount: () => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
@@ -107,14 +107,19 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 export const useUserStore = create<UserState & UserActions>()((set, get) => ({
   ...initialState,
 
-  fetchUserStats: async () => {
+  fetchUserStats: async (options) => {
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) {
       set({ error: { message: 'No Bitcoin address configured' } });
       return;
     }
 
-    set({ isLoading: true, error: null });
+    // Only show loading indicator for user-initiated refresh, not background polls
+    if (!options?.silent) {
+      set({ isLoading: true, error: null });
+    } else {
+      set({ error: null });
+    }
 
     // Fetch user stats and historical data in parallel
     const [userResult, historicalResult] = await Promise.all([

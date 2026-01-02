@@ -41,7 +41,7 @@ interface PoolState {
 }
 
 interface PoolActions {
-  fetchPoolStats: () => Promise<void>;
+  fetchPoolStats: (options?: { silent?: boolean }) => Promise<void>;
   fetchLeaderboard: (limit?: number) => Promise<void>;
   fetchLeaderboards: (limit?: number) => Promise<void>;
   fetchHistorical: (
@@ -91,8 +91,13 @@ function getIntervalForPeriod(period: HistoricalPeriod): HistoricalInterval {
 export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
   ...initialState,
 
-  fetchPoolStats: async () => {
-    set({ isLoading: true, error: null });
+  fetchPoolStats: async (options) => {
+    // Only show loading indicator for user-initiated refresh, not background polls
+    if (!options?.silent) {
+      set({ isLoading: true, error: null });
+    } else {
+      set({ error: null });
+    }
 
     const result = await parasite.getPoolStats();
 

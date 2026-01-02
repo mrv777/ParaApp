@@ -16,7 +16,7 @@ export function usePoolPolling(): UsePollingReturn {
   const fetchBitcoinPrice = usePoolStore((s) => s.fetchBitcoinPrice);
 
   const onPoll = useCallback(async () => {
-    await Promise.all([fetchPoolStats(), fetchBitcoinPrice()]);
+    await Promise.all([fetchPoolStats({ silent: true }), fetchBitcoinPrice()]);
   }, [fetchPoolStats, fetchBitcoinPrice]);
 
   return usePolling({ onPoll });

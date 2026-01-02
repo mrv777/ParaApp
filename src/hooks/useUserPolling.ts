@@ -17,7 +17,7 @@ export function useUserPolling(): UsePollingReturn {
   const fetchUserStats = useUserStore((s) => s.fetchUserStats);
 
   const onPoll = useCallback(async () => {
-    await fetchUserStats();
+    await fetchUserStats({ silent: true });
   }, [fetchUserStats]);
 
   return usePolling({
