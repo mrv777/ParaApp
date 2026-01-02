@@ -11,9 +11,13 @@ import { Text } from '../Text';
 import { Badge } from '../Badge';
 import { MultiMinerSection } from './MultiMinerSection';
 import { useUserStore, selectUserWorkers } from '@/store/userStore';
-import { useMinerStore, selectMinersByStratumUser } from '@/store/minerStore';
+import { useMinerStore, selectMiners } from '@/store/minerStore';
+import type { LocalMiner } from '@/types';
 import { formatHashrate, formatDifficulty, formatTimestamp } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
+
+// Stable empty array to prevent infinite re-renders
+const EMPTY_MINERS: LocalMiner[] = [];
 
 export interface LinkedWorkerSectionProps {
   stratumUser: string;
@@ -25,11 +29,14 @@ export function LinkedWorkerSection({
   currentMinerIp,
 }: LinkedWorkerSectionProps) {
   const workers = useUserStore(selectUserWorkers);
-  const selectMiners = useMemo(
-    () => selectMinersByStratumUser(stratumUser),
-    [stratumUser]
+  const allMiners = useMinerStore(selectMiners);
+  const linkedMiners = useMemo(
+    () =>
+      stratumUser
+        ? allMiners.filter((m) => m.stratumUser === stratumUser)
+        : EMPTY_MINERS,
+    [allMiners, stratumUser]
   );
-  const linkedMiners = useMinerStore(selectMiners);
 
   const [expanded, setExpanded] = useState(false);
 
