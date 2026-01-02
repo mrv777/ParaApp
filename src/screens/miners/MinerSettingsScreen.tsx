@@ -349,7 +349,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <KeyboardAvoidingView
-        className="flex-1"
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
@@ -372,7 +372,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
         </View>
 
         <ScrollView
-          className="flex-1"
+          style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: hasChanges ? 120 : 32 }}
           keyboardShouldPersistTaps="handled"
         >
