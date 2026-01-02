@@ -2,8 +2,9 @@
  * BlocksList component - List of blocks found by the pool
  */
 
-import { View } from 'react-native';
+import { View, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { haptics } from '@/utils/haptics';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { SkeletonLoader, SkeletonText } from '../SkeletonLoader';
@@ -65,8 +66,12 @@ export function BlocksList({
         Blocks Found
       </Text>
       {displayBlocks.map((block, index) => (
-        <View
+        <Pressable
           key={`${block.block_height}-${index}`}
+          onPress={() => {
+            haptics.light();
+            Linking.openURL(`https://mempool.space/block/${block.block_height}`);
+          }}
           className={`flex-row items-center py-2.5 ${
             index < displayBlocks.length - 1 ? 'border-b border-border/50' : ''
           }`}
@@ -83,7 +88,8 @@ export function BlocksList({
               ? formatTimestamp(block.block_timestamp * 1000)
               : '--'}
           </Text>
-        </View>
+          <Ionicons name="open-outline" size={14} color={colors.textMuted} style={{ marginLeft: 8 }} />
+        </Pressable>
       ))}
     </Card>
   );

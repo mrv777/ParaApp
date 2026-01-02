@@ -14,7 +14,6 @@ import {
   TimePresetButtons,
   FullScreenChart,
   PoolStatsGrid,
-  BlocksList,
   LeaderboardCard,
   SkeletonStatItem,
   Text,
@@ -23,7 +22,6 @@ import { usePoolPolling } from '@/hooks';
 import {
   usePoolStore,
   selectPoolStats,
-  selectLeaderboard,
   selectDifficultyLeaderboard,
   selectLoyaltyLeaderboard,
   selectHistorical,
@@ -46,7 +44,6 @@ export function PoolScreen(_props: Props) {
 
   // Store selectors
   const stats = usePoolStore(selectPoolStats);
-  const leaderboard = usePoolStore(selectLeaderboard);
   const difficultyLeaderboard = usePoolStore(selectDifficultyLeaderboard);
   const loyaltyLeaderboard = usePoolStore(selectLoyaltyLeaderboard);
   const historical = usePoolStore(selectHistorical);
@@ -55,19 +52,16 @@ export function PoolScreen(_props: Props) {
   const period = usePoolStore((s) => s.historicalPeriod);
   const isLoading = usePoolStore((s) => s.isLoading);
   const isLoadingHistorical = usePoolStore((s) => s.isLoadingHistorical);
-  const isLoadingLeaderboard = usePoolStore((s) => s.isLoadingLeaderboard);
   const isLoadingLeaderboards = usePoolStore((s) => s.isLoadingLeaderboards);
 
   // Cache staleness checks
   const statsCache = usePoolStore((s) => s.stats);
   const historicalCache = usePoolStore((s) => s.historical);
-  const leaderboardCache = usePoolStore((s) => s.leaderboard);
   const difficultyLeaderboardCache = usePoolStore((s) => s.difficultyLeaderboard);
 
   // Actions
   const refreshAll = usePoolStore((s) => s.refreshAll);
   const fetchHistorical = usePoolStore((s) => s.fetchHistorical);
-  const fetchLeaderboard = usePoolStore((s) => s.fetchLeaderboard);
   const fetchLeaderboards = usePoolStore((s) => s.fetchLeaderboards);
   const setHistoricalPeriod = usePoolStore((s) => s.setHistoricalPeriod);
   const clearError = usePoolStore((s) => s.clearError);
@@ -86,18 +80,14 @@ export function PoolScreen(_props: Props) {
     if (!historical) {
       fetchHistorical(period);
     }
-    if (!leaderboard) {
-      fetchLeaderboard();
-    }
     if (!difficultyLeaderboard) {
       fetchLeaderboards();
     }
-  }, [stats, historical, leaderboard, difficultyLeaderboard, refreshAll, fetchHistorical, fetchLeaderboard, fetchLeaderboards, period]);
+  }, [stats, historical, difficultyLeaderboard, refreshAll, fetchHistorical, fetchLeaderboards, period]);
 
   // Determine skeleton display based on cache staleness
   const showStatsSkeleton = isCacheStale(statsCache) && isLoading && !stats;
   const showChartSkeleton = isCacheStale(historicalCache) && isLoadingHistorical && !historical;
-  const showLeaderboardSkeleton = isCacheStale(leaderboardCache) && isLoadingLeaderboard && !leaderboard;
   const showLeaderboardsSkeleton = isCacheStale(difficultyLeaderboardCache) && isLoadingLeaderboards && !difficultyLeaderboard;
 
   // Pull-to-refresh handler
@@ -106,11 +96,10 @@ export function PoolScreen(_props: Props) {
     await Promise.all([
       refreshAll(),
       fetchHistorical(period),
-      fetchLeaderboard(),
       fetchLeaderboards(),
     ]);
     setRefreshing(false);
-  }, [refreshAll, fetchHistorical, fetchLeaderboard, fetchLeaderboards, period]);
+  }, [refreshAll, fetchHistorical, fetchLeaderboards, period]);
 
   // Period change handler
   const handlePeriodChange = useCallback(
@@ -202,15 +191,6 @@ export function PoolScreen(_props: Props) {
             stats={stats ?? null}
             bitcoinPrice={bitcoinPrice ?? null}
             isLoading={showStatsSkeleton}
-          />
-        </View>
-
-        {/* Blocks Found - using leaderboard data */}
-        <View className="px-4 pb-4">
-          <BlocksList
-            blocks={leaderboard ?? []}
-            isLoading={showLeaderboardSkeleton}
-            maxItems={5}
           />
         </View>
 
