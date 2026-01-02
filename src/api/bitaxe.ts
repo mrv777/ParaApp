@@ -22,7 +22,7 @@ export async function getSystemInfo(
 ): Promise<ApiResult<BitaxeSystemInfo>> {
   return fetchWithTimeout<BitaxeSystemInfo>(
     `${minerUrl(ip)}/api/system/info`,
-    { timeout: MINER_TIMEOUT }
+    { timeout: MINER_TIMEOUT, retries: 0 }
   );
 }
 
@@ -35,7 +35,7 @@ export async function getAsicSettings(
 ): Promise<ApiResult<AsicConfig>> {
   return fetchWithTimeout<AsicConfig>(
     `${minerUrl(ip)}/api/system/asic`,
-    { timeout: MINER_TIMEOUT }
+    { timeout: MINER_TIMEOUT, retries: 0 }
   );
 }
 

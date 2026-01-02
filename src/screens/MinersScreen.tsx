@@ -25,6 +25,7 @@ import {
   selectDiscoveryProgress,
   selectDiscoveryError,
 } from '@/store/minerStore';
+import { usePolling } from '@/hooks/usePolling';
 import { colors } from '@/constants/colors';
 import type { MinersStackScreenProps } from '@/types/navigation';
 import type {
@@ -66,20 +67,20 @@ export function MinersScreen({ navigation }: Props) {
   const allOffline = miners.length > 0 && miners.every((m) => !m.isOnline);
   const showNetworkBanner = allOffline && !bannerDismissed;
 
+  // Polling for live updates
+  const onPoll = useCallback(() => refreshAllMiners(), [refreshAllMiners]);
+  usePolling({
+    onPoll,
+    enabled: miners.length > 0,
+    immediate: true,
+  });
+
   // Reset banner dismissed when any miner comes online
   useEffect(() => {
     if (!allOffline && bannerDismissed) {
       setBannerDismissed(false);
     }
   }, [allOffline, bannerDismissed]);
-
-  // Refresh all miners on mount
-  useEffect(() => {
-    if (miners.length > 0) {
-      refreshAllMiners();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Compute warnings for each miner
   const minerWarnings = useMemo(() => {
