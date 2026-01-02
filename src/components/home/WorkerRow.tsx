@@ -7,6 +7,7 @@ import { View, Pressable, LayoutAnimation, Platform, UIManager } from 'react-nat
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
 import { Badge } from '../Badge';
+import { WorkerStatusDot } from './WorkerStatusDot';
 import { LinkedMinersIndicator } from './LinkedMinersIndicator';
 import { LinkedMinersExpandedSection } from './LinkedMinersExpandedSection';
 import { formatHashrate, formatDifficulty, formatTimestamp } from '@/utils/formatting';
@@ -44,14 +45,13 @@ export function WorkerRow({
     }
   };
 
-  const isOnline = worker.status === 'online';
-
   const content = (
     <View className={`py-2 ${className}`}>
       {/* Main row */}
       <View className="flex-row items-center justify-between">
-        <View className="flex-1 mr-2">
-          <Text variant="body" className="font-medium" numberOfLines={1}>
+        <View className="flex-row items-center flex-1 mr-2 gap-2">
+          <WorkerStatusDot status={worker.status} size="sm" />
+          <Text variant="body" className="font-medium flex-1" numberOfLines={1}>
             {worker.name}
           </Text>
         </View>
@@ -85,8 +85,21 @@ export function WorkerRow({
       {/* Expanded details */}
       {expanded && (
         <View className="mt-3 pt-3 border-t border-border">
-          <Badge variant={isOnline ? 'success' : 'danger'} size="sm">
-            {isOnline ? 'Online' : 'Offline'}
+          <Badge
+            variant={
+              worker.status === 'online'
+                ? 'success'
+                : worker.status === 'stale'
+                  ? 'warning'
+                  : 'danger'
+            }
+            size="sm"
+          >
+            {worker.status === 'online'
+              ? 'Online'
+              : worker.status === 'stale'
+                ? 'Stale'
+                : 'Offline'}
           </Badge>
 
           {/* Linked miners section */}

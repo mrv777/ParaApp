@@ -5,7 +5,19 @@
 /**
  * Worker status
  */
-export type WorkerStatus = 'online' | 'offline';
+export type WorkerStatus = 'online' | 'stale' | 'offline';
+
+/**
+ * Summary of worker health across all workers
+ */
+export interface WorkerHealthSummary {
+  total: number;
+  online: number;
+  stale: number;
+  offline: number;
+  /** Most severe status among all workers */
+  worstStatus: WorkerStatus;
+}
 
 // ============================================
 // Raw API Response Types

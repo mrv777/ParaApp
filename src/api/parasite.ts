@@ -20,7 +20,9 @@ import type {
   AccountApiResponse,
   HistoricalPeriod,
   HistoricalInterval,
+  WorkerStatus,
 } from '@/types';
+import { WORKER_STALE_THRESHOLD_MS } from '@/constants';
 import { fetchWithTimeout, patchJson } from './client';
 
 const BASE_URL = 'https://parasite.space';
@@ -58,10 +60,26 @@ function parseDifficulty(diffStr: string): number {
 }
 
 /**
- * Determine worker status based on hashrate
+ * Determine worker status based on hashrate and last submission time
  */
-function getWorkerStatus(hashrate: number): 'online' | 'offline' {
-  return hashrate > 0 ? 'online' : 'offline';
+function getWorkerStatus(hashrate: number, lastSubmission: number): WorkerStatus {
+  if (hashrate <= 0) {
+    return 'offline';
+  }
+
+  const now = Date.now();
+  const timeSinceLastShare = now - lastSubmission;
+
+  // Handle clock skew (future timestamp) - treat as online
+  if (timeSinceLastShare < 0) {
+    return 'online';
+  }
+
+  if (timeSinceLastShare > WORKER_STALE_THRESHOLD_MS) {
+    return 'stale';
+  }
+
+  return 'online';
 }
 
 /**
@@ -71,13 +89,14 @@ function transformWorker(raw: UserWorkerApiResponse): UserWorker {
   const hashrate = parseFloat(raw.hashrate) || 0;
   // API returns Unix timestamp in seconds, convert to milliseconds
   const lastSubmissionSeconds = parseInt(raw.lastSubmission, 10) || 0;
+  const lastSubmissionMs = lastSubmissionSeconds * 1000;
   return {
     id: raw.id,
     name: raw.name,
     hashrate,
     bestDifficulty: parseFloat(raw.bestDifficulty) || 0,
-    lastSubmission: lastSubmissionSeconds * 1000,
-    status: getWorkerStatus(hashrate),
+    lastSubmission: lastSubmissionMs,
+    status: getWorkerStatus(hashrate, lastSubmissionMs),
   };
 }
 

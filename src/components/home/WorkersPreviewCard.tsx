@@ -9,6 +9,8 @@ import { Button } from '../Button';
 import { ConnectionStatus } from '../ConnectionStatus';
 import { SkeletonText } from '../SkeletonLoader';
 import { WorkerRow } from './WorkerRow';
+import { WorkerHealthBadge } from './WorkerHealthBadge';
+import { useWorkerHealth } from '@/hooks';
 import type { UserWorker } from '@/types';
 
 export interface WorkersPreviewCardProps {
@@ -31,12 +33,16 @@ export function WorkersPreviewCard({
   const safeWorkers = Array.isArray(workers) ? workers : [];
   const displayWorkers = safeWorkers.slice(0, maxItems);
   const showSkeleton = isLoading && safeWorkers.length === 0;
+  const healthSummary = useWorkerHealth(safeWorkers);
 
   return (
     <Card padding="none" className={className}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-3 pt-3 pb-1">
-        <Text variant="subtitle" className="text-base">Workers</Text>
+        <View className="flex-row items-center gap-2">
+          <Text variant="subtitle" className="text-base">Workers</Text>
+          <WorkerHealthBadge summary={healthSummary} />
+        </View>
         <ConnectionStatus status={connectionStatus} />
       </View>
 
