@@ -1,5 +1,5 @@
 /**
- * WorkersListScreen - Full list of workers with expandable details
+ * WorkersListScreen - Full list of workers with sorting
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -27,7 +27,6 @@ const SORT_ORDER_CYCLE: WorkerSortOrder[] = ['hashrate', 'name', 'bestDiff'];
 type Props = HomeStackScreenProps<'WorkersList'>;
 
 export function WorkersListScreen({ navigation }: Props) {
-  const [expandedWorker, setExpandedWorker] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Stores
@@ -42,11 +41,6 @@ export function WorkersListScreen({ navigation }: Props) {
     () => sortWorkers(workers, sortOrder),
     [workers, sortOrder]
   );
-
-  // Toggle expanded worker
-  const handleToggleExpand = useCallback((workerName: string) => {
-    setExpandedWorker((prev) => (prev === workerName ? null : workerName));
-  }, []);
 
   // Go back
   const handleGoBack = useCallback(() => {
@@ -71,16 +65,8 @@ export function WorkersListScreen({ navigation }: Props) {
 
   // Render worker item
   const renderItem = useCallback(
-    ({ item }: { item: UserWorker }) => (
-      <WorkerRow
-        worker={item}
-        expanded={expandedWorker === item.name}
-        onToggle={() => handleToggleExpand(item.name)}
-        showExpandButton
-        showLinkedMiners
-      />
-    ),
-    [expandedWorker, handleToggleExpand]
+    ({ item }: { item: UserWorker }) => <WorkerRow worker={item} />,
+    []
   );
 
   // Key extractor

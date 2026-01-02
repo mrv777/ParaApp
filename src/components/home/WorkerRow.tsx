@@ -1,52 +1,22 @@
 /**
- * WorkerRow - Expandable row for worker display
- * Used in both WorkersPreviewCard (non-expandable) and WorkersListScreen (expandable)
+ * WorkerRow - Simple row for worker display
+ * Shows worker name, status, hashrate, best difficulty, and last submission
  */
 
-import { View, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View } from 'react-native';
 import { Text } from '../Text';
-import { Badge } from '../Badge';
 import { WorkerStatusDot } from './WorkerStatusDot';
-import { LinkedMinersIndicator } from './LinkedMinersIndicator';
-import { LinkedMinersExpandedSection } from './LinkedMinersExpandedSection';
 import { formatHashrate, formatDifficulty, formatTimestamp } from '@/utils/formatting';
-import { haptics } from '@/utils/haptics';
-import { colors } from '@/constants/colors';
 import type { UserWorker } from '@/types';
-
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android') {
-  UIManager.setLayoutAnimationEnabledExperimental?.(true);
-}
 
 export interface WorkerRowProps {
   worker: UserWorker;
-  expanded?: boolean;
-  onToggle?: () => void;
-  showExpandButton?: boolean;
-  showLinkedMiners?: boolean;
   className?: string;
 }
 
-export function WorkerRow({
-  worker,
-  expanded = false,
-  onToggle,
-  showExpandButton = false,
-  showLinkedMiners = false,
-  className = '',
-}: WorkerRowProps) {
-  const handlePress = () => {
-    if (showExpandButton && onToggle) {
-      haptics.selection();
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      onToggle();
-    }
-  };
-
-  const content = (
-    <View className={`py-2 ${className}`}>
+export function WorkerRow({ worker, className = '' }: WorkerRowProps) {
+  return (
+    <View className={`py-2 border-b border-border ${className}`}>
       {/* Main row */}
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center flex-1 mr-2 gap-2">
@@ -55,19 +25,10 @@ export function WorkerRow({
             {worker.name}
           </Text>
         </View>
-        <View className="flex-row items-center gap-3">
-          <View className="items-end">
-            <Text variant="mono" className="text-sm">
-              {formatHashrate(worker.hashrate)}
-            </Text>
-          </View>
-          {showExpandButton && (
-            <Ionicons
-              name={expanded ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={colors.textMuted}
-            />
-          )}
+        <View className="items-end">
+          <Text variant="mono" className="text-sm">
+            {formatHashrate(worker.hashrate)}
+          </Text>
         </View>
       </View>
 
@@ -79,49 +40,7 @@ export function WorkerRow({
         <Text variant="caption" color="muted">
           Last: {formatTimestamp(worker.lastSubmission)}
         </Text>
-        {showLinkedMiners && <LinkedMinersIndicator workerName={worker.name} />}
       </View>
-
-      {/* Expanded details */}
-      {expanded && (
-        <View className="mt-3 pt-3 border-t border-border">
-          <Badge
-            variant={
-              worker.status === 'online'
-                ? 'success'
-                : worker.status === 'stale'
-                  ? 'warning'
-                  : 'danger'
-            }
-            size="sm"
-          >
-            {worker.status === 'online'
-              ? 'Online'
-              : worker.status === 'stale'
-                ? 'Stale'
-                : 'Offline'}
-          </Badge>
-
-          {/* Linked miners section */}
-          {showLinkedMiners && (
-            <LinkedMinersExpandedSection workerName={worker.name} />
-          )}
-        </View>
-      )}
     </View>
   );
-
-  if (showExpandButton) {
-    return (
-      <Pressable
-        onPress={handlePress}
-        className="border-b border-border"
-        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-      >
-        {content}
-      </Pressable>
-    );
-  }
-
-  return <View className="border-b border-border">{content}</View>;
 }

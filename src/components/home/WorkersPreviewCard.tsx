@@ -68,11 +68,7 @@ export function WorkersPreviewCard({
           </View>
         ) : (
           displayWorkers.map((worker) => (
-            <WorkerRow
-              key={worker.name}
-              worker={worker}
-              showExpandButton={false}
-            />
+            <WorkerRow key={worker.name} worker={worker} />
           ))
         )}
       </View>

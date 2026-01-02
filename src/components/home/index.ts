@@ -16,9 +16,3 @@ export type { WorkerRowProps } from './WorkerRow';
 
 export { WorkersPreviewCard } from './WorkersPreviewCard';
 export type { WorkersPreviewCardProps } from './WorkersPreviewCard';
-
-export { LinkedMinersIndicator } from './LinkedMinersIndicator';
-export type { LinkedMinersIndicatorProps } from './LinkedMinersIndicator';
-
-export { LinkedMinersExpandedSection } from './LinkedMinersExpandedSection';
-export type { LinkedMinersExpandedSectionProps } from './LinkedMinersExpandedSection';
