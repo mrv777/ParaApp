@@ -11,7 +11,7 @@ import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
-import { usePoolPolling, useUserPolling } from '@/hooks';
+import { usePoolPolling, useUserPolling, useUserRanks } from '@/hooks';
 import {
   usePoolStore,
   selectPoolError,
@@ -60,6 +60,9 @@ export function HomeMainScreen({ navigation }: Props) {
   // Initialize polling
   usePoolPolling();
   useUserPolling();
+
+  // Get user leaderboard ranks
+  const { difficultyRank, loyaltyRank } = useUserRanks();
 
   // Determine which error to show
   const error = hasAddress ? userError : poolError;
@@ -122,6 +125,8 @@ export function HomeMainScreen({ navigation }: Props) {
           <View className="px-4 pt-3 gap-3">
             <UserStatsCard
               stats={userStats ?? null}
+              difficultyRank={difficultyRank}
+              loyaltyRank={loyaltyRank}
               isLoading={isUserLoading}
             />
             <WorkersPreviewCard

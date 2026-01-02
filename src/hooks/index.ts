@@ -15,3 +15,4 @@ export {
   type Orientation,
   type UseOrientationReturn,
 } from './useOrientation';
+export { useUserRanks, type UserRanks } from './useUserRanks';

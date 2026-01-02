@@ -12,11 +12,24 @@ import type { UserStats } from '@/types';
 
 export interface UserStatsCardProps {
   stats: UserStats | null;
+  difficultyRank?: number | null;
+  loyaltyRank?: number | null;
   isLoading?: boolean;
   className?: string;
 }
 
-export function UserStatsCard({ stats, isLoading = false, className = '' }: UserStatsCardProps) {
+const formatRank = (rank: number | null | undefined): string => {
+  if (rank == null) return '--';
+  return `#${rank}`;
+};
+
+export function UserStatsCard({
+  stats,
+  difficultyRank,
+  loyaltyRank,
+  isLoading = false,
+  className = '',
+}: UserStatsCardProps) {
   const showSkeleton = isLoading && !stats;
 
   return (
@@ -32,6 +45,14 @@ export function UserStatsCard({ stats, isLoading = false, className = '' }: User
             <View className="flex-1">
               <SkeletonStatItem />
             </View>
+            <View className="flex-1">
+              <SkeletonStatItem />
+            </View>
+            <View className="flex-1">
+              <SkeletonStatItem />
+            </View>
+          </View>
+          <View className="flex-row gap-3">
             <View className="flex-1">
               <SkeletonStatItem />
             </View>
@@ -70,6 +91,26 @@ export function UserStatsCard({ stats, isLoading = false, className = '' }: User
               <StatItem
                 label="Best Diff"
                 value={stats?.bestDifficultyFormatted || '--'}
+                size="sm"
+              />
+            </View>
+          </View>
+
+          {/* Leaderboard ranks row */}
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <StatItem
+                icon="trophy-outline"
+                label="Difficulty Rank"
+                value={formatRank(difficultyRank)}
+                size="sm"
+              />
+            </View>
+            <View className="flex-1">
+              <StatItem
+                icon="medal-outline"
+                label="Loyalty Rank"
+                value={formatRank(loyaltyRank)}
                 size="sm"
               />
             </View>

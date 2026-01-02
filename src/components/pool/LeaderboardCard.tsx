@@ -10,6 +10,7 @@ import { Card } from '../Card';
 import { Text } from '../Text';
 import { SkeletonLoader, SkeletonText } from '../SkeletonLoader';
 import { truncateAddress, formatDifficulty, formatNumber } from '@/utils/formatting';
+import { addressMatches } from '@/utils/address';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import type { DifficultyLeaderboardEntry, LoyaltyLeaderboardEntry } from '@/types';
@@ -53,7 +54,7 @@ export function LeaderboardCard({
   loyaltyEntries,
   userAddress,
   isLoading = false,
-  maxHeight = 300,
+  maxHeight = 400,
   className = '',
 }: LeaderboardCardProps) {
   const { t } = useTranslation();
@@ -66,9 +67,9 @@ export function LeaderboardCard({
 
   const entries = activeTab === 'difficulty' ? difficultyEntries : loyaltyEntries;
 
-  // Find user's position in current leaderboard
+  // Find user's position in current leaderboard using flexible matching
   const userIndex = userAddress
-    ? entries.findIndex((e) => e.address === userAddress)
+    ? entries.findIndex((e) => addressMatches(e.address, userAddress))
     : -1;
 
   // Show skeleton when loading with no data
@@ -142,7 +143,7 @@ export function LeaderboardCard({
       {entries && entries.length > 0 && (
         <ScrollView style={{ maxHeight }} nestedScrollEnabled>
           {entries.map((entry, index) => {
-            const isUser = userAddress && entry.address === userAddress;
+            const isUser = userAddress && addressMatches(entry.address, userAddress);
 
             return (
               <View
@@ -170,8 +171,8 @@ export function LeaderboardCard({
         </ScrollView>
       )}
 
-      {/* User position pinned section (if beyond top 10) */}
-      {userIndex > 10 && userAddress && (
+      {/* User position pinned section */}
+      {userIndex !== -1 && userAddress && (
         <View className="mt-2 pt-2 border-t border-border">
           <View className="flex-row items-center py-2 bg-foreground/5 -mx-2 px-2 rounded">
             <Text variant="mono" color="muted" className="w-8 text-sm">
