@@ -220,6 +220,10 @@ export function UserHashrateChart({
     };
   }, [chartData, period]);
 
+  // Keep option ref in sync for use in chart creation effect
+  const optionRef = useRef(option);
+  optionRef.current = option;
+
   // Initialize chart instance ONCE (only when echarts is ready and we have dimensions)
   useEffect(() => {
     const echarts = getEcharts();
@@ -236,10 +240,10 @@ export function UserHashrateChart({
 
     chartInstanceRef.current = chart;
 
-    // Set initial option if available (fixes race condition where option
-    // was computed before chart instance existed)
-    if (option) {
-      chart.setOption(option, true);
+    // Apply current options from ref (fixes race condition where chart is
+    // created but option update effect doesn't run because option unchanged)
+    if (optionRef.current) {
+      chart.setOption(optionRef.current, true);
     }
 
     // Cleanup only on unmount
@@ -247,7 +251,7 @@ export function UserHashrateChart({
       chart.dispose();
       chartInstanceRef.current = null;
     };
-  }, [isReady, dimensions.width, dimensions.height, option]);
+  }, [isReady, dimensions.width, dimensions.height]);
 
   // Update chart options when data changes (don't recreate the chart)
   useEffect(() => {
