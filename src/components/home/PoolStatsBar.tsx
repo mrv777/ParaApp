@@ -16,7 +16,7 @@ interface MiniStatProps {
 function MiniStat({ label, value }: MiniStatProps) {
   return (
     <View className="items-center">
-      <Text variant="caption" color="muted" className="text-[10px]">
+      <Text variant="caption" color="muted" className="text-[10px] uppercase">
         {label}
       </Text>
       <Text variant="mono" className="text-sm font-semibold">

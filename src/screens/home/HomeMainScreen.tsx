@@ -2,7 +2,7 @@
  * HomeMainScreen - Main home screen with user stats or pool preview
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -42,6 +42,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const isPoolLoading = usePoolStore((s) => s.isLoading);
   const refreshPool = usePoolStore((s) => s.refreshAll);
   const clearPoolError = usePoolStore((s) => s.clearError);
+  const fetchLeaderboards = usePoolStore((s) => s.fetchLeaderboards);
 
   // User store (when address is configured)
   const userStats = useUserStore(selectUserStats);
@@ -61,6 +62,11 @@ export function HomeMainScreen({ navigation }: Props) {
   usePoolPolling();
   useUserPolling();
 
+  // Fetch leaderboards on mount (for user rank display)
+  useEffect(() => {
+    fetchLeaderboards();
+  }, [fetchLeaderboards]);
+
   // Get user leaderboard ranks
   const { difficultyRank, loyaltyRank } = useUserRanks();
 
@@ -75,12 +81,13 @@ export function HomeMainScreen({ navigation }: Props) {
   // Pull-to-refresh handler
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (hasAddress) {
-      await refreshUser();
-    }
-    await refreshPool();
+    await Promise.all([
+      hasAddress ? refreshUser() : Promise.resolve(),
+      refreshPool(),
+      fetchLeaderboards(),
+    ]);
     setRefreshing(false);
-  }, [hasAddress, refreshUser, refreshPool]);
+  }, [hasAddress, refreshUser, refreshPool, fetchLeaderboards]);
 
   // Navigate to Settings to add address
   const handleAddAddress = useCallback(() => {

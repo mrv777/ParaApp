@@ -8,7 +8,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Switch,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,7 +25,6 @@ import {
   type WorkerSortOrder,
 } from '@/store/settingsStore';
 import { isValidBitcoinAddress } from '@/utils/validation';
-import { truncateAddress } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import type { SettingsStackScreenProps } from '@/types/navigation';
@@ -65,14 +63,12 @@ export function SettingsMainScreen({ navigation }: Props) {
   const temperatureUnit = useSettingsStore(selectTemperatureUnit);
   const pollingInterval = useSettingsStore(selectPollingInterval);
   const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
-  const isPublic = useSettingsStore((s) => s.isPublicOnLeaderboard);
 
   // Actions
   const setBitcoinAddress = useSettingsStore((s) => s.setBitcoinAddress);
   const setTemperatureUnit = useSettingsStore((s) => s.setTemperatureUnit);
   const setPollingInterval = useSettingsStore((s) => s.setPollingInterval);
   const setWorkerSortOrder = useSettingsStore((s) => s.setWorkerSortOrder);
-  const setPublicOnLeaderboard = useSettingsStore((s) => s.setPublicOnLeaderboard);
 
   // Local state
   const [addressInput, setAddressInput] = useState(bitcoinAddress || '');
@@ -149,14 +145,6 @@ export function SettingsMainScreen({ navigation }: Props) {
     [setWorkerSortOrder]
   );
 
-  const handleVisibilityToggle = useCallback(
-    (value: boolean) => {
-      haptics.selection();
-      setPublicOnLeaderboard(value);
-    },
-    [setPublicOnLeaderboard]
-  );
-
   const handleOpenLink = useCallback((url: string) => {
     haptics.light();
     Linking.openURL(url);
@@ -178,9 +166,19 @@ export function SettingsMainScreen({ navigation }: Props) {
       >
           {/* Bitcoin Address Section */}
           <View className="px-4 py-4">
-            <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-              Bitcoin Address
-            </Text>
+            <View className="flex-row items-center mb-3">
+              <Text variant="caption" color="muted" className="uppercase tracking-wide">
+                Bitcoin Address
+              </Text>
+              {bitcoinAddress && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={14}
+                  color={colors.success}
+                  style={{ marginLeft: 6 }}
+                />
+              )}
+            </View>
 
             {/* Address Input Row */}
             <View className="flex-row items-center gap-2">
@@ -208,43 +206,23 @@ export function SettingsMainScreen({ navigation }: Props) {
               </Pressable>
             </View>
 
-            {/* Validation Feedback */}
-            {(validationError || isAddressValid) && (
+            {/* Validation Error */}
+            {validationError && (
               <Animated.View
                 entering={FadeIn.duration(200)}
                 exiting={FadeOut.duration(200)}
                 className="flex-row items-center mt-2"
               >
                 <Ionicons
-                  name={isAddressValid ? 'checkmark-circle' : 'alert-circle'}
+                  name="alert-circle"
                   size={16}
-                  color={isAddressValid ? colors.success : colors.danger}
+                  color={colors.danger}
                 />
-                <Text
-                  variant="caption"
-                  color={isAddressValid ? 'success' : 'danger'}
-                  className="ml-1"
-                >
-                  {isAddressValid
-                    ? `Saved: ${truncateAddress(addressInput)}`
-                    : validationError}
+                <Text variant="caption" color="danger" className="ml-1">
+                  {validationError}
                 </Text>
               </Animated.View>
             )}
-
-            {/* Visibility Toggle */}
-            <View className="flex-row items-center justify-between mt-4 pt-3 border-t border-border/50">
-              <Text variant="body" color="muted">
-                Show on leaderboard
-              </Text>
-              <Switch
-                value={isPublic}
-                onValueChange={handleVisibilityToggle}
-                trackColor={{ false: colors.surface, true: colors.primary }}
-                thumbColor={colors.background}
-                ios_backgroundColor={colors.surface}
-              />
-            </View>
           </View>
 
           {/* Preferences Section */}

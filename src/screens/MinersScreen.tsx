@@ -258,9 +258,7 @@ export function MinersScreen({ navigation }: Props) {
           </View>
           <HeaderButtons
             onAddPress={handleAddPress}
-            onScanPress={handleStartScan}
             onSortFilterPress={handleSortFilterPress}
-            isDiscovering={isDiscovering}
           />
         </View>
 

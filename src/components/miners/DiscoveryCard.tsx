@@ -3,7 +3,7 @@
  * Includes scan button, progress indicator, manual IP entry, and custom range
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, TextInput, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -53,22 +53,26 @@ export function DiscoveryCard({
   const [showCustomRange, setShowCustomRange] = useState(false);
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
 
-  // Progress bar animation
+  // Progress bar animation - use pixel-based width for iOS compatibility
   const progressWidth = useSharedValue(0);
 
-  // Update progress animation
-  if (progress) {
-    progressWidth.value = withTiming(
-      (progress.scanned / progress.total) * 100,
-      { duration: 200 }
-    );
-  } else {
-    progressWidth.value = 0;
-  }
+  // Update progress animation when scan progresses or resets
+  useEffect(() => {
+    if (progress && progressBarWidth > 0) {
+      const targetWidth = progress.total > 0
+        ? (progress.scanned / progress.total) * progressBarWidth
+        : 0;
+      progressWidth.value = withTiming(targetWidth, { duration: 200 });
+    } else {
+      // Immediately reset when not discovering
+      progressWidth.value = 0;
+    }
+  }, [progress?.scanned, progress?.total, progressBarWidth]);
 
   const progressBarStyle = useAnimatedStyle(() => ({
-    width: `${progressWidth.value}%`,
+    width: progressWidth.value,
   }));
 
   const handleStartScan = useCallback(() => {
@@ -172,18 +176,21 @@ export function DiscoveryCard({
         <View>
           {/* Progress stats */}
           {progress && (
-            <View className="flex-row justify-between mb-2">
-              <Text variant="caption" color="muted">
+            <View className="flex-row justify-between items-baseline mb-2">
+              <Text variant="caption" color="default">
                 Scanning: {progress.scanned}/{progress.total}
               </Text>
-              <Text variant="caption" color="success">
+              <Text variant="body" color="success" className="font-semibold">
                 Found: {progress.found}
               </Text>
             </View>
           )}
 
           {/* Progress bar */}
-          <View className="h-2 bg-secondary rounded-full overflow-hidden mb-3">
+          <View
+            className="h-2.5 bg-secondary rounded-full overflow-hidden mb-3"
+            onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+          >
             <Animated.View
               className="h-full bg-foreground rounded-full"
               style={progressBarStyle}
