@@ -39,6 +39,19 @@ pnpx expo-doctor        # Diagnose project issues (package versions, config, etc
 pnpm expo install --fix # Fix package versions to match Expo SDK
 ```
 
+## Building APK
+
+Build a local Android APK for testing:
+
+```bash
+eas build --profile preview --platform android --local
+```
+
+Requirements:
+- Android Studio with SDK installed
+- `ANDROID_HOME` environment variable set
+- EAS CLI (`pnpm add -g eas-cli`)
+
 ### Expo Doctor
 
 Use `pnpx expo-doctor` to diagnose common project issues:

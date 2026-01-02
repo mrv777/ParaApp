@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "parasite-app-temp",
-    "slug": "parasite-app-temp",
-    "version": "1.0.0",
+    "name": "paraapp",
+    "slug": "paraapp",
+    "version": "0.1.0",
+    "scheme": "paraapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0A0C0F"
     },
     "ios": {
       "supportsTablet": true
@@ -18,10 +19,16 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0A0C0F"
       },
+      "backgroundColor": "#0A0C0F",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "app.paraapp",
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -34,7 +41,23 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to scan Bitcoin address QR codes"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
+          }
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8817e235-92a0-49f8-a726-5b010ee55f0b"
+      }
+    },
+    "owner": "mrv-matrica"
   }
 }
