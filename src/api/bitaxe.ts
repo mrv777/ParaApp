@@ -4,7 +4,7 @@
  */
 
 import type { ApiResult, AsicConfig, BitaxeSystemInfo, MinerSettings } from '@/types';
-import { fetchWithTimeout, postJson, patchJson, MINER_TIMEOUT } from './client';
+import { fetchWithTimeout, postJson, postText, patchJson, MINER_TIMEOUT } from './client';
 
 /**
  * Build base URL for a miner
@@ -106,11 +106,13 @@ export async function restart(ip: string): Promise<ApiResult<void>> {
 }
 
 /**
- * Flash LED to identify the miner
+ * Flash LED/display to identify the miner
+ * Note: Returns plain text response, not JSON.
+ * Requires ESP-Miner v2.12.0+
  * @param ip - Miner IP address
  */
-export async function identify(ip: string): Promise<ApiResult<void>> {
-  return postJson<void>(`${minerUrl(ip)}/api/system/identify`, {}, {
+export async function identify(ip: string): Promise<ApiResult<string>> {
+  return postText(`${minerUrl(ip)}/api/system/identify`, {}, {
     timeout: MINER_TIMEOUT,
   });
 }

@@ -22,6 +22,7 @@ module.exports = {
         // App-specific (temperature warnings)
         warning: '#facc15', // 68°C threshold
         danger: '#ef4444', // 70°C+ threshold
+        success: '#22c55e', // Online/healthy status
       },
       fontFamily: {
         mono: ['"Courier New"', 'Courier', 'monospace'],

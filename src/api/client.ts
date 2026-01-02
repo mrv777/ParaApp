@@ -126,6 +126,82 @@ export async function postJson<T>(
 }
 
 /**
+ * POST request expecting text response (not JSON)
+ * Used for endpoints that return text/plain
+ */
+export async function postText(
+  url: string,
+  body: unknown,
+  options: FetchOptions & Omit<RequestInit, 'method' | 'body'> = {}
+): Promise<ApiResult<string>> {
+  const {
+    timeout = DEFAULT_TIMEOUT,
+    retries = DEFAULT_RETRIES,
+    retryDelayMs = DEFAULT_RETRY_DELAY,
+    ...fetchOptions
+  } = options;
+
+  let lastError: ApiError | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      const delay = retryDelayMs * Math.pow(2, attempt - 1);
+      await sleep(delay);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...fetchOptions,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...fetchOptions.headers,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        lastError = createApiError(
+          `HTTP ${response.status}: ${response.statusText}`,
+          response.status
+        );
+        continue;
+      }
+
+      const data = await response.text();
+      return { success: true, data };
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          lastError = createApiError('Request timeout', undefined, 'TIMEOUT');
+        } else {
+          lastError = createApiError(
+            error.message,
+            undefined,
+            'NETWORK_ERROR'
+          );
+        }
+      } else {
+        lastError = createApiError('Unknown error', undefined, 'UNKNOWN');
+      }
+    }
+  }
+
+  return {
+    success: false,
+    error: lastError || createApiError('Request failed'),
+  };
+}
+
+/**
  * PATCH request with JSON body
  */
 export async function patchJson<T>(

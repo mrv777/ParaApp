@@ -18,6 +18,7 @@ import { Text } from '../Text';
 import { SwipeToConfirm } from '../SwipeToConfirm';
 import { useMinerStore } from '@/store/minerStore';
 import { haptics } from '@/utils/haptics';
+import { supportsIdentify } from '@/utils/version';
 import { colors } from '@/constants/colors';
 import type { LocalMiner } from '@/types';
 
@@ -182,37 +183,39 @@ export function MinerControlsSection({
         Controls
       </Text>
       <View className="bg-secondary rounded-lg p-4 gap-3">
-        {/* Identify LED Button */}
-        <Pressable
-          onPress={handleIdentify}
-          disabled={isIdentifying || isReconnecting}
-          className={`flex-row items-center justify-between py-3 px-4 bg-background rounded-lg ${
-            isIdentifying || isReconnecting ? 'opacity-50' : 'active:opacity-70'
-          }`}
-        >
-          <View className="flex-row items-center gap-3">
-            <Animated.View style={isIdentifying ? pulsingStyle : undefined}>
-              <Ionicons
-                name={isIdentifying ? 'flash' : 'flash-outline'}
-                size={24}
-                color={isIdentifying ? colors.warning : colors.text}
-              />
-            </Animated.View>
-            <View>
-              <Text variant="body" className="font-medium">
-                {isIdentifying ? 'LED Flashing...' : 'Identify LED'}
-              </Text>
-              <Text variant="caption" color="muted">
-                {isIdentifying
-                  ? 'Check your miner'
-                  : 'Flash LED to locate miner'}
-              </Text>
+        {/* Identify LED Button - only for ESP-Miner v2.12.0+ */}
+        {supportsIdentify(miner) && (
+          <Pressable
+            onPress={handleIdentify}
+            disabled={isIdentifying || isReconnecting}
+            className={`flex-row items-center justify-between py-3 px-4 bg-background rounded-lg ${
+              isIdentifying || isReconnecting ? 'opacity-50' : 'active:opacity-70'
+            }`}
+          >
+            <View className="flex-row items-center gap-3">
+              <Animated.View style={isIdentifying ? pulsingStyle : undefined}>
+                <Ionicons
+                  name={isIdentifying ? 'flash' : 'flash-outline'}
+                  size={24}
+                  color={isIdentifying ? colors.warning : colors.text}
+                />
+              </Animated.View>
+              <View>
+                <Text variant="body" className="font-medium">
+                  {isIdentifying ? 'LED Flashing...' : 'Identify LED'}
+                </Text>
+                <Text variant="caption" color="muted">
+                  {isIdentifying
+                    ? 'Check your miner'
+                    : 'Flash LED to locate miner'}
+                </Text>
+              </View>
             </View>
-          </View>
-          {isIdentifying && (
-            <ActivityIndicator size="small" color={colors.warning} />
-          )}
-        </Pressable>
+            {isIdentifying && (
+              <ActivityIndicator size="small" color={colors.warning} />
+            )}
+          </Pressable>
+        )}
 
         {/* Restart Section */}
         {isReconnecting ? (

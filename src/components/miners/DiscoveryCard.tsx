@@ -180,7 +180,7 @@ export function DiscoveryCard({
               <Text variant="caption" color="default">
                 Scanning: {progress.scanned}/{progress.total}
               </Text>
-              <Text variant="body" color="success" className="font-semibold">
+              <Text variant="body" color="default" className="font-semibold">
                 Found: {progress.found}
               </Text>
             </View>
