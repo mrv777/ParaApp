@@ -11,7 +11,7 @@ import { Badge } from '../Badge';
 import {
   formatHashrate,
   formatTemperature,
-  formatPower,
+  formatDifficulty,
 } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -134,23 +134,36 @@ export function MinerRow({
         {miner.isOnline ? (
           <View className="flex-row items-center gap-4 mt-1">
             <Text variant="caption" color="muted">
+              {miner.ip}
+            </Text>
+            <Text variant="caption" color="muted">
               {formatHashrate(miner.hashRate * 1e9)}
+            </Text>
+            <Text variant="caption" color="muted">
+              {formatDifficulty(miner.bestDiff)}
             </Text>
             <Text variant="caption" color={tempColor}>
               {formatTemperature(miner.temp)}
             </Text>
-            <Text variant="caption" color="muted">
-              {formatPower(miner.power)}
-            </Text>
           </View>
         ) : isLoading ? (
-          <Text variant="caption" color="muted" className="mt-1">
-            Connecting...
-          </Text>
+          <View className="flex-row items-center gap-4 mt-1">
+            <Text variant="caption" color="muted">
+              {miner.ip}
+            </Text>
+            <Text variant="caption" color="muted">
+              Connecting...
+            </Text>
+          </View>
         ) : (
-          <Text variant="caption" color="muted" className="mt-1">
-            Offline
-          </Text>
+          <View className="flex-row items-center gap-4 mt-1">
+            <Text variant="caption" color="muted">
+              {miner.ip}
+            </Text>
+            <Text variant="caption" color="muted">
+              Offline
+            </Text>
+          </View>
         )}
       </View>
 
