@@ -2,10 +2,13 @@
  * HomeMainScreen - Main home screen with user stats or pool preview
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+
+import { ShareableStatsCard } from '@/components/home/ShareableStatsCard';
+import { useShareStats } from '@/hooks/useShareStats';
 
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { Text } from '@/components/Text';
@@ -45,6 +48,10 @@ type Props = HomeStackScreenProps<'HomeMain'>;
 export function HomeMainScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
+
+  // Share stats functionality
+  const shareCardRef = useRef<View>(null);
+  const { isSharing, captureAndShare, shareError, clearError: clearShareError, shouldRenderCard } = useShareStats(shareCardRef);
 
   // Settings store
   const hasAddress = useSettingsStore(selectHasAddress);
@@ -182,6 +189,8 @@ export function HomeMainScreen({ navigation }: Props) {
               difficultyRank={difficultyRank}
               loyaltyRank={loyaltyRank}
               isLoading={isUserLoading}
+              onShare={captureAndShare}
+              isSharing={isSharing}
             />
 
             {/* User Hashrate Chart */}
@@ -242,6 +251,33 @@ export function HomeMainScreen({ navigation }: Props) {
         onPeriodChange={handlePeriodChange}
         isLoading={isLoadingHistorical}
       />
+
+      {/* Share Error Banner */}
+      {shareError && (
+        <ErrorBanner
+          message={shareError}
+          onDismiss={clearShareError}
+          className="absolute bottom-24 left-4 right-4"
+        />
+      )}
+
+      {/* Hidden shareable card for capture (off-screen, only mounted when sharing) */}
+      {shouldRenderCard && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: -9999,
+          }}
+          pointerEvents="none"
+        >
+          <ShareableStatsCard
+            ref={shareCardRef}
+            hashrate={userStats?.hashrate ?? null}
+            bestDifficulty={userStats?.bestDifficultyFormatted ?? null}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }

@@ -8,6 +8,9 @@ export type { AddAddressPromptProps } from './AddAddressPrompt';
 export { PoolSummaryCard } from './PoolSummaryCard';
 export type { PoolSummaryCardProps } from './PoolSummaryCard';
 
+export { ShareableStatsCard } from './ShareableStatsCard';
+export type { ShareableStatsCardProps } from './ShareableStatsCard';
+
 export { UserStatsCard } from './UserStatsCard';
 export type { UserStatsCardProps } from './UserStatsCard';
 

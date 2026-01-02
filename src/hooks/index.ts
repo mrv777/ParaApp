@@ -15,5 +15,6 @@ export {
   type Orientation,
   type UseOrientationReturn,
 } from './useOrientation';
+export { useShareStats, type UseShareStatsReturn } from './useShareStats';
 export { useUserRanks, type UserRanks } from './useUserRanks';
 export { useWorkerHealth } from './useWorkerHealth';

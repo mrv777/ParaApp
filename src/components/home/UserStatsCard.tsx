@@ -2,12 +2,14 @@
  * UserStatsCard - Displays user hashrate stats when address is configured
  */
 
-import { View } from 'react-native';
+import { View, Pressable, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { StatItem } from '../StatItem';
 import { SkeletonStatItem } from '../SkeletonLoader';
 import { formatHashrate } from '@/utils/formatting';
+import { colors } from '@/constants/colors';
 import type { UserStats } from '@/types';
 
 export interface UserStatsCardProps {
@@ -16,6 +18,8 @@ export interface UserStatsCardProps {
   loyaltyRank?: number | null;
   isLoading?: boolean;
   className?: string;
+  onShare?: () => void;
+  isSharing?: boolean;
 }
 
 const formatRank = (rank: number | null | undefined): string => {
@@ -29,14 +33,36 @@ export function UserStatsCard({
   loyaltyRank,
   isLoading = false,
   className = '',
+  onShare,
+  isSharing = false,
 }: UserStatsCardProps) {
   const showSkeleton = isLoading && !stats;
 
   return (
     <Card padding="sm" className={className}>
-      <Text variant="subtitle" className="mb-2 text-base">
-        Mining Stats
-      </Text>
+      <View className="mb-2 flex-row items-center justify-between">
+        <Text variant="subtitle" className="text-base">
+          Mining Stats
+        </Text>
+        {onShare && (
+          <Pressable
+            onPress={onShare}
+            disabled={isSharing || showSkeleton}
+            hitSlop={8}
+            className="active:opacity-60"
+          >
+            {isSharing ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Ionicons
+                name="share-outline"
+                size={20}
+                color={showSkeleton ? colors.textDisabled : colors.textMuted}
+              />
+            )}
+          </Pressable>
+        )}
+      </View>
 
       {showSkeleton ? (
         <View className="gap-3">
