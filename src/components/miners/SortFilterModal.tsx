@@ -59,6 +59,7 @@ const SORT_OPTIONS: { value: MinerSortOption; label: string }[] = [
   { value: 'status', label: 'Status' },
   { value: 'name', label: 'Name' },
   { value: 'hashrate', label: 'Hashrate' },
+  { value: 'bestDiff', label: 'Best Diff' },
   { value: 'temp', label: 'Temperature' },
 ];
 

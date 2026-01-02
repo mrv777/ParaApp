@@ -114,6 +114,8 @@ export function MinersScreen({ navigation }: Props) {
       switch (sortBy) {
         case 'hashrate':
           return b.hashRate - a.hashRate;
+        case 'bestDiff':
+          return b.bestDiff - a.bestDiff;
         case 'temp':
           return b.temp - a.temp;
         case 'status':

@@ -21,7 +21,7 @@ export type WarningSeverity = 'caution' | 'danger';
 /**
  * Sort options for miners list
  */
-export type MinerSortOption = 'name' | 'hashrate' | 'temp' | 'status';
+export type MinerSortOption = 'name' | 'hashrate' | 'temp' | 'status' | 'bestDiff';
 
 /**
  * Filter options for miners list
