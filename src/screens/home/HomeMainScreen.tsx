@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { Text } from '@/components/Text';
+import { TipBanner } from '@/components/TipBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
@@ -33,6 +34,7 @@ import {
 } from '@/store/userStore';
 import { haptics } from '@/utils/haptics';
 import { useSettingsStore, selectHasAddress, selectWorkerSortOrder } from '@/store/settingsStore';
+import { useMinerStore } from '@/store/minerStore';
 import { sortWorkers } from '@/utils/sorting';
 import { colors } from '@/constants/colors';
 import type { HomeStackScreenProps } from '@/types/navigation';
@@ -47,6 +49,9 @@ export function HomeMainScreen({ navigation }: Props) {
   // Settings store
   const hasAddress = useSettingsStore(selectHasAddress);
   const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
+
+  // Miner store - check if user has any miners
+  const hasMiners = useMinerStore((s) => s.miners.length > 0);
 
   // Pool store
   const poolError = usePoolStore(selectPoolError);
@@ -211,6 +216,13 @@ export function HomeMainScreen({ navigation }: Props) {
               isLoading={isUserLoading}
               connectionStatus={connectionStatus}
             />
+
+            {/* Tip for users without miners */}
+            {!hasMiners && (
+              <TipBanner tipId="home-miners-tip" icon="wifi-outline">
+                Add devices on the miners tab to manage them
+              </TipBanner>
+            )}
           </View>
         ) : (
           /* Without Address: Show add address CTA */

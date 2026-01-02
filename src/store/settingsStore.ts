@@ -25,6 +25,9 @@ interface SettingsState {
   // Visibility on leaderboards
   isPublicOnLeaderboard: boolean;
 
+  // Dismissed tips (persisted)
+  dismissedTips: string[];
+
   // Cache timestamps
   lastPoolFetch: number | null;
   lastUserFetch: number | null;
@@ -41,6 +44,7 @@ interface SettingsActions {
   setMinerFilterBy: (filter: MinerFilterOption) => void;
   setBitcoinAddress: (address: string | null) => void;
   setPublicOnLeaderboard: (isPublic: boolean) => void;
+  dismissTip: (tipId: string) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -53,6 +57,7 @@ const initialState: SettingsState = {
   minerFilterBy: 'all',
   bitcoinAddress: null,
   isPublicOnLeaderboard: true,
+  dismissedTips: [],
   lastPoolFetch: null,
   lastUserFetch: null,
   isHydrated: false,
@@ -78,6 +83,13 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setPublicOnLeaderboard: (isPublic) =>
         set({ isPublicOnLeaderboard: isPublic }),
 
+      dismissTip: (tipId) =>
+        set((state) => ({
+          dismissedTips: state.dismissedTips.includes(tipId)
+            ? state.dismissedTips
+            : [...state.dismissedTips, tipId],
+        })),
+
       updateCacheTimestamp: (type) => {
         const timestamp = Date.now();
         if (type === 'pool') {
@@ -100,6 +112,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         minerFilterBy: state.minerFilterBy,
         bitcoinAddress: state.bitcoinAddress,
         isPublicOnLeaderboard: state.isPublicOnLeaderboard,
+        dismissedTips: state.dismissedTips,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);

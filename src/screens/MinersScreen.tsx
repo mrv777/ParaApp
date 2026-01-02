@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Text } from '@/components/Text';
+import { TipBanner } from '@/components/TipBanner';
 import {
   DiscoveryCard,
   MinerRow,
@@ -303,6 +304,13 @@ export function MinersScreen({ navigation }: Props) {
               {sectionHeader}
             </Text>
           </View>
+        )}
+
+        {/* Swipe tip - shown when user has miners */}
+        {miners.length > 0 && (
+          <TipBanner tipId="miners-swipe-tip" icon="swap-horizontal-outline" className="mx-4 mb-2">
+            Swipe left on a miner to remove it
+          </TipBanner>
         )}
       </>
     ),
