@@ -13,7 +13,7 @@ import { MultiMinerSection } from './MultiMinerSection';
 import { useUserStore, selectUserWorkers } from '@/store/userStore';
 import { useMinerStore, selectMiners } from '@/store/minerStore';
 import type { LocalMiner } from '@/types';
-import { formatHashrate, formatDifficulty, formatTimestamp } from '@/utils/formatting';
+import { formatHashrate, formatDifficulty, formatTimestamp, parseWorkerName } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
 
 // Stable empty array to prevent infinite re-renders
@@ -40,8 +40,11 @@ export function LinkedWorkerSection({
 
   const [expanded, setExpanded] = useState(false);
 
-  // Find matching worker
-  const linkedWorker = workers.find((w) => w.name === stratumUser);
+  // Find matching worker by parsing worker name from stratum user
+  const workerName = parseWorkerName(stratumUser);
+  const linkedWorker = workerName
+    ? workers.find((w) => w.name === workerName)
+    : undefined;
 
   // Sibling miners (excluding current)
   const siblingMiners = linkedMiners.filter((m) => m.ip !== currentMinerIp);

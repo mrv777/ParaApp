@@ -229,3 +229,26 @@ export function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return '--%';
   return `${Math.round(value)}%`;
 }
+
+/**
+ * Extract worker name from stratum user string
+ * Format: {bitcoin_address}.{worker_name}.{device_id}@{pool_domain}
+ * Example: "bc1qxxx.q43.gamma@pool.com" → "q43"
+ * @param stratumUser - Full stratum user string from miner
+ * @returns Worker name portion, or null if not parseable
+ */
+export function parseWorkerName(stratumUser: string): string | null {
+  if (!stratumUser) return null;
+
+  // Remove pool domain if present (e.g., @sati.pro)
+  const withoutDomain = stratumUser.split('@')[0];
+
+  // Split by dots: [bitcoin_address, worker_name, device_id, ...]
+  const parts = withoutDomain.split('.');
+
+  // Need at least 2 parts (address.worker)
+  if (parts.length < 2) return null;
+
+  // Worker name is the second part (after bitcoin address)
+  return parts[1] || null;
+}

@@ -162,7 +162,7 @@ export function AliasEditSheet({
             className="flex-1 py-3 rounded-lg bg-foreground items-center"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <Text variant="body" className="font-medium text-background">
+            <Text variant="body" className="font-medium text-black">
               Save
             </Text>
           </Pressable>

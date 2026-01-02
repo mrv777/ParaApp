@@ -1,5 +1,5 @@
 /**
- * HashrateChart component - Interactive line chart using ECharts
+ * UserHashrateChart component - Interactive line chart for user hashrate using ECharts
  */
 
 import { useRef, useEffect, useMemo, useState } from 'react';
@@ -9,34 +9,56 @@ import { ChartSkeleton } from './ChartSkeleton';
 import { initEcharts, getEcharts, getSvgChart, isEchartsReady } from './echarts-init';
 import { colors } from '@/constants/colors';
 import { formatHashrate } from '@/utils/formatting';
-import type { PoolHistoricalPoint, HistoricalPeriod } from '@/types';
+import type { UserHistoricalPoint, HistoricalPeriod } from '@/types';
 
-export interface HashrateChartProps {
-  data: PoolHistoricalPoint[];
+export interface UserHashrateChartProps {
+  data: UserHistoricalPoint[];
   period: HistoricalPeriod;
   isLoading?: boolean;
   height?: number;
-  onDataPointSelect?: (point: PoolHistoricalPoint | null) => void;
+  onDataPointSelect?: (point: UserHistoricalPoint | null) => void;
   className?: string;
 }
 
 /**
- * Get appropriate hashrate field based on period
+ * Downsample data to a maximum number of points for performance
+ * Uses LTTB (Largest Triangle Three Buckets) simplified approach
  */
-function getHashrateField(period: HistoricalPeriod): keyof PoolHistoricalPoint {
-  switch (period) {
-    case '1h':
-      return 'hashrate15m';
-    case '24h':
-      return 'hashrate1hr';
-    case '7d':
-      return 'hashrate6hr';
-    case '30d':
-      return 'hashrate1d';
-    default:
-      return 'hashrate15m';
+function downsampleData(
+  data: UserHistoricalPoint[],
+  maxPoints: number
+): UserHistoricalPoint[] {
+  if (data.length <= maxPoints) return data;
+
+  const result: UserHistoricalPoint[] = [];
+  const bucketSize = (data.length - 2) / (maxPoints - 2);
+
+  // Always keep first point
+  result.push(data[0]);
+
+  // Sample middle points
+  for (let i = 1; i < maxPoints - 1; i++) {
+    const bucketStart = Math.floor((i - 1) * bucketSize) + 1;
+    const bucketEnd = Math.min(Math.floor(i * bucketSize) + 1, data.length - 1);
+
+    // Pick the point with max hashrate in each bucket (preserves peaks)
+    let maxPoint = data[bucketStart];
+    for (let j = bucketStart + 1; j < bucketEnd; j++) {
+      if (data[j].hashrate > maxPoint.hashrate) {
+        maxPoint = data[j];
+      }
+    }
+    result.push(maxPoint);
   }
+
+  // Always keep last point
+  result.push(data[data.length - 1]);
+
+  return result;
 }
+
+// Maximum data points to render (for performance)
+const MAX_CHART_POINTS = 200;
 
 /**
  * Format X-axis label based on period
@@ -57,14 +79,14 @@ function formatXAxisLabel(timestamp: number, period: HistoricalPeriod): string {
   }
 }
 
-export function HashrateChart({
+export function UserHashrateChart({
   data,
   period,
   isLoading = false,
   height = 200,
   onDataPointSelect,
   className = '',
-}: HashrateChartProps) {
+}: UserHashrateChartProps) {
   const chartRef = useRef<unknown>(null);
   const chartInstanceRef = useRef<ReturnType<typeof import('echarts/core').init> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 300, height });
@@ -77,16 +99,18 @@ export function HashrateChart({
     }
   }, [isReady]);
 
-  // Calculate chart data
+  // Calculate chart data - simplified for user data (single hashrate field)
+  // Note: User timestamps are already in milliseconds (converted from ISO string)
+  // Downsample if too many points to prevent performance issues
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
-    const hashrateField = getHashrateField(period);
-    return data.map((point) => [
-      point.timestamp * 1000,
-      point[hashrateField] as number,
+    const sampled = downsampleData(data, MAX_CHART_POINTS);
+    return sampled.map((point) => [
+      point.timestamp,
+      point.hashrate,
     ]);
-  }, [data, period]);
+  }, [data]);
 
   // Generate chart options
   const option = useMemo(() => {
