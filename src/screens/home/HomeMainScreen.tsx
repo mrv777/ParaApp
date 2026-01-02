@@ -14,6 +14,7 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { Text } from '@/components/Text';
 import { TipBanner } from '@/components/TipBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
+import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
@@ -37,7 +38,8 @@ import {
 } from '@/store/userStore';
 import { haptics } from '@/utils/haptics';
 import { useSettingsStore, selectHasAddress, selectWorkerSortOrder } from '@/store/settingsStore';
-import { useMinerStore } from '@/store/minerStore';
+import { useShallow } from 'zustand/react/shallow';
+import { useMinerStore, selectFleetStats } from '@/store/minerStore';
 import { sortWorkers } from '@/utils/sorting';
 import { colors } from '@/constants/colors';
 import type { HomeStackScreenProps } from '@/types/navigation';
@@ -57,8 +59,9 @@ export function HomeMainScreen({ navigation }: Props) {
   const hasAddress = useSettingsStore(selectHasAddress);
   const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
 
-  // Miner store - check if user has any miners
-  const hasMiners = useMinerStore((s) => s.miners.length > 0);
+  // Miner store - fleet stats for overview card (useShallow prevents infinite loop)
+  const fleetStats = useMinerStore(useShallow(selectFleetStats));
+  const refreshAllMiners = useMinerStore((s) => s.refreshAllMiners);
 
   // Pool store
   const poolError = usePoolStore(selectPoolError);
@@ -94,6 +97,13 @@ export function HomeMainScreen({ navigation }: Props) {
   useEffect(() => {
     fetchLeaderboards();
   }, [fetchLeaderboards]);
+
+  // Refresh miners on mount if any are saved (they start offline after rehydration)
+  useEffect(() => {
+    if (fleetStats && fleetStats.onlineCount === 0) {
+      refreshAllMiners();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch historical data when address is available
   useEffect(() => {
@@ -132,6 +142,11 @@ export function HomeMainScreen({ navigation }: Props) {
   // Navigate to Workers List
   const handleViewAllWorkers = useCallback(() => {
     navigation.navigate('WorkersList');
+  }, [navigation]);
+
+  // Navigate to Miners tab
+  const handleFleetPress = useCallback(() => {
+    navigation.getParent()?.navigate('Miners');
   }, [navigation]);
 
   // Chart period change handler
@@ -226,8 +241,13 @@ export function HomeMainScreen({ navigation }: Props) {
               connectionStatus={connectionStatus}
             />
 
+            {/* Fleet Overview Card */}
+            {fleetStats && (
+              <FleetOverviewCard {...fleetStats} onPress={handleFleetPress} />
+            )}
+
             {/* Tip for users without miners */}
-            {!hasMiners && (
+            {!fleetStats && (
               <TipBanner tipId="home-miners-tip" icon="wifi-outline">
                 Add devices on the miners tab to manage them
               </TipBanner>
@@ -237,6 +257,11 @@ export function HomeMainScreen({ navigation }: Props) {
           /* Without Address: Show add address CTA */
           <View className="px-4 pt-3 gap-3">
             <AddAddressPrompt onPress={handleAddAddress} />
+
+            {/* Fleet Overview Card (shown even without address) */}
+            {fleetStats && (
+              <FleetOverviewCard {...fleetStats} onPress={handleFleetPress} />
+            )}
           </View>
         )}
       </ScrollView>

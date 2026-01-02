@@ -5,6 +5,9 @@
 export { AddAddressPrompt } from './AddAddressPrompt';
 export type { AddAddressPromptProps } from './AddAddressPrompt';
 
+export { FleetOverviewCard } from './FleetOverviewCard';
+export type { FleetOverviewCardProps } from './FleetOverviewCard';
+
 export { PoolSummaryCard } from './PoolSummaryCard';
 export type { PoolSummaryCardProps } from './PoolSummaryCard';
 

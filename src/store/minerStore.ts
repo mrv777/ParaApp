@@ -20,6 +20,17 @@ import { scanSubnet } from '@/utils/discovery';
 import { parseDifficulty } from '@/utils/formatting';
 import { tempThresholds } from '@/constants/theme';
 
+/**
+ * Check if a miner has any warnings (pure function for use in selectors)
+ */
+export const hasMinerWarnings = (miner: LocalMiner): boolean => {
+  if (!miner.isOnline) return true;
+  if (miner.temp >= tempThresholds.caution) return true;
+  if (miner.overheatMode || miner.powerFault) return true;
+  if (miner.hashRate < miner.expectedHashrate * 0.8) return true;
+  return false;
+};
+
 interface MinerState {
   // Runtime miner data
   miners: LocalMiner[];
@@ -451,10 +462,7 @@ export const selectOnlineMiners = (state: MinerState) =>
 export const selectOfflineMiners = (state: MinerState) =>
   state.miners.filter((m) => !m.isOnline);
 export const selectMinersWithWarnings = (state: MinerState) =>
-  state.miners.filter((m) => {
-    const store = useMinerStore.getState();
-    return store.getWarnings(m).length > 0;
-  });
+  state.miners.filter(hasMinerWarnings);
 export const selectIsDiscovering = (state: MinerState) => state.isDiscovering;
 export const selectDiscoveryProgress = (state: MinerState) =>
   state.discoveryProgress;
@@ -476,3 +484,38 @@ export const selectMinersByStratumUser =
     const matches = state.miners.filter((m) => m.stratumUser === stratumUser);
     return matches.length > 0 ? matches : EMPTY_MINERS;
   };
+
+/**
+ * Fleet stats for Home screen overview
+ */
+export interface FleetStats {
+  totalHashrate: number; // Sum of online miner hashrates (GH/s)
+  highestDiff: number; // Max bestDiff across all miners
+  warningCount: number; // Total miners with warnings
+  onlineCount: number; // Number of online miners
+  totalCount: number; // Total miners saved
+}
+
+/**
+ * Select aggregated fleet stats for Home screen
+ * Returns null if no miners saved
+ */
+export const selectFleetStats = (state: MinerState): FleetStats | null => {
+  const { miners } = state;
+  if (miners.length === 0) return null;
+
+  const onlineMiners = miners.filter((m) => m.isOnline);
+  const totalHashrate = onlineMiners.reduce((sum, m) => sum + m.hashRate, 0);
+  const highestDiff = Math.max(0, ...miners.map((m) => m.bestDiff));
+
+  // Count miners with warnings
+  const warningCount = miners.filter(hasMinerWarnings).length;
+
+  return {
+    totalHashrate,
+    highestDiff,
+    warningCount,
+    onlineCount: onlineMiners.length,
+    totalCount: miners.length,
+  };
+};
