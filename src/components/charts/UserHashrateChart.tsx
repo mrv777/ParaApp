@@ -207,7 +207,7 @@ export function UserHashrateChart({
             hour: '2-digit',
             minute: '2-digit',
           });
-          return `${timeStr}<br/><strong>${formatHashrate(value)}</strong>`;
+          return `${timeStr}\n${formatHashrate(value)}`;
         },
         axisPointer: {
           type: 'line' as const,
@@ -236,12 +236,18 @@ export function UserHashrateChart({
 
     chartInstanceRef.current = chart;
 
+    // Set initial option if available (fixes race condition where option
+    // was computed before chart instance existed)
+    if (option) {
+      chart.setOption(option, true);
+    }
+
     // Cleanup only on unmount
     return () => {
       chart.dispose();
       chartInstanceRef.current = null;
     };
-  }, [isReady, dimensions.width, dimensions.height]);
+  }, [isReady, dimensions.width, dimensions.height, option]);
 
   // Update chart options when data changes (don't recreate the chart)
   useEffect(() => {
