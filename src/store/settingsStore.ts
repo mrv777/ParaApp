@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { TemperatureUnit } from '@/utils/formatting';
+import type { MinerSortOption, MinerFilterOption } from '@/types';
 
 export type PollingInterval = 5000 | 10000 | 20000 | 30000;
 export type WorkerSortOrder = 'hashrate' | 'name' | 'bestDiff';
@@ -15,6 +16,8 @@ interface SettingsState {
   temperatureUnit: TemperatureUnit;
   pollingInterval: PollingInterval;
   workerSortOrder: WorkerSortOrder;
+  minerSortBy: MinerSortOption;
+  minerFilterBy: MinerFilterOption;
 
   // User Bitcoin address (persisted)
   bitcoinAddress: string | null;
@@ -34,6 +37,8 @@ interface SettingsActions {
   setTemperatureUnit: (unit: TemperatureUnit) => void;
   setPollingInterval: (interval: PollingInterval) => void;
   setWorkerSortOrder: (order: WorkerSortOrder) => void;
+  setMinerSortBy: (sort: MinerSortOption) => void;
+  setMinerFilterBy: (filter: MinerFilterOption) => void;
   setBitcoinAddress: (address: string | null) => void;
   setPublicOnLeaderboard: (isPublic: boolean) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
@@ -44,6 +49,8 @@ const initialState: SettingsState = {
   temperatureUnit: 'celsius',
   pollingInterval: 10000,
   workerSortOrder: 'hashrate',
+  minerSortBy: 'status',
+  minerFilterBy: 'all',
   bitcoinAddress: null,
   isPublicOnLeaderboard: true,
   lastPoolFetch: null,
@@ -61,6 +68,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setPollingInterval: (interval) => set({ pollingInterval: interval }),
 
       setWorkerSortOrder: (order) => set({ workerSortOrder: order }),
+
+      setMinerSortBy: (sort) => set({ minerSortBy: sort }),
+
+      setMinerFilterBy: (filter) => set({ minerFilterBy: filter }),
 
       setBitcoinAddress: (address) => set({ bitcoinAddress: address }),
 
@@ -85,6 +96,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         temperatureUnit: state.temperatureUnit,
         pollingInterval: state.pollingInterval,
         workerSortOrder: state.workerSortOrder,
+        minerSortBy: state.minerSortBy,
+        minerFilterBy: state.minerFilterBy,
         bitcoinAddress: state.bitcoinAddress,
         isPublicOnLeaderboard: state.isPublicOnLeaderboard,
       }),

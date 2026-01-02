@@ -7,9 +7,9 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Text } from '@/components/Text';
-import { Badge } from '@/components/Badge';
 import {
   DiscoveryCard,
   MinerRow,
@@ -26,27 +26,24 @@ import {
   selectDiscoveryError,
 } from '@/store/minerStore';
 import { usePolling } from '@/hooks/usePolling';
+import { useSettingsStore } from '@/store/settingsStore';
 import { colors } from '@/constants/colors';
 import type { MinersStackScreenProps } from '@/types/navigation';
-import type {
-  LocalMiner,
-  DiscoveryOptions,
-  MinerSortOption,
-  MinerFilterOption,
-  MinerWarning,
-} from '@/types';
+import type { LocalMiner, DiscoveryOptions, MinerWarning } from '@/types';
 
 type Props = MinersStackScreenProps<'MinersMain'>;
 
 export function MinersScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
-
-  // Sort and filter state
-  const [sortBy, setSortBy] = useState<MinerSortOption>('status');
-  const [filterBy, setFilterBy] = useState<MinerFilterOption>('all');
   const [showSortFilter, setShowSortFilter] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Sort and filter from settings (persisted)
+  const sortBy = useSettingsStore((s) => s.minerSortBy);
+  const filterBy = useSettingsStore((s) => s.minerFilterBy);
+  const setSortBy = useSettingsStore((s) => s.setMinerSortBy);
+  const setFilterBy = useSettingsStore((s) => s.setMinerFilterBy);
 
   // Store selectors
   const miners = useMinerStore(selectMiners);
@@ -63,8 +60,10 @@ export function MinersScreen({ navigation }: Props) {
   const refreshAllMiners = useMinerStore((s) => s.refreshAllMiners);
   const getWarnings = useMinerStore((s) => s.getWarnings);
 
-  // Compute if all miners are offline
-  const allOffline = miners.length > 0 && miners.every((m) => !m.isOnline);
+  // Compute online/offline status
+  const onlineCount = miners.filter((m) => m.isOnline).length;
+  const allOffline = miners.length > 0 && onlineCount === 0;
+  const allOnline = miners.length > 0 && onlineCount === miners.length;
   const showNetworkBanner = allOffline && !bannerDismissed;
 
   // Polling for live updates
@@ -91,17 +90,23 @@ export function MinersScreen({ navigation }: Props) {
     return map;
   }, [miners, getWarnings]);
 
-  // Sort miners with warnings first, then by selected option
+  // Sort miners: online with warnings first, then online without, then offline
   const sortedMiners = useMemo(() => {
-    const withWarnings: LocalMiner[] = [];
-    const withoutWarnings: LocalMiner[] = [];
+    const onlineWithWarnings: LocalMiner[] = [];
+    const onlineWithoutWarnings: LocalMiner[] = [];
+    const offline: LocalMiner[] = [];
 
     miners.forEach((m) => {
-      const warnings = minerWarnings.get(m.ip) || [];
-      if (warnings.length > 0) {
-        withWarnings.push(m);
+      if (!m.isOnline) {
+        offline.push(m);
       } else {
-        withoutWarnings.push(m);
+        const warnings = minerWarnings.get(m.ip) || [];
+        const hasWarnings = warnings.some((w) => w.type !== 'offline');
+        if (hasWarnings) {
+          onlineWithWarnings.push(m);
+        } else {
+          onlineWithoutWarnings.push(m);
+        }
       }
     });
 
@@ -122,7 +127,11 @@ export function MinersScreen({ navigation }: Props) {
       }
     };
 
-    return [...withWarnings.sort(sortFn), ...withoutWarnings.sort(sortFn)];
+    return [
+      ...onlineWithWarnings.sort(sortFn),
+      ...onlineWithoutWarnings.sort(sortFn),
+      ...offline.sort(sortFn),
+    ];
   }, [miners, minerWarnings, sortBy]);
 
   // Filter sorted miners
@@ -251,10 +260,18 @@ export function MinersScreen({ navigation }: Props) {
           <View className="flex-1">
             <Text variant="title">Miners</Text>
             {miners.length > 0 && (
-              <Text variant="caption" color="muted" className="mt-1">
-                {miners.filter((m) => m.isOnline).length} of {miners.length}{' '}
-                online
-              </Text>
+              <View className="flex-row items-center gap-1 mt-1">
+                {!allOnline && (
+                  <Ionicons
+                    name="alert-circle"
+                    size={14}
+                    color={colors.warning}
+                  />
+                )}
+                <Text variant="caption" color="muted">
+                  {onlineCount} of {miners.length} online
+                </Text>
+              </View>
             )}
           </View>
           <HeaderButtons
@@ -277,22 +294,6 @@ export function MinersScreen({ navigation }: Props) {
           />
         )}
 
-        {/* Active filter/sort indicators */}
-        {(filterBy !== 'all' || sortBy !== 'status') && (
-          <View className="px-4 py-2 flex-row gap-2">
-            {filterBy !== 'all' && (
-              <Badge variant="default" size="sm">
-                {filterBy === 'warning' ? 'Warnings' : filterBy}
-              </Badge>
-            )}
-            {sortBy !== 'status' && (
-              <Badge variant="default" size="sm">
-                Sort: {sortBy}
-              </Badge>
-            )}
-          </View>
-        )}
-
         {/* Miners list header */}
         {filteredMiners.length > 0 && (
           <View className="px-4 pt-4 pb-2">
@@ -304,7 +305,9 @@ export function MinersScreen({ navigation }: Props) {
       </>
     ),
     [
-      miners,
+      miners.length,
+      onlineCount,
+      allOnline,
       isDiscovering,
       handleAddPress,
       handleStartScan,
@@ -316,8 +319,6 @@ export function MinersScreen({ navigation }: Props) {
       handleAddManualIp,
       handleScanRange,
       handleCloseDiscovery,
-      filterBy,
-      sortBy,
       filteredMiners.length,
       sectionHeader,
     ]
