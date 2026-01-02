@@ -65,6 +65,10 @@ export interface LocalMiner {
   frequency: number;
   /** Fan speed (%) */
   fanSpeed: number;
+  /** Auto fan speed enabled */
+  autoFanSpeed: boolean;
+  /** Fan RPM reading */
+  fanRpm: number;
   /** Best difficulty ever achieved */
   bestDiff: number;
   /** Best difficulty this session (since restart) */
@@ -103,8 +107,10 @@ export interface MinerSettings {
   frequency?: number;
   /** Core voltage (mV) */
   coreVoltage?: number;
-  /** Fan speed (%) - 0 for auto */
+  /** Fan speed (%) for manual mode */
   fanSpeed?: number;
+  /** Auto fan speed enabled */
+  autoFanSpeed?: boolean;
   /** Pool stratum URL */
   stratumUrl?: string;
   /** Pool stratum port */

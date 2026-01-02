@@ -79,6 +79,17 @@ export async function fetchWithTimeout<T>(
         continue;
       }
 
+      // Check content type - reject if explicitly non-JSON (like text/html)
+      const contentType = response.headers.get('content-type');
+      if (contentType && !contentType.includes('json')) {
+        lastError = createApiError(
+          'Server returned non-JSON response',
+          response.status,
+          'INVALID_RESPONSE'
+        );
+        continue;
+      }
+
       const data = (await response.json()) as T;
       return { success: true, data };
     } catch (error) {

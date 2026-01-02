@@ -30,8 +30,31 @@ import type { AsicConfig, MinerSettings } from '@/types/miner';
 
 type Props = MinersStackScreenProps<'MinerSettings'>;
 
-/** Fan speed options (0 = auto) */
-const FAN_OPTIONS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+/** Fan speed options for manual mode */
+const FAN_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+/** Generate fallback ASIC config from miner data when /api/system/asic fails */
+function generateFallbackAsicConfig(miner: {
+  ASICModel: string;
+  deviceModel: string;
+  frequency: number;
+  voltage: number;
+}): AsicConfig {
+  // Default options based on BM1370 (most common)
+  const defaultFreqOptions = [485, 500, 515, 525, 550, 575, 590, 600];
+  const defaultVoltOptions = [1100, 1120, 1150, 1170, 1200, 1215, 1250];
+
+  return {
+    ASICModel: miner.ASICModel,
+    deviceModel: miner.deviceModel,
+    frequencyOptions: defaultFreqOptions,
+    voltageOptions: defaultVoltOptions,
+    defaultFrequency: 600,
+    defaultVoltage: 1150,
+    absMaxFrequency: 1000,
+    absMaxVoltage: 1300,
+  };
+}
 
 /** Pending change entry */
 interface PendingChange {
@@ -61,6 +84,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const [frequency, setFrequency] = useState(0);
   const [voltage, setVoltage] = useState(0);
   const [fanSpeed, setFanSpeed] = useState(0);
+  const [autoFan, setAutoFan] = useState(false);
   const [stratumUrl, setStratumUrl] = useState('');
   const [stratumPort, setStratumPort] = useState(0);
   const [stratumUser, setStratumUser] = useState('');
@@ -79,49 +103,69 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
 
-  // Fetch ASIC config on mount
+  // Fetch ASIC config on mount only (not on miner refresh)
   useEffect(() => {
+    // Skip if already loaded
+    if (asicConfig) return;
+
     async function fetchAsicConfig() {
       setConfigLoading(true);
       setConfigError(null);
       const result = await getAsicSettings(ip);
       if (result.success) {
         setAsicConfig(result.data);
+      } else if (miner) {
+        // Use fallback config for older firmware that doesn't have /api/system/asic
+        setAsicConfig(generateFallbackAsicConfig(miner));
       } else {
         setConfigError(result.error.message || 'Failed to load ASIC configuration');
       }
       setConfigLoading(false);
     }
     fetchAsicConfig();
-  }, [ip]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ip, miner?.ASICModel]); // Only re-fetch if IP or ASIC model changes
 
-  // Initialize form values from miner data
+  // Initialize pool and fan settings from miner data (always, even without asicConfig)
   useEffect(() => {
-    if (miner && asicConfig) {
-      // Use actual current values from miner
-      const currentFrequency = miner.frequency || asicConfig.defaultFrequency;
-      const currentVoltage = miner.voltage || asicConfig.defaultVoltage;
-      const currentFanSpeed = miner.fanSpeed || 0;
-
-      setFrequency(currentFrequency);
-      setVoltage(currentVoltage);
-      setFanSpeed(currentFanSpeed);
+    if (miner) {
+      // Pool settings
       setStratumUrl(miner.stratumUrl || '');
       setStratumPort(miner.stratumPort || 3333);
       setStratumUser(miner.stratumUser || '');
-      setStratumPassword('x'); // Default password
+      setStratumPassword('x');
+      // Fan settings
+      setFanSpeed(miner.fanSpeed || 50);
+      setAutoFan(miner.autoFanSpeed ?? false);
+    }
+  }, [miner]);
 
-      setOriginalValues({
-        frequency: currentFrequency,
-        coreVoltage: currentVoltage,
-        fanSpeed: currentFanSpeed,
+  // Initialize frequency/voltage when asicConfig is available
+  useEffect(() => {
+    if (miner && asicConfig) {
+      setFrequency(miner.frequency || asicConfig.defaultFrequency);
+      setVoltage(miner.voltage || asicConfig.defaultVoltage);
+    }
+  }, [miner, asicConfig]);
+
+  // Set original values for change tracking
+  useEffect(() => {
+    if (miner && !configLoading) {
+      const values: MinerSettings = {
+        fanSpeed: miner.fanSpeed || 50,
+        autoFanSpeed: miner.autoFanSpeed ?? false,
         stratumUrl: miner.stratumUrl || '',
         stratumPort: miner.stratumPort || 3333,
         stratumUser: miner.stratumUser || '',
         stratumPassword: 'x',
-      });
+      };
+      if (asicConfig) {
+        values.frequency = miner.frequency || asicConfig.defaultFrequency;
+        values.coreVoltage = miner.voltage || asicConfig.defaultVoltage;
+      }
+      setOriginalValues(values);
     }
-  }, [miner, asicConfig]);
+  }, [miner, asicConfig, configLoading]);
 
   // Navigate back if miner removed
   useEffect(() => {
@@ -135,30 +179,40 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     if (!originalValues) return [];
     const changes: PendingChange[] = [];
 
-    if (frequency !== originalValues.frequency) {
+    // Frequency/voltage only when asicConfig is available
+    if (asicConfig) {
+      if (frequency !== originalValues.frequency) {
+        changes.push({
+          field: 'frequency',
+          label: 'Frequency',
+          from: `${originalValues.frequency} MHz`,
+          to: `${frequency} MHz`,
+        });
+      }
+      if (voltage !== originalValues.coreVoltage) {
+        changes.push({
+          field: 'voltage',
+          label: 'Voltage',
+          from: `${originalValues.coreVoltage} mV`,
+          to: `${voltage} mV`,
+        });
+      }
+    }
+    // Fan changes always tracked (doesn't need asicConfig)
+    if (autoFan !== originalValues.autoFanSpeed) {
       changes.push({
-        field: 'frequency',
-        label: 'Frequency',
-        from: `${originalValues.frequency} MHz`,
-        to: `${frequency} MHz`,
+        field: 'autoFan',
+        label: 'Fan Mode',
+        from: originalValues.autoFanSpeed ? 'Auto' : 'Manual',
+        to: autoFan ? 'Auto' : 'Manual',
       });
     }
-    if (voltage !== originalValues.coreVoltage) {
-      changes.push({
-        field: 'voltage',
-        label: 'Voltage',
-        from: `${originalValues.coreVoltage} mV`,
-        to: `${voltage} mV`,
-      });
-    }
-    if (fanSpeed !== originalValues.fanSpeed) {
-      const fromStr = originalValues.fanSpeed === 0 ? 'Auto' : `${originalValues.fanSpeed}%`;
-      const toStr = fanSpeed === 0 ? 'Auto' : `${fanSpeed}%`;
+    if (!autoFan && fanSpeed !== originalValues.fanSpeed) {
       changes.push({
         field: 'fanSpeed',
         label: 'Fan Speed',
-        from: fromStr,
-        to: toStr,
+        from: `${originalValues.fanSpeed}%`,
+        to: `${fanSpeed}%`,
       });
     }
     if (stratumUrl !== originalValues.stratumUrl) {
@@ -195,7 +249,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     }
 
     return changes;
-  }, [frequency, voltage, fanSpeed, stratumUrl, stratumPort, stratumUser, stratumPassword, originalValues]);
+  }, [frequency, voltage, fanSpeed, autoFan, stratumUrl, stratumPort, stratumUser, stratumPassword, originalValues, asicConfig]);
 
   const hasChanges = pendingChanges.length > 0;
 
@@ -252,7 +306,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     if (voltage !== originalValues?.coreVoltage) {
       settings.coreVoltage = voltage;
     }
-    if (fanSpeed !== originalValues?.fanSpeed) {
+    if (autoFan !== originalValues?.autoFanSpeed) {
+      settings.autoFanSpeed = autoFan;
+    }
+    if (!autoFan && fanSpeed !== originalValues?.fanSpeed) {
       settings.fanSpeed = fanSpeed;
     }
     if (stratumUrl !== originalValues?.stratumUrl) {
@@ -287,6 +344,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     frequency,
     voltage,
     fanSpeed,
+    autoFan,
     stratumUrl,
     stratumPort,
     stratumUser,
@@ -311,6 +369,11 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const handleFanSelect = useCallback((value: number) => {
     haptics.selection();
     setFanSpeed(value);
+  }, []);
+
+  const handleAutoFanToggle = useCallback((auto: boolean) => {
+    haptics.selection();
+    setAutoFan(auto);
   }, []);
 
   const handleCustomFrequencyToggle = useCallback(() => {
@@ -561,38 +624,91 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 )}
               </View>
 
-              {/* Fan Speed */}
+            </View>
+          )}
+
+          {/* Fan Control - shows even without asicConfig */}
+          {miner && !configLoading && (
+            <View className="px-4 py-4 border-t border-border">
+              <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
+                Fan Control
+              </Text>
               <View>
                 <View className="flex-row justify-between items-center mb-2">
                   <Text variant="body">Fan Speed</Text>
-                  <Text variant="body" className="font-medium">
-                    {fanSpeed === 0 ? 'Auto' : `${fanSpeed}%`}
-                  </Text>
+                  {!autoFan && (
+                    <Text variant="body" className="font-medium">
+                      {fanSpeed}%
+                    </Text>
+                  )}
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  className="-mx-1"
-                >
-                  <View className="flex-row gap-2 px-1">
-                    {FAN_OPTIONS.map((opt) => (
-                      <Pressable
-                        key={opt}
-                        onPress={() => handleFanSelect(opt)}
-                        className={`px-3 py-2 rounded-lg ${
-                          fanSpeed === opt ? 'bg-primary' : 'bg-secondary'
-                        }`}
-                      >
-                        <Text
-                          variant="body"
-                          className={fanSpeed === opt ? 'text-background font-medium' : ''}
-                        >
-                          {opt === 0 ? 'Auto' : `${opt}%`}
-                        </Text>
-                      </Pressable>
-                    ))}
+                {/* Auto/Manual segmented control */}
+                <View className="flex-row bg-secondary rounded-lg p-1 mb-3">
+                  <Pressable
+                    onPress={() => handleAutoFanToggle(true)}
+                    className={`flex-1 py-2 rounded-md ${
+                      autoFan ? 'bg-primary' : ''
+                    }`}
+                  >
+                    <Text
+                      variant="body"
+                      className={`text-center ${autoFan ? 'text-background font-medium' : ''}`}
+                    >
+                      Auto
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleAutoFanToggle(false)}
+                    className={`flex-1 py-2 rounded-md ${
+                      !autoFan ? 'bg-primary' : ''
+                    }`}
+                  >
+                    <Text
+                      variant="body"
+                      className={`text-center ${!autoFan ? 'text-background font-medium' : ''}`}
+                    >
+                      Manual
+                    </Text>
+                  </Pressable>
+                </View>
+                {/* Auto mode info */}
+                {autoFan && (
+                  <View className="bg-secondary/50 rounded-lg p-3">
+                    <Text variant="caption" color="muted">
+                      Automatic fan control enabled
+                    </Text>
+                    <Text variant="body" className="mt-1">
+                      Current: {miner?.fanSpeed ?? 0}% ({miner?.fanRpm ?? 0} RPM)
+                    </Text>
                   </View>
-                </ScrollView>
+                )}
+                {/* Manual mode percentage buttons */}
+                {!autoFan && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="-mx-1"
+                  >
+                    <View className="flex-row gap-2 px-1">
+                      {FAN_OPTIONS.map((opt) => (
+                        <Pressable
+                          key={opt}
+                          onPress={() => handleFanSelect(opt)}
+                          className={`px-3 py-2 rounded-lg ${
+                            fanSpeed === opt ? 'bg-primary' : 'bg-secondary'
+                          }`}
+                        >
+                          <Text
+                            variant="body"
+                            className={fanSpeed === opt ? 'text-background font-medium' : ''}
+                          >
+                            {opt}%
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
               </View>
             </View>
           )}

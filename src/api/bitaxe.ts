@@ -57,10 +57,11 @@ export async function updateSettings(
   if (settings.coreVoltage !== undefined) {
     payload.coreVoltage = settings.coreVoltage;
   }
+  if (settings.autoFanSpeed !== undefined) {
+    payload.autofanspeed = settings.autoFanSpeed ? 1 : 0;
+  }
   if (settings.fanSpeed !== undefined) {
-    // 0 means auto fan
     payload.fanspeed = settings.fanSpeed;
-    payload.autofanspeed = settings.fanSpeed === 0 ? 1 : 0;
   }
   if (settings.stratumUrl !== undefined) {
     payload.stratumURL = settings.stratumUrl;
