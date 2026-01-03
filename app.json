@@ -2,11 +2,11 @@
   "expo": {
     "name": "ParaApp",
     "slug": "paraapp",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "scheme": "paraapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -14,7 +14,8 @@
       "backgroundColor": "#FFFFFF"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "app.parasite.paraapp"
     },
     "android": {
       "adaptiveIcon": {
