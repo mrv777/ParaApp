@@ -240,7 +240,6 @@ export function HomeMainScreen({ navigation }: Props) {
               workers={sortedWorkers}
               onViewAll={handleViewAllWorkers}
               isLoading={isUserLoading}
-              connectionStatus={connectionStatus}
             />
 
             {/* Fleet Overview Card */}

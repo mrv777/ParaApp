@@ -2,16 +2,17 @@
  * WorkersPreviewCard - Shows top workers with "View all" button
  */
 
+import { useMemo } from 'react';
 import { View } from 'react-native';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { Button } from '../Button';
-import { ConnectionStatus } from '../ConnectionStatus';
 import { SkeletonText } from '../SkeletonLoader';
 import { WorkerRow } from './WorkerRow';
 import { WorkerHealthBadge } from './WorkerHealthBadge';
 import { useWorkerHealth } from '@/hooks';
 import { useTranslation } from '@/i18n';
+import { formatHashrate } from '@/utils/formatting';
 import type { UserWorker } from '@/types';
 
 export interface WorkersPreviewCardProps {
@@ -19,7 +20,6 @@ export interface WorkersPreviewCardProps {
   maxItems?: number;
   onViewAll: () => void;
   isLoading?: boolean;
-  connectionStatus?: 'connected' | 'connecting' | 'offline';
   className?: string;
 }
 
@@ -28,7 +28,6 @@ export function WorkersPreviewCard({
   maxItems = 5,
   onViewAll,
   isLoading = false,
-  connectionStatus = 'connected',
   className = '',
 }: WorkersPreviewCardProps) {
   const { t } = useTranslation();
@@ -36,6 +35,10 @@ export function WorkersPreviewCard({
   const displayWorkers = safeWorkers.slice(0, maxItems);
   const showSkeleton = isLoading && safeWorkers.length === 0;
   const healthSummary = useWorkerHealth(safeWorkers);
+  const totalHashrate = useMemo(
+    () => safeWorkers.reduce((sum, w) => sum + w.hashrate, 0),
+    [safeWorkers]
+  );
 
   return (
     <Card padding="none" className={className}>
@@ -45,7 +48,11 @@ export function WorkersPreviewCard({
           <Text variant="subtitle" className="text-base">{t('home.workers')}</Text>
           <WorkerHealthBadge summary={healthSummary} />
         </View>
-        <ConnectionStatus status={connectionStatus} />
+        {totalHashrate > 0 && (
+          <Text variant="mono" className="text-sm">
+            {formatHashrate(totalHashrate)}
+          </Text>
+        )}
       </View>
 
       {/* Workers list */}
