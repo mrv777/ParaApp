@@ -24,11 +24,13 @@ import { usePolling } from '@/hooks/usePolling';
 import { haptics } from '@/utils/haptics';
 import { formatTimestamp, formatDifficulty } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
 
 type Props = MinersStackScreenProps<'MinerDetail'>;
 
 export function MinerDetailScreen({ route, navigation }: Props) {
+  const { t } = useTranslation();
   const { ip } = route.params;
 
   // State
@@ -133,7 +135,7 @@ export function MinerDetailScreen({ route, navigation }: Props) {
           </View>
           {!miner.isOnline && (
             <Text variant="caption" color="danger">
-              Offline
+              {t('common.offline')}
             </Text>
           )}
         </View>
@@ -191,22 +193,22 @@ export function MinerDetailScreen({ route, navigation }: Props) {
               <View className="flex-row items-center gap-2 mb-3">
                 <View className="w-2 h-2 rounded-full bg-danger" />
                 <Text variant="body" className="font-medium">
-                  Miner is offline
+                  {t('miners.minerIsOffline')}
                 </Text>
               </View>
               <View className="gap-2">
                 <View className="flex-row justify-between">
                   <Text variant="body" color="muted">
-                    Last seen
+                    {t('miners.lastSeen')}
                   </Text>
                   <Text variant="body">
-                    {miner.lastSeen ? formatTimestamp(miner.lastSeen) : 'Never'}
+                    {miner.lastSeen ? formatTimestamp(miner.lastSeen) : t('common.never')}
                   </Text>
                 </View>
                 {miner.bestDiff > 0 && (
                   <View className="flex-row justify-between">
                     <Text variant="body" color="muted">
-                      Last best diff
+                      {t('miners.lastBestDiff')}
                     </Text>
                     <Text variant="body">
                       {formatDifficulty(miner.bestDiff)}

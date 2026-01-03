@@ -7,6 +7,7 @@ import { View } from 'react-native';
 import { Text } from '../Text';
 import { WorkerStatusDot } from './WorkerStatusDot';
 import { formatHashrate, formatDifficulty, formatTimestamp } from '@/utils/formatting';
+import { useTranslation } from '@/i18n';
 import type { UserWorker } from '@/types';
 
 export interface WorkerRowProps {
@@ -15,6 +16,8 @@ export interface WorkerRowProps {
 }
 
 export function WorkerRow({ worker, className = '' }: WorkerRowProps) {
+  const { t } = useTranslation();
+
   return (
     <View className={`py-2 border-b border-border ${className}`}>
       {/* Main row */}
@@ -35,10 +38,10 @@ export function WorkerRow({ worker, className = '' }: WorkerRowProps) {
       {/* Secondary stats row */}
       <View className="flex-row items-center gap-4 mt-1">
         <Text variant="caption" color="muted">
-          Best: {formatDifficulty(worker.bestDifficulty)}
+          {t('home.bestLabel')}: {formatDifficulty(worker.bestDifficulty)}
         </Text>
         <Text variant="caption" color="muted">
-          Last: {formatTimestamp(worker.lastSubmission)}
+          {t('home.lastLabel')}: {formatTimestamp(worker.lastSubmission)}
         </Text>
       </View>
     </View>

@@ -10,6 +10,7 @@ import type { MinerSortOption, MinerFilterOption } from '@/types';
 
 export type PollingInterval = 5000 | 10000 | 20000 | 30000;
 export type WorkerSortOrder = 'hashrate' | 'name' | 'bestDiff';
+export type Language = 'auto' | 'en' | 'es' | 'de' | 'fr' | 'pt';
 
 interface SettingsState {
   // User preferences
@@ -18,6 +19,7 @@ interface SettingsState {
   workerSortOrder: WorkerSortOrder;
   minerSortBy: MinerSortOption;
   minerFilterBy: MinerFilterOption;
+  language: Language;
 
   // User Bitcoin address (persisted)
   bitcoinAddress: string | null;
@@ -44,6 +46,7 @@ interface SettingsActions {
   setMinerFilterBy: (filter: MinerFilterOption) => void;
   setBitcoinAddress: (address: string | null) => void;
   setPublicOnLeaderboard: (isPublic: boolean) => void;
+  setLanguage: (lang: Language) => void;
   dismissTip: (tipId: string) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
   setHydrated: (hydrated: boolean) => void;
@@ -55,6 +58,7 @@ const initialState: SettingsState = {
   workerSortOrder: 'hashrate',
   minerSortBy: 'status',
   minerFilterBy: 'all',
+  language: 'auto',
   bitcoinAddress: null,
   isPublicOnLeaderboard: true,
   dismissedTips: [],
@@ -83,6 +87,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setPublicOnLeaderboard: (isPublic) =>
         set({ isPublicOnLeaderboard: isPublic }),
 
+      setLanguage: (lang) => set({ language: lang }),
+
       dismissTip: (tipId) =>
         set((state) => ({
           dismissedTips: state.dismissedTips.includes(tipId)
@@ -110,6 +116,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         workerSortOrder: state.workerSortOrder,
         minerSortBy: state.minerSortBy,
         minerFilterBy: state.minerFilterBy,
+        language: state.language,
         bitcoinAddress: state.bitcoinAddress,
         isPublicOnLeaderboard: state.isPublicOnLeaderboard,
         dismissedTips: state.dismissedTips,
@@ -133,3 +140,4 @@ export const selectHasAddress = (state: SettingsState) =>
   state.bitcoinAddress !== null && state.bitcoinAddress.length > 0;
 export const selectWorkerSortOrder = (state: SettingsState) =>
   state.workerSortOrder;
+export const selectLanguage = (state: SettingsState) => state.language;

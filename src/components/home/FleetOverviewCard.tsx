@@ -10,6 +10,7 @@ import { Card } from '../Card';
 import { Text } from '../Text';
 import { formatHashrate, formatDifficulty } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { FleetStats } from '@/store/minerStore';
 
 export interface FleetOverviewCardProps extends FleetStats {
@@ -24,6 +25,7 @@ export function FleetOverviewCard({
   totalCount,
   onPress,
 }: FleetOverviewCardProps) {
+  const { t } = useTranslation();
   const allOffline = totalCount > 0 && onlineCount === 0;
 
   return (
@@ -35,7 +37,7 @@ export function FleetOverviewCard({
           <View className="flex-row items-center gap-1.5">
             <Ionicons name="hardware-chip-outline" size={16} color={colors.textMuted} />
             <Text variant="caption" color="muted" className="text-xs uppercase">
-              Swarm
+              {t('home.swarm')}
             </Text>
           </View>
 
@@ -71,7 +73,7 @@ export function FleetOverviewCard({
             <>
               <View className="w-px h-4 bg-border" />
               <Text variant="caption" color="muted" className="text-xs">
-                All offline
+                {t('home.allOffline')}
               </Text>
             </>
           ) : null}

@@ -20,6 +20,7 @@ import { useMinerStore } from '@/store/minerStore';
 import { haptics } from '@/utils/haptics';
 import { supportsIdentify } from '@/utils/version';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { LocalMiner } from '@/types';
 
 export interface MinerControlsSectionProps {
@@ -35,6 +36,7 @@ export function MinerControlsSection({
   miner,
   onReconnecting,
 }: MinerControlsSectionProps) {
+  const { t } = useTranslation();
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -134,7 +136,7 @@ export function MinerControlsSection({
       haptics.error();
       setIsIdentifying(false);
       stopPulsing();
-      showError('Failed to identify miner');
+      showError(t('errors.failedToIdentify'));
     }
   }, [
     isIdentifying,
@@ -163,12 +165,12 @@ export function MinerControlsSection({
       reconnectTimeoutRef.current = setTimeout(() => {
         setIsReconnecting(false);
         onReconnecting?.(false);
-        showError('Miner failed to reconnect');
+        showError(t('errors.failedToReconnect'));
       }, RECONNECT_TIMEOUT_MS);
     } else {
       haptics.error();
       setIsRestarting(false);
-      showError('Failed to restart miner');
+      showError(t('errors.failedToRestart'));
     }
   }, [miner.ip, restartMiner, dismissError, showError, onReconnecting]);
 
@@ -180,7 +182,7 @@ export function MinerControlsSection({
   return (
     <View className="px-4 mb-4">
       <Text variant="caption" color="muted" className="mb-2 uppercase">
-        Controls
+        {t('miners.controls')}
       </Text>
       <View className="bg-secondary rounded-lg p-4 gap-3">
         {/* Identify LED Button - only for ESP-Miner v2.12.0+ */}
@@ -202,12 +204,12 @@ export function MinerControlsSection({
               </Animated.View>
               <View>
                 <Text variant="body" className="font-medium">
-                  {isIdentifying ? 'LED Flashing...' : 'Identify LED'}
+                  {isIdentifying ? t('miners.ledFlashing') : t('miners.identifyLed')}
                 </Text>
                 <Text variant="caption" color="muted">
                   {isIdentifying
-                    ? 'Check your miner'
-                    : 'Flash LED to locate miner'}
+                    ? t('miners.checkYourMiner')
+                    : t('miners.flashLedHint')}
                 </Text>
               </View>
             </View>
@@ -223,7 +225,7 @@ export function MinerControlsSection({
           <View className="flex-row items-center justify-center gap-3 py-4 px-4 bg-background rounded-lg">
             <ActivityIndicator size="small" color={colors.text} />
             <Text variant="body" color="muted">
-              Reconnecting...
+              {t('miners.reconnecting')}
             </Text>
           </View>
         ) : isRestarting ? (
@@ -231,14 +233,14 @@ export function MinerControlsSection({
           <View className="flex-row items-center justify-center gap-3 py-4 px-4 bg-background rounded-lg">
             <ActivityIndicator size="small" color={colors.danger} />
             <Text variant="body" color="muted">
-              Restarting...
+              {t('miners.restarting')}
             </Text>
           </View>
         ) : (
           // Swipe to restart
           <SwipeToConfirm
-            label="Swipe to restart"
-            confirmLabel="Restarting..."
+            label={t('miners.swipeToRestart')}
+            confirmLabel={t('miners.restarting')}
             onConfirm={handleRestart}
             variant="danger"
             disabled={isIdentifying}

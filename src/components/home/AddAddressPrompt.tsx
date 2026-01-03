@@ -8,6 +8,7 @@ import { Card } from '../Card';
 import { Text } from '../Text';
 import { Button } from '../Button';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 
 export interface AddAddressPromptProps {
   onPress: () => void;
@@ -15,6 +16,8 @@ export interface AddAddressPromptProps {
 }
 
 export function AddAddressPrompt({ onPress, className = '' }: AddAddressPromptProps) {
+  const { t } = useTranslation();
+
   return (
     <Card className={className}>
       <View className="items-center py-4">
@@ -22,13 +25,13 @@ export function AddAddressPrompt({ onPress, className = '' }: AddAddressPromptPr
           <Ionicons name="wallet-outline" size={28} color={colors.text} />
         </View>
         <Text variant="subtitle" className="text-center mb-2">
-          Track Your Mining Stats
+          {t('home.trackStats')}
         </Text>
         <Text variant="body" color="muted" className="text-center mb-4 px-4">
-          Add your Bitcoin address to see your hashrate, workers, and mining progress
+          {t('home.trackStatsDesc')}
         </Text>
         <Button variant="primary" icon="add-circle-outline" onPress={onPress}>
-          Add Bitcoin Address
+          {t('home.addBitcoinAddress')}
         </Button>
       </View>
     </Card>

@@ -16,21 +16,22 @@ import {
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { tempThresholds } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 import type { LocalMiner, MinerWarning, MinerWarningType } from '@/types';
 
 /**
- * Get short label for warning type
+ * Get translation key for warning type
  */
-function getWarningLabel(type: MinerWarningType): string {
-  const labels: Record<MinerWarningType, string> = {
-    temp_caution: 'Warm',
-    temp_danger: 'Hot!',
-    overheat: 'Overheat',
-    power_fault: 'Power',
-    low_hashrate: 'Low HR',
-    offline: 'Offline',
+function getWarningKey(type: MinerWarningType): string {
+  const keys: Record<MinerWarningType, string> = {
+    temp_caution: 'warnings.warm',
+    temp_danger: 'warnings.hot',
+    overheat: 'warnings.overheatLabel',
+    power_fault: 'warnings.powerLabel',
+    low_hashrate: 'warnings.lowHrLabel',
+    offline: 'warnings.offlineLabel',
   };
-  return labels[type] || type;
+  return keys[type] || type;
 }
 
 export interface MinerRowProps {
@@ -50,6 +51,7 @@ export function MinerRow({
   isLoading = false,
   className = '',
 }: MinerRowProps) {
+  const { t } = useTranslation();
   const displayName = miner.alias || miner.hostname || miner.ip;
 
   // Determine temperature warning level
@@ -81,7 +83,7 @@ export function MinerRow({
       style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
     >
       <Ionicons name="trash-outline" size={22} color="#fff" />
-      <Text className="text-white text-xs mt-1">Delete</Text>
+      <Text className="text-white text-xs mt-1">{t('common.delete')}</Text>
     </Pressable>
   );
 
@@ -119,7 +121,7 @@ export function MinerRow({
                 variant={w.severity === 'danger' ? 'danger' : 'warning'}
                 size="sm"
               >
-                {getWarningLabel(w.type)}
+                {t(getWarningKey(w.type))}
               </Badge>
             ))}
             {warnings.length > 2 && (
@@ -152,7 +154,7 @@ export function MinerRow({
               {miner.ip}
             </Text>
             <Text variant="caption" color="muted">
-              Connecting...
+              {t('miners.connecting')}
             </Text>
           </View>
         ) : (
@@ -161,7 +163,7 @@ export function MinerRow({
               {miner.ip}
             </Text>
             <Text variant="caption" color="muted">
-              Offline
+              {t('common.offline')}
             </Text>
           </View>
         )}

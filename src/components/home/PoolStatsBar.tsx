@@ -7,6 +7,7 @@ import { View } from 'react-native';
 import { Text } from '../Text';
 import { formatHashrate, formatNumber } from '@/utils/formatting';
 import { usePoolStore, selectPoolStats, selectIsPoolLoading } from '@/store/poolStore';
+import { useTranslation } from '@/i18n';
 
 interface MiniStatProps {
   label: string;
@@ -40,6 +41,7 @@ export interface PoolStatsBarProps {
 }
 
 export function PoolStatsBar({ className = '' }: PoolStatsBarProps) {
+  const { t } = useTranslation();
   const stats = usePoolStore(selectPoolStats);
   const isLoading = usePoolStore(selectIsPoolLoading);
 
@@ -57,19 +59,19 @@ export function PoolStatsBar({ className = '' }: PoolStatsBarProps) {
       ) : (
         <>
           <MiniStat
-            label="Pool"
+            label={t('home.pool')}
             value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
           />
           <MiniStat
-            label="Miners"
+            label={t('home.minersLabel')}
             value={stats?.users ? formatNumber(stats.users) : '--'}
           />
           <MiniStat
-            label="Workers"
+            label={t('home.workersLabel')}
             value={stats?.workers ? formatNumber(stats.workers) : '--'}
           />
           <MiniStat
-            label="Best Diff"
+            label={t('home.bestDiffLabel')}
             value={stats?.highestDifficulty || '--'}
           />
         </>

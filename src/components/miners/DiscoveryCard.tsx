@@ -17,6 +17,7 @@ import { Button } from '../Button';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { isValidIpAddress, parseIpRange } from '@/utils/validation';
+import { useTranslation } from '@/i18n';
 import type { DiscoveryProgress } from '@/types';
 
 // Enable LayoutAnimation on Android
@@ -47,6 +48,7 @@ export function DiscoveryCard({
   onClose,
   className = '',
 }: DiscoveryCardProps) {
+  const { t } = useTranslation();
   const [manualIp, setManualIp] = useState('');
   const [manualError, setManualError] = useState<string | null>(null);
   const [isAddingManual, setIsAddingManual] = useState(false);
@@ -89,13 +91,13 @@ export function DiscoveryCard({
     const trimmedIp = manualIp.trim();
 
     if (!trimmedIp) {
-      setManualError('Enter an IP address');
+      setManualError(t('errors.enterIpAddress'));
       haptics.error();
       return;
     }
 
     if (!isValidIpAddress(trimmedIp)) {
-      setManualError('Invalid IP address');
+      setManualError(t('errors.invalidIp'));
       haptics.error();
       return;
     }
@@ -109,11 +111,11 @@ export function DiscoveryCard({
         setManualIp('');
         haptics.success();
       } else {
-        setManualError('Could not connect to miner');
+        setManualError(t('errors.couldNotConnect'));
         haptics.error();
       }
     } catch {
-      setManualError('Failed to add miner');
+      setManualError(t('errors.failedToAdd'));
       haptics.error();
     } finally {
       setIsAddingManual(false);
@@ -155,7 +157,7 @@ export function DiscoveryCard({
           color={colors.text}
         />
         <Text variant="subtitle" className="ml-2 flex-1">
-          Discover Miners
+          {t('miners.discoverMiners')}
         </Text>
         {onClose && !isDiscovering && (
           <Pressable
@@ -178,10 +180,10 @@ export function DiscoveryCard({
           {progress && (
             <View className="flex-row justify-between items-baseline mb-2">
               <Text variant="caption" color="default">
-                Scanning: {progress.scanned}/{progress.total}
+                {t('miners.scanningProgress', { scanned: progress.scanned, total: progress.total })}
               </Text>
               <Text variant="body" color="default" className="font-semibold">
-                Found: {progress.found}
+                {t('miners.foundCount', { count: progress.found })}
               </Text>
             </View>
           )}
@@ -199,7 +201,7 @@ export function DiscoveryCard({
 
           {/* Cancel button */}
           <Button variant="secondary" onPress={handleStopScan}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </View>
       ) : (
@@ -209,7 +211,7 @@ export function DiscoveryCard({
           onPress={handleStartScan}
           className="mb-3"
         >
-          Scan Network
+          {t('miners.scanNetwork')}
         </Button>
       )}
 
@@ -229,7 +231,7 @@ export function DiscoveryCard({
       {/* Manual IP entry */}
       <View>
         <Text variant="caption" color="muted" className="mb-2">
-          Add manually by IP
+          {t('miners.addManuallyByIp')}
         </Text>
         <View className="flex-row gap-2">
           <TextInput
@@ -252,7 +254,7 @@ export function DiscoveryCard({
             loading={isAddingManual}
             disabled={isAddingManual || !manualIp.trim()}
           >
-            Add
+            {t('common.add')}
           </Button>
         </View>
         {manualError && (
@@ -273,7 +275,7 @@ export function DiscoveryCard({
           color={colors.textMuted}
         />
         <Text variant="caption" color="muted" className="ml-1">
-          Custom IP range
+          {t('miners.customIpRange')}
         </Text>
       </Pressable>
 
@@ -291,7 +293,7 @@ export function DiscoveryCard({
               autoCorrect={false}
             />
             <Text variant="caption" color="muted">
-              to
+              {t('common.to')}
             </Text>
             <TextInput
               className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-foreground text-center"
@@ -309,7 +311,7 @@ export function DiscoveryCard({
             onPress={handleScanCustomRange}
             disabled={!isRangeValid() || isDiscovering}
           >
-            Scan Range
+            {t('miners.scanRange')}
           </Button>
         </View>
       )}

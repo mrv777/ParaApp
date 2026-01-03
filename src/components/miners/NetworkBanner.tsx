@@ -10,6 +10,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 
 export interface NetworkBannerProps {
   visible: boolean;
@@ -22,6 +23,8 @@ export function NetworkBanner({
   onDismiss,
   className = '',
 }: NetworkBannerProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (visible) {
       haptics.warning();
@@ -47,7 +50,7 @@ export function NetworkBanner({
 
         {/* Message */}
         <Text color="warning" className="flex-1">
-          Network unavailable - miners unreachable
+          {t('miners.networkUnavailable')}
         </Text>
 
         {/* Dismiss button */}

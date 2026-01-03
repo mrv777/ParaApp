@@ -15,6 +15,7 @@ import { useMinerStore, selectMiners } from '@/store/minerStore';
 import type { LocalMiner } from '@/types';
 import { formatHashrate, formatDifficulty, formatTimestamp, parseWorkerName } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 
 // Stable empty array to prevent infinite re-renders
 const EMPTY_MINERS: LocalMiner[] = [];
@@ -28,6 +29,7 @@ export function LinkedWorkerSection({
   stratumUser,
   currentMinerIp,
 }: LinkedWorkerSectionProps) {
+  const { t } = useTranslation();
   const workers = useUserStore(selectUserWorkers);
   const allMiners = useMinerStore(selectMiners);
   const linkedMiners = useMemo(
@@ -66,7 +68,7 @@ export function LinkedWorkerSection({
           color={linkedWorker ? colors.textMuted : colors.textDisabled}
         />
         <Text variant="caption" color="muted" className="uppercase">
-          {linkedWorker ? 'Linked Pool Worker' : 'Pool Worker Link'}
+          {linkedWorker ? t('miners.linkedWorker') : t('miners.poolWorkerLink')}
         </Text>
       </View>
 
@@ -78,7 +80,7 @@ export function LinkedWorkerSection({
               {linkedWorker.name}
             </Text>
             <Badge variant={isOnline ? 'success' : 'danger'} size="sm">
-              {isOnline ? 'Online' : 'Offline'}
+              {isOnline ? t('common.online') : t('common.offline')}
             </Badge>
           </View>
 
@@ -86,7 +88,7 @@ export function LinkedWorkerSection({
           <View className="flex-row gap-4">
             <View className="flex-1">
               <Text variant="caption" color="muted" className="mb-1">
-                Pool Hashrate
+                {t('miners.poolHashrate')}
               </Text>
               <Text variant="body" className="font-medium">
                 {formatHashrate(linkedWorker.hashrate)}
@@ -94,7 +96,7 @@ export function LinkedWorkerSection({
             </View>
             <View className="flex-1">
               <Text variant="caption" color="muted" className="mb-1">
-                Best Diff
+                {t('miners.bestDiff')}
               </Text>
               <Text variant="body" className="font-medium">
                 {formatDifficulty(linkedWorker.bestDifficulty)}
@@ -105,7 +107,7 @@ export function LinkedWorkerSection({
           {/* Last share */}
           <View className="mt-3 pt-3 border-t border-border">
             <Text variant="caption" color="muted">
-              Last share: {formatTimestamp(linkedWorker.lastSubmission)}
+              {t('miners.lastShare', { time: formatTimestamp(linkedWorker.lastSubmission) })}
             </Text>
           </View>
 
@@ -125,10 +127,10 @@ export function LinkedWorkerSection({
           <Ionicons name="unlink" size={18} color={colors.textDisabled} />
           <View className="flex-1">
             <Text variant="body" color="muted">
-              Not linked to pool
+              {t('miners.notLinked')}
             </Text>
             <Text variant="caption" color="muted">
-              Worker &quot;{stratumUser}&quot; not found on this address
+              {t('miners.workerNotFound', { name: stratumUser })}
             </Text>
           </View>
         </View>

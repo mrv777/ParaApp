@@ -16,6 +16,7 @@ import {
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { MinerSortOption, MinerFilterOption } from '@/types';
 
 export interface SortFilterModalProps {
@@ -55,21 +56,6 @@ function OptionRow({ label, selected, onPress }: OptionRowProps) {
   );
 }
 
-const SORT_OPTIONS: { value: MinerSortOption; label: string }[] = [
-  { value: 'status', label: 'Status' },
-  { value: 'name', label: 'Name' },
-  { value: 'hashrate', label: 'Hashrate' },
-  { value: 'bestDiff', label: 'Best Diff' },
-  { value: 'temp', label: 'Temperature' },
-];
-
-const FILTER_OPTIONS: { value: MinerFilterOption; label: string }[] = [
-  { value: 'all', label: 'All Miners' },
-  { value: 'online', label: 'Online' },
-  { value: 'offline', label: 'Offline' },
-  { value: 'warning', label: 'With Warnings' },
-];
-
 export function SortFilterModal({
   visible,
   onClose,
@@ -78,9 +64,25 @@ export function SortFilterModal({
   filterBy,
   onFilterChange,
 }: SortFilterModalProps) {
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
   const snapPoints = useMemo(() => ['60%'], []);
+
+  const SORT_OPTIONS: { value: MinerSortOption; label: string }[] = useMemo(() => [
+    { value: 'status', label: t('common.status') },
+    { value: 'name', label: t('miners.hostname') },
+    { value: 'hashrate', label: t('miners.hashrate') },
+    { value: 'bestDiff', label: t('miners.bestDiff') },
+    { value: 'temp', label: t('miners.temperature') },
+  ], [t]);
+
+  const FILTER_OPTIONS: { value: MinerFilterOption; label: string }[] = useMemo(() => [
+    { value: 'all', label: t('miners.allMiners') },
+    { value: 'online', label: t('common.online') },
+    { value: 'offline', label: t('common.offline') },
+    { value: 'warning', label: t('miners.minersWithWarnings') },
+  ], [t]);
 
   useEffect(() => {
     if (visible) {
@@ -133,7 +135,7 @@ export function SortFilterModal({
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 pb-2">
           <Text variant="subtitle" className="font-semibold">
-            Sort & Filter
+            {t('miners.sortAndFilter')}
           </Text>
           <Pressable
             onPress={handleDismiss}
@@ -155,7 +157,7 @@ export function SortFilterModal({
               color="muted"
               className="px-4 pb-2 uppercase"
             >
-              Sort By
+              {t('miners.sortBy')}
             </Text>
             <View className="bg-background mx-4 rounded-lg overflow-hidden">
               {SORT_OPTIONS.map((option, index) => (
@@ -178,7 +180,7 @@ export function SortFilterModal({
               color="muted"
               className="px-4 pb-2 uppercase"
             >
-              Filter
+              {t('miners.filter')}
             </Text>
             <View className="bg-background mx-4 rounded-lg overflow-hidden">
               {FILTER_OPTIONS.map((option, index) => (

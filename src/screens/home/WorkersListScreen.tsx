@@ -16,17 +16,26 @@ import {
   type WorkerSortOrder,
 } from '@/store/settingsStore';
 import { haptics } from '@/utils/haptics';
-import { sortWorkers, getSortOrderLabel } from '@/utils/sorting';
+import { sortWorkers } from '@/utils/sorting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { HomeStackScreenProps } from '@/types/navigation';
 import type { UserWorker } from '@/types';
 
 /** Sort order cycle: hashrate -> name -> bestDiff -> hashrate */
 const SORT_ORDER_CYCLE: WorkerSortOrder[] = ['hashrate', 'name', 'bestDiff'];
 
+/** Translation keys for sort orders */
+const SORT_ORDER_KEYS: Record<WorkerSortOrder, string> = {
+  hashrate: 'home.hashrate',
+  name: 'common.name',
+  bestDiff: 'home.bestDiff',
+};
+
 type Props = HomeStackScreenProps<'WorkersList'>;
 
 export function WorkersListScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
 
   // Stores
@@ -78,14 +87,14 @@ export function WorkersListScreen({ navigation }: Props) {
       <View className="flex-1 items-center justify-center py-20">
         <Ionicons name="hardware-chip-outline" size={48} color={colors.textMuted} />
         <Text variant="body" color="muted" className="mt-4">
-          No workers found
+          {t('home.noWorkersFound')}
         </Text>
         <Text variant="caption" color="muted" className="mt-1 text-center px-8">
-          Workers will appear here once they submit shares to the pool
+          {t('home.workersAppearHintLong')}
         </Text>
       </View>
     ),
-    []
+    [t]
   );
 
   return (
@@ -100,7 +109,7 @@ export function WorkersListScreen({ navigation }: Props) {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
         <Text variant="title" className="flex-1">
-          All Workers
+          {t('home.viewAllWorkers')}
         </Text>
         {/* Sort button */}
         <Pressable
@@ -110,7 +119,7 @@ export function WorkersListScreen({ navigation }: Props) {
         >
           <Ionicons name="swap-vertical" size={14} color={colors.textSecondary} />
           <Text variant="caption" color="muted" className="ml-1">
-            {getSortOrderLabel(sortOrder)}
+            {t(SORT_ORDER_KEYS[sortOrder])}
           </Text>
         </Pressable>
         <Text variant="caption" color="muted">

@@ -29,12 +29,14 @@ import {
 import { usePolling } from '@/hooks/usePolling';
 import { useSettingsStore } from '@/store/settingsStore';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
 import type { LocalMiner, DiscoveryOptions, MinerWarning } from '@/types';
 
 type Props = MinersStackScreenProps<'MinersMain'>;
 
 export function MinersScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [showSortFilter, setShowSortFilter] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
@@ -245,15 +247,15 @@ export function MinersScreen({ navigation }: Props) {
   const sectionHeader = useMemo(() => {
     switch (filterBy) {
       case 'online':
-        return 'ONLINE MINERS';
+        return t('miners.onlineMiners');
       case 'offline':
-        return 'OFFLINE MINERS';
+        return t('miners.offlineMiners');
       case 'warning':
-        return 'MINERS WITH WARNINGS';
+        return t('miners.minersWithWarnings');
       default:
-        return 'ALL MINERS';
+        return t('miners.allMiners');
     }
-  }, [filterBy]);
+  }, [filterBy, t]);
 
   const ListHeader = useMemo(
     () => (
@@ -261,7 +263,7 @@ export function MinersScreen({ navigation }: Props) {
         {/* Screen title with header buttons */}
         <View className="px-4 pt-4 pb-2 flex-row items-center justify-between">
           <View className="flex-1">
-            <Text variant="title">Miners</Text>
+            <Text variant="title">{t('miners.title')}</Text>
             {miners.length > 0 && (
               <View className="flex-row items-center gap-1 mt-1">
                 {!allOnline && (
@@ -272,7 +274,7 @@ export function MinersScreen({ navigation }: Props) {
                   />
                 )}
                 <Text variant="caption" color="muted">
-                  {onlineCount} of {miners.length} online
+                  {t('miners.onlineCount', { online: onlineCount, total: miners.length })}
                 </Text>
               </View>
             )}
@@ -309,7 +311,7 @@ export function MinersScreen({ navigation }: Props) {
         {/* Swipe tip - shown when user has miners */}
         {miners.length > 0 && (
           <TipBanner tipId="miners-swipe-tip" icon="swap-horizontal-outline" className="mx-4 mb-2">
-            Swipe left on a miner to remove it
+            {t('miners.tipSwipeRemove')}
           </TipBanner>
         )}
       </>
@@ -331,6 +333,7 @@ export function MinersScreen({ navigation }: Props) {
       handleCloseDiscovery,
       filteredMiners.length,
       sectionHeader,
+      t,
     ]
   );
 

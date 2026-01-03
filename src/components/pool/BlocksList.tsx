@@ -10,6 +10,7 @@ import { Text } from '../Text';
 import { SkeletonLoader, SkeletonText } from '../SkeletonLoader';
 import { formatTimestamp, truncateAddress } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { LeaderboardEntry } from '@/types';
 
 export interface BlocksListProps {
@@ -25,12 +26,14 @@ export function BlocksList({
   maxItems = 5,
   className = '',
 }: BlocksListProps) {
+  const { t } = useTranslation();
+
   // Show skeleton when loading with no data
   if (isLoading && (!blocks || blocks.length === 0)) {
     return (
       <Card className={className}>
         <Text variant="subtitle" className="mb-3">
-          Blocks Found
+          {t('pool.blocksFound')}
         </Text>
         {Array.from({ length: 3 }).map((_, i) => (
           <View key={i} className="flex-row items-center py-2.5 gap-3">
@@ -49,10 +52,10 @@ export function BlocksList({
     return (
       <Card className={className}>
         <Text variant="subtitle" className="mb-3">
-          Blocks Found
+          {t('pool.blocksFound')}
         </Text>
         <Text variant="caption" color="muted" className="text-center py-4">
-          No blocks found yet
+          {t('pool.noBlocks')}
         </Text>
       </Card>
     );
@@ -63,7 +66,7 @@ export function BlocksList({
   return (
     <Card className={className}>
       <Text variant="subtitle" className="mb-3">
-        Blocks Found
+        {t('pool.blocksFound')}
       </Text>
       {displayBlocks.map((block, index) => (
         <Pressable

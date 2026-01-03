@@ -10,6 +10,7 @@ import { StatItem } from '../StatItem';
 import { SkeletonStatItem } from '../SkeletonLoader';
 import { formatHashrate } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { UserStats } from '@/types';
 
 export interface UserStatsCardProps {
@@ -36,13 +37,14 @@ export function UserStatsCard({
   onShare,
   isSharing = false,
 }: UserStatsCardProps) {
+  const { t } = useTranslation();
   const showSkeleton = isLoading && !stats;
 
   return (
     <Card padding="sm" className={className}>
       <View className="mb-2 flex-row items-center justify-between">
         <Text variant="subtitle" className="text-base">
-          Mining Stats
+          {t('home.miningStats')}
         </Text>
         {onShare && (
           <Pressable
@@ -92,7 +94,7 @@ export function UserStatsCard({
           {/* Primary hashrate */}
           <StatItem
             icon="speedometer-outline"
-            label="Current Hashrate"
+            label={t('home.currentHashrate')}
             value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
             size="lg"
           />
@@ -101,21 +103,21 @@ export function UserStatsCard({
           <View className="flex-row gap-3">
             <View className="flex-1">
               <StatItem
-                label="1h Average"
+                label={t('home.avg1h')}
                 value={stats?.hashrate1h ? formatHashrate(stats.hashrate1h) : '--'}
                 size="sm"
               />
             </View>
             <View className="flex-1">
               <StatItem
-                label="24h Average"
+                label={t('home.avg24h')}
                 value={stats?.hashrate24h ? formatHashrate(stats.hashrate24h) : '--'}
                 size="sm"
               />
             </View>
             <View className="flex-1">
               <StatItem
-                label="Best Diff"
+                label={t('home.bestDiff')}
                 value={stats?.bestDifficultyFormatted || '--'}
                 size="sm"
               />
@@ -127,7 +129,7 @@ export function UserStatsCard({
             <View className="flex-1">
               <StatItem
                 icon="trophy-outline"
-                label="Difficulty Rank"
+                label={t('home.difficultyRank')}
                 value={formatRank(difficultyRank)}
                 size="sm"
               />
@@ -135,7 +137,7 @@ export function UserStatsCard({
             <View className="flex-1">
               <StatItem
                 icon="medal-outline"
-                label="Loyalty Rank"
+                label={t('home.loyaltyRank')}
                 value={formatRank(loyaltyRank)}
                 size="sm"
               />

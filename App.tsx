@@ -1,6 +1,7 @@
 import './global.css';
 import '@/i18n'; // Initialize i18n
 
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -12,6 +13,8 @@ import { PoolScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
 import { HomeStack, MinersStack, SettingsStack } from '@/navigation';
 import { colors } from '@/constants/colors';
+import { changeLanguage } from '@/i18n';
+import { useSettingsStore, selectIsHydrated, selectLanguage } from '@/store/settingsStore';
 import type { MainTabParamList } from '@/types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -31,6 +34,16 @@ const navigationTheme = {
 };
 
 export default function App() {
+  const isHydrated = useSettingsStore(selectIsHydrated);
+  const language = useSettingsStore(selectLanguage);
+
+  // Sync language preference on app startup
+  useEffect(() => {
+    if (isHydrated) {
+      changeLanguage(language);
+    }
+  }, [isHydrated, language]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

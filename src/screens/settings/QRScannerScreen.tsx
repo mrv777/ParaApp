@@ -13,6 +13,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { isValidBitcoinAddress } from '@/utils/validation';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { SettingsStackScreenProps } from '@/types/navigation';
 
 type Props = SettingsStackScreenProps<'QRScanner'>;
@@ -37,6 +38,7 @@ function extractBitcoinAddress(data: string): string | null {
 }
 
 export function QRScannerScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function QRScannerScreen({ navigation }: Props) {
         navigation.goBack();
       } else {
         // Show error but allow retry
-        setScanError('Not a valid Bitcoin address');
+        setScanError(t('qrScanner.notValidAddress'));
         haptics.warning();
         // Reset after a short delay to allow retry
         timeoutRef.current = setTimeout(() => {
@@ -100,7 +102,7 @@ export function QRScannerScreen({ navigation }: Props) {
     return (
       <View className="flex-1 bg-black items-center justify-center">
         <Text variant="body" color="muted">
-          Loading camera...
+          {t('qrScanner.loadingCamera')}
         </Text>
       </View>
     );
@@ -124,23 +126,23 @@ export function QRScannerScreen({ navigation }: Props) {
               <Ionicons name="camera-outline" size={48} color={colors.textMuted} />
             </View>
             <Text variant="subtitle" className="font-semibold text-center mb-2">
-              Camera Access Required
+              {t('qrScanner.cameraRequired')}
             </Text>
             <Text variant="body" color="muted" className="text-center mb-6">
-              Allow camera access to scan Bitcoin address QR codes
+              {t('qrScanner.cameraRequiredDesc')}
             </Text>
 
             {permission.canAskAgain ? (
               <Button onPress={handleRequestPermission} icon="camera">
-                Allow Camera Access
+                {t('qrScanner.allowCamera')}
               </Button>
             ) : (
               <View className="items-center">
                 <Text variant="caption" color="muted" className="text-center mb-4">
-                  Camera permission was denied. Please enable it in Settings.
+                  {t('qrScanner.cameraDenied')}
                 </Text>
                 <Button variant="secondary" onPress={handleOpenSettings}>
-                  Open Settings
+                  {t('qrScanner.openSettings')}
                 </Button>
               </View>
             )}
@@ -176,7 +178,7 @@ export function QRScannerScreen({ navigation }: Props) {
             </Pressable>
             <View className="bg-black/50 rounded-full px-4 py-2">
               <Text variant="body" style={{ color: 'white' }}>
-                Scan QR Code
+                {t('qrScanner.title')}
               </Text>
             </View>
             <View style={{ width: 44 }} />
@@ -204,7 +206,7 @@ export function QRScannerScreen({ navigation }: Props) {
             ) : (
               <View className="bg-black/50 rounded-full px-6 py-3">
                 <Text variant="body" style={{ color: 'white' }} className="text-center">
-                  Point camera at Bitcoin address QR code
+                  {t('qrScanner.instruction')}
                 </Text>
               </View>
             )}

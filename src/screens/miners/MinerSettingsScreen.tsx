@@ -25,6 +25,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { getAsicSettings, updateSettings, PARASITE_STRATUM_PRESET } from '@/api/bitaxe';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
 import type { AsicConfig, MinerSettings } from '@/types/miner';
 
@@ -65,6 +66,7 @@ interface PendingChange {
 }
 
 export function MinerSettingsScreen({ route, navigation }: Props) {
+  const { t } = useTranslation();
   const { ip } = route.params;
 
   // Store
@@ -118,7 +120,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
         // Use fallback config for older firmware that doesn't have /api/system/asic
         setAsicConfig(generateFallbackAsicConfig(miner));
       } else {
-        setConfigError(result.error.message || 'Failed to load ASIC configuration');
+        setConfigError(result.error.message || t('errors.failedToLoadConfig'));
       }
       setConfigLoading(false);
     }
@@ -259,22 +261,22 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     const maxOption = Math.max(...asicConfig.frequencyOptions);
     if (frequency > maxOption) {
       return frequency > asicConfig.absMaxFrequency
-        ? 'Exceeds absolute maximum!'
-        : 'Exceeds recommended range';
+        ? t('miners.exceedsMaximum')
+        : t('miners.exceedsRecommended');
     }
     return null;
-  }, [frequency, asicConfig]);
+  }, [frequency, asicConfig, t]);
 
   const voltageWarning = useMemo(() => {
     if (!asicConfig) return null;
     const maxOption = Math.max(...asicConfig.voltageOptions);
     if (voltage > maxOption) {
       return voltage > asicConfig.absMaxVoltage
-        ? 'Exceeds absolute maximum!'
-        : 'Exceeds recommended range';
+        ? t('miners.exceedsMaximum')
+        : t('miners.exceedsRecommended');
     }
     return null;
-  }, [voltage, asicConfig]);
+  }, [voltage, asicConfig, t]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -334,7 +336,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
       navigation.goBack();
     } else {
       haptics.error();
-      setApplyError(result.error.message || 'Failed to apply settings');
+      setApplyError(result.error.message || t('errors.failedToApply'));
     }
 
     setApplying(false);
@@ -426,7 +428,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
           </Pressable>
           <View className="flex-1">
             <Text variant="subtitle" className="font-semibold">
-              Miner Settings
+              {t('miners.minerSettings')}
             </Text>
             <Text variant="caption" color="muted" numberOfLines={1}>
               {displayName}
@@ -452,7 +454,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
             <View className="items-center justify-center py-12">
               <ActivityIndicator size="large" color={colors.primary} />
               <Text variant="body" color="muted" className="mt-3">
-                Loading configuration...
+                {t('miners.loadingConfig')}
               </Text>
             </View>
           )}
@@ -465,7 +467,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                   {configError}
                 </Text>
                 <Text variant="caption" color="muted" className="mt-2">
-                  Hardware settings unavailable. You can still configure pool settings.
+                  {t('miners.hardwareUnavailable')}
                 </Text>
               </View>
             </View>
@@ -475,13 +477,13 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
           {asicConfig && !configLoading && (
             <View className="px-4 py-4">
               <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-                Hardware
+                {t('miners.hardware')}
               </Text>
 
               {/* Frequency */}
               <View className="mb-4">
                 <View className="flex-row justify-between items-center mb-2">
-                  <Text variant="body">Frequency</Text>
+                  <Text variant="body">{t('miners.frequency')}</Text>
                   <View className="flex-row items-center gap-2">
                     {frequencyWarning && (
                       <Badge variant="warning" size="sm">
@@ -521,7 +523,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                         className="px-3 py-2 rounded-lg bg-secondary border border-border"
                       >
                         <Text variant="body" color="muted">
-                          Custom
+                          {t('common.custom')}
                         </Text>
                       </Pressable>
                     </View>
@@ -538,7 +540,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                       className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
                       style={{ color: colors.text }}
                       placeholderTextColor={colors.textMuted}
-                      placeholder="Enter frequency (MHz)"
+                      placeholder={t('miners.enterFrequency')}
                       autoFocus
                     />
                     <Pressable
@@ -554,7 +556,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               {/* Voltage */}
               <View className="mb-4">
                 <View className="flex-row justify-between items-center mb-2">
-                  <Text variant="body">Voltage</Text>
+                  <Text variant="body">{t('miners.voltage')}</Text>
                   <View className="flex-row items-center gap-2">
                     {voltageWarning && (
                       <Badge variant="warning" size="sm">
@@ -594,7 +596,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                         className="px-3 py-2 rounded-lg bg-secondary border border-border"
                       >
                         <Text variant="body" color="muted">
-                          Custom
+                          {t('common.custom')}
                         </Text>
                       </Pressable>
                     </View>
@@ -611,7 +613,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                       className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
                       style={{ color: colors.text }}
                       placeholderTextColor={colors.textMuted}
-                      placeholder="Enter voltage (mV)"
+                      placeholder={t('miners.enterVoltage')}
                       autoFocus
                     />
                     <Pressable
@@ -631,11 +633,11 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
           {miner && !configLoading && (
             <View className="px-4 py-4 border-t border-border">
               <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-                Fan Control
+                {t('miners.fanControl')}
               </Text>
               <View>
                 <View className="flex-row justify-between items-center mb-2">
-                  <Text variant="body">Fan Speed</Text>
+                  <Text variant="body">{t('miners.fanSpeed')}</Text>
                   {!autoFan && (
                     <Text variant="body" className="font-medium">
                       {fanSpeed}%
@@ -654,7 +656,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                       variant="body"
                       className={`text-center ${autoFan ? 'text-background font-medium' : ''}`}
                     >
-                      Auto
+                      {t('miners.auto')}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -667,7 +669,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                       variant="body"
                       className={`text-center ${!autoFan ? 'text-background font-medium' : ''}`}
                     >
-                      Manual
+                      {t('common.manual')}
                     </Text>
                   </Pressable>
                 </View>
@@ -675,10 +677,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 {autoFan && (
                   <View className="bg-secondary/50 rounded-lg p-3">
                     <Text variant="caption" color="muted">
-                      Automatic fan control enabled
+                      {t('miners.autoFanEnabled')}
                     </Text>
                     <Text variant="body" className="mt-1">
-                      Current: {miner?.fanSpeed ?? 0}% ({miner?.fanRpm ?? 0} RPM)
+                      {t('miners.currentFanStatus', { speed: miner?.fanSpeed ?? 0, rpm: miner?.fanRpm ?? 0 })}
                     </Text>
                   </View>
                 )}
@@ -716,13 +718,13 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
           {/* Pool Configuration */}
           <View className="px-4 py-4 border-t border-border">
             <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-              Pool Configuration
+              {t('miners.poolConfiguration')}
             </Text>
 
             {/* Stratum URL */}
             <View className="mb-3">
               <Text variant="caption" color="muted" className="mb-1">
-                Stratum URL
+                {t('miners.stratumUrl')}
               </Text>
               <TextInput
                 value={stratumUrl}
@@ -730,7 +732,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
-                placeholder="stratum.pool.com"
+                placeholder={t('miners.stratumPlaceholder')}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -739,7 +741,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
             {/* Port */}
             <View className="mb-3">
               <Text variant="caption" color="muted" className="mb-1">
-                Port
+                {t('miners.port')}
               </Text>
               <TextInput
                 value={String(stratumPort)}
@@ -751,7 +753,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
-                placeholder="3333"
+                placeholder={t('miners.portPlaceholder')}
                 keyboardType="number-pad"
               />
             </View>
@@ -759,7 +761,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
             {/* Worker */}
             <View className="mb-3">
               <Text variant="caption" color="muted" className="mb-1">
-                Worker
+                {t('miners.worker')}
               </Text>
               <TextInput
                 value={stratumUser}
@@ -767,7 +769,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
-                placeholder="your_bitcoin_address.worker_name"
+                placeholder={t('miners.workerPlaceholder')}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -776,7 +778,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
             {/* Password */}
             <View className="mb-4">
               <Text variant="caption" color="muted" className="mb-1">
-                Password
+                {t('miners.password')}
               </Text>
               <TextInput
                 value={stratumPassword}
@@ -784,7 +786,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
-                placeholder="x"
+                placeholder={t('miners.passwordPlaceholder')}
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -797,7 +799,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               onPress={handleSetParasite}
               icon="flash"
             >
-              Set to Parasite Pool
+              {t('miners.setToParasite')}
             </Button>
           </View>
 
@@ -809,7 +811,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               className="px-4 py-4 border-t border-border"
             >
               <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-                Pending Changes
+                {t('miners.pendingChanges')}
               </Text>
               <View className="bg-secondary rounded-lg p-3 gap-2">
                 {pendingChanges.map((change) => (
@@ -843,13 +845,13 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 <View className="flex-row items-center justify-center py-3">
                   <ActivityIndicator size="small" color={colors.primary} />
                   <Text variant="body" color="muted" className="ml-2">
-                    Applying settings...
+                    {t('miners.applyingSettings')}
                   </Text>
                 </View>
               ) : (
                 <SwipeToConfirm
-                  label="Swipe to apply"
-                  confirmLabel="Applied!"
+                  label={t('miners.swipeToApply')}
+                  confirmLabel={t('common.applied')}
                   onConfirm={handleApply}
                   variant="danger"
                 />

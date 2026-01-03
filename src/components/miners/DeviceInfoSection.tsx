@@ -4,6 +4,7 @@
 
 import { View } from 'react-native';
 import { Text } from '../Text';
+import { useTranslation } from '@/i18n';
 import type { LocalMiner } from '@/types';
 
 export interface DeviceInfoSectionProps {
@@ -57,6 +58,7 @@ function truncateWorker(worker: string, maxLength = 24): string {
 }
 
 export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
+  const { t } = useTranslation();
   const poolUrl = miner.stratumUrl
     ? `${miner.stratumUrl}:${miner.stratumPort}`
     : '--';
@@ -64,20 +66,20 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
   return (
     <View className="px-4 mb-4">
       <Text variant="caption" color="muted" className="mb-2 uppercase">
-        Device Info
+        {t('miners.deviceInfo')}
       </Text>
       <View className="bg-secondary rounded-lg px-4">
-        <InfoRow label="Model" value={miner.deviceModel} />
-        <InfoRow label="ASIC" value={miner.ASICModel} />
-        <InfoRow label="Firmware" value={miner.version} />
-        <InfoRow label="IP Address" value={miner.ip} />
-        <InfoRow label="Hostname" value={miner.hostname} />
-        <InfoRow label="Pool" value={poolUrl} />
-        <InfoRow label="Worker" value={truncateWorker(miner.stratumUser)} />
+        <InfoRow label={t('miners.model')} value={miner.deviceModel} />
+        <InfoRow label={t('miners.asic')} value={miner.ASICModel} />
+        <InfoRow label={t('miners.firmware')} value={miner.version} />
+        <InfoRow label={t('miners.ipAddress')} value={miner.ip} />
+        <InfoRow label={t('miners.hostname')} value={miner.hostname} />
+        <InfoRow label={t('miners.pool')} value={poolUrl} />
+        <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
         {/* WiFi row - no bottom border (last item) */}
         <View className="flex-row justify-between py-2.5 gap-4">
           <Text variant="body" color="muted" className="flex-shrink-0">
-            WiFi
+            {t('miners.wifi')}
           </Text>
           <Text variant="body" className="font-medium flex-shrink text-right" numberOfLines={1}>
             {miner.wifiSSID || '--'}

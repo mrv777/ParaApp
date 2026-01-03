@@ -10,6 +10,7 @@ import {
   formatTimestamp,
   formatDifficulty,
 } from '@/utils/formatting';
+import { useTranslation } from '@/i18n';
 import type { PoolStats } from '@/types';
 
 export interface PoolStatsGridProps {
@@ -25,6 +26,8 @@ export function PoolStatsGrid({
   isLoading = false,
   className = '',
 }: PoolStatsGridProps) {
+  const { t } = useTranslation();
+
   // Show skeleton when loading with no data
   if (isLoading && !stats) {
     return (
@@ -51,42 +54,42 @@ export function PoolStatsGrid({
       <View className="w-1/2 px-2 mb-4">
         <StatItem
           icon="people-outline"
-          label="Users"
+          label={t('pool.users')}
           value={formatNumber(stats?.users ?? 0)}
         />
       </View>
       <View className="w-1/2 px-2 mb-4">
         <StatItem
           icon="hardware-chip-outline"
-          label="Workers"
+          label={t('pool.workers')}
           value={formatNumber(stats?.workers ?? 0)}
         />
       </View>
       <View className="w-1/2 px-2 mb-4">
         <StatItem
           icon="time-outline"
-          label="Last Block"
+          label={t('pool.lastBlock')}
           value={lastBlockTimestamp ? formatTimestamp(lastBlockTimestamp) : '--'}
         />
       </View>
       <View className="w-1/2 px-2 mb-4">
         <StatItem
           icon="hourglass-outline"
-          label="Uptime"
+          label={t('pool.uptime')}
           value={stats?.uptime ?? '--'}
         />
       </View>
       <View className="w-1/2 px-2 mb-4">
         <StatItem
           icon="logo-bitcoin"
-          label="BTC Price"
+          label={t('pool.btcPrice')}
           value={bitcoinPrice ? `$${formatNumber(bitcoinPrice, 0)}` : '--'}
         />
       </View>
       <View className="w-1/2 px-2 mb-4">
         <StatItem
           icon="trending-up-outline"
-          label="Highest Diff"
+          label={t('pool.highestDiff')}
           value={
             typeof highestDiff === 'number'
               ? formatDifficulty(highestDiff)

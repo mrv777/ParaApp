@@ -42,12 +42,14 @@ import { useShallow } from 'zustand/react/shallow';
 import { useMinerStore, selectFleetStats } from '@/store/minerStore';
 import { sortWorkers } from '@/utils/sorting';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { HomeStackScreenProps } from '@/types/navigation';
 import type { HistoricalPeriod } from '@/types';
 
 type Props = HomeStackScreenProps<'HomeMain'>;
 
 export function HomeMainScreen({ navigation }: Props) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
 
@@ -228,7 +230,7 @@ export function HomeMainScreen({ navigation }: Props) {
                 <View className="absolute bottom-2 right-2 flex-row items-center bg-background/80 rounded-full px-2 py-1">
                   <Ionicons name="expand-outline" size={14} color={colors.textMuted} />
                   <Text variant="caption" color="muted" className="ml-1 text-xs">
-                    Tap to expand
+                    {t('home.tapToExpand')}
                   </Text>
                 </View>
               </Pressable>
@@ -249,7 +251,7 @@ export function HomeMainScreen({ navigation }: Props) {
             {/* Tip for users without miners */}
             {!fleetStats && (
               <TipBanner tipId="home-miners-tip" icon="wifi-outline">
-                Add devices on the miners tab to manage them
+                {t('home.tipAddDevices')}
               </TipBanner>
             )}
           </View>

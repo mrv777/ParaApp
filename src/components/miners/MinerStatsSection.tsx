@@ -17,6 +17,7 @@ import {
   formatNumber,
 } from '@/utils/formatting';
 import { tempThresholds } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 
 export interface MinerStatsSectionProps {
   miner: LocalMiner;
@@ -58,6 +59,8 @@ export function MinerStatsSection({
   miner,
   temperatureUnit,
 }: MinerStatsSectionProps) {
+  const { t } = useTranslation();
+
   // Convert hashrate from GH/s to H/s for formatter
   const hashrateHs = miner.hashRate * 1e9;
   const expectedHs = miner.expectedHashrate * 1e9;
@@ -72,33 +75,33 @@ export function MinerStatsSection({
   return (
     <View className="px-4 mb-4">
       <Text variant="caption" color="muted" className="mb-2 uppercase">
-        Performance
+        {t('miners.performance')}
       </Text>
       <View className="flex-row flex-wrap gap-2">
         <StatItem
-          label="Hashrate"
+          label={t('miners.hashrate')}
           value={formatHashrate(hashrateHs)}
-          subValue={`Expected: ${formatHashrate(expectedHs)}`}
+          subValue={t('miners.expected', { value: formatHashrate(expectedHs) })}
         />
         <StatItem
-          label="Temperature"
+          label={t('miners.temperature')}
           value={formatTemperature(miner.temp, temperatureUnit)}
           color={getTemperatureColor(miner.temp)}
         />
-        <StatItem label="Power" value={formatPower(miner.power)} />
-        <StatItem label="Voltage" value={formatVoltage(miner.voltage)} />
+        <StatItem label={t('miners.power')} value={formatPower(miner.power)} />
+        <StatItem label={t('miners.voltage')} value={formatVoltage(miner.voltage)} />
         <StatItem
-          label="Shares"
+          label={t('miners.shares')}
           value={formatNumber(miner.sharesAccepted)}
-          subValue={`${rejectRate}% rejected`}
+          subValue={t('miners.rejected', { rate: rejectRate })}
         />
-        <StatItem label="Uptime" value={formatUptime(miner.uptimeSeconds)} />
+        <StatItem label={t('miners.uptime')} value={formatUptime(miner.uptimeSeconds)} />
         <StatItem
-          label="Best Diff"
+          label={t('miners.bestDiff')}
           value={formatDifficulty(miner.bestDiff)}
-          subValue={`Session: ${formatDifficulty(miner.bestSessionDiff)}`}
+          subValue={t('miners.session', { value: formatDifficulty(miner.bestSessionDiff) })}
         />
-        <StatItem label="Fan Speed" value={formatPercent(miner.fanSpeed)} />
+        <StatItem label={t('miners.fanSpeed')} value={formatPercent(miner.fanSpeed)} />
       </View>
     </View>
   );

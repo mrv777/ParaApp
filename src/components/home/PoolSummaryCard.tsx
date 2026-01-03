@@ -8,6 +8,7 @@ import { Text } from '../Text';
 import { StatItem } from '../StatItem';
 import { SkeletonStatItem } from '../SkeletonLoader';
 import { formatHashrate, formatNumber } from '@/utils/formatting';
+import { useTranslation } from '@/i18n';
 import type { PoolStats } from '@/types';
 
 export interface PoolSummaryCardProps {
@@ -17,12 +18,13 @@ export interface PoolSummaryCardProps {
 }
 
 export function PoolSummaryCard({ stats, isLoading = false, className = '' }: PoolSummaryCardProps) {
+  const { t } = useTranslation();
   const showSkeleton = isLoading && !stats;
 
   return (
     <Card className={className}>
       <Text variant="subtitle" className="mb-4">
-        Pool Overview
+        {t('home.poolOverview')}
       </Text>
 
       {showSkeleton ? (
@@ -41,21 +43,21 @@ export function PoolSummaryCard({ stats, isLoading = false, className = '' }: Po
         <View className="flex-row justify-between gap-3">
           <View className="flex-1">
             <StatItem
-              label="Pool Hashrate"
+              label={t('home.poolHashrate')}
               value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
               size="sm"
             />
           </View>
           <View className="flex-1">
             <StatItem
-              label="Users"
+              label={t('home.users')}
               value={stats?.users ? formatNumber(stats.users) : '--'}
               size="sm"
             />
           </View>
           <View className="flex-1">
             <StatItem
-              label="Workers"
+              label={t('home.workersLabel')}
               value={stats?.workers ? formatNumber(stats.workers) : '--'}
               size="sm"
             />

@@ -6,7 +6,8 @@
 import './config';
 
 // Re-export i18n instance and hooks
-export { default as i18n } from './config';
+export { default as i18n, changeLanguage, SUPPORTED_LANGUAGES } from './config';
+export type { SupportedLanguage } from './config';
 export { useTranslation, Trans } from 'react-i18next';
 
 // Re-export translation type for type-safe translations

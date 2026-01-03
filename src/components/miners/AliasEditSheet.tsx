@@ -16,6 +16,7 @@ import {
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 
 export interface AliasEditSheetProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export function AliasEditSheet({
   onSave,
   onClose,
 }: AliasEditSheetProps) {
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const insets = useSafeAreaInsets();
   const [alias, setAlias] = useState(currentAlias);
@@ -95,7 +97,7 @@ export function AliasEditSheet({
         {/* Header */}
         <View className="flex-row items-center justify-between pb-4">
           <Text variant="subtitle" className="font-semibold">
-            Edit Alias
+            {t('miners.editAlias')}
           </Text>
           <Pressable
             onPress={handleDismiss}
@@ -109,13 +111,13 @@ export function AliasEditSheet({
         {/* Input section */}
         <View>
           <Text variant="caption" color="muted" className="mb-2">
-            Custom name for this miner
+            {t('miners.aliasLabel')}
           </Text>
           <View className="flex-row items-center bg-background rounded-lg border border-border">
             <BottomSheetTextInput
               value={alias}
               onChangeText={setAlias}
-              placeholder={hostname || 'Enter alias'}
+              placeholder={hostname || t('miners.enterAlias')}
               placeholderTextColor={colors.textMuted}
               style={{
                 flex: 1,
@@ -142,7 +144,7 @@ export function AliasEditSheet({
             )}
           </View>
           <Text variant="caption" color="muted" className="mt-1">
-            Leave empty to use hostname
+            {t('miners.aliasHint')}
           </Text>
         </View>
 
@@ -154,7 +156,7 @@ export function AliasEditSheet({
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
             <Text variant="body" className="font-medium">
-              Cancel
+              {t('common.cancel')}
             </Text>
           </Pressable>
           <Pressable
@@ -163,7 +165,7 @@ export function AliasEditSheet({
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
             <Text variant="body" className="font-medium text-black">
-              Save
+              {t('common.save')}
             </Text>
           </Pressable>
         </View>

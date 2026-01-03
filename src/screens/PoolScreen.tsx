@@ -33,12 +33,14 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { formatHashrate } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 import type { MainTabScreenProps } from '@/types/navigation';
 import type { HistoricalPeriod } from '@/types';
 
 type Props = MainTabScreenProps<'Pool'>;
 
 export function PoolScreen(_props: Props) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
 
@@ -152,7 +154,7 @@ export function PoolScreen(_props: Props) {
           ) : (
             <StatItem
               icon="speedometer-outline"
-              label="Pool Hashrate"
+              label={t('pool.hashrate')}
               value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
             />
           )}
@@ -178,7 +180,7 @@ export function PoolScreen(_props: Props) {
             <View className="absolute bottom-2 right-2 flex-row items-center bg-background/80 rounded-full px-2 py-1">
               <Ionicons name="expand-outline" size={14} color={colors.textMuted} />
               <Text variant="caption" color="muted" className="ml-1 text-xs">
-                Tap to expand
+                {t('pool.chartExpand')}
               </Text>
             </View>
           </Pressable>

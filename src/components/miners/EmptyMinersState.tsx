@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
 import { Button } from '../Button';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 
 export interface EmptyMinersStateProps {
   onStartDiscovery: () => void;
@@ -18,6 +19,8 @@ export function EmptyMinersState({
   onStartDiscovery,
   className = '',
 }: EmptyMinersStateProps) {
+  const { t } = useTranslation();
+
   return (
     <View className={`items-center justify-center py-16 px-8 ${className}`}>
       <View className="w-20 h-20 rounded-full bg-secondary items-center justify-center mb-6">
@@ -25,11 +28,11 @@ export function EmptyMinersState({
       </View>
 
       <Text variant="subtitle" align="center" className="mb-2">
-        No Miners Found
+        {t('miners.noMinersFound')}
       </Text>
 
       <Text variant="body" color="muted" align="center" className="mb-8">
-        Scan your network to discover Bitaxe miners, or add one manually by IP address.
+        {t('miners.noMinersFoundDesc')}
       </Text>
 
       <Button
@@ -38,7 +41,7 @@ export function EmptyMinersState({
         icon="search"
         onPress={onStartDiscovery}
       >
-        Scan Network
+        {t('miners.scanNetwork')}
       </Button>
     </View>
   );

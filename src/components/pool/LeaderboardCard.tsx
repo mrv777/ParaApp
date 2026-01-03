@@ -160,7 +160,7 @@ export function LeaderboardCard({
                   #{index + 1}
                 </Text>
                 <Text variant="caption" className="flex-1">
-                  {isUser ? 'You' : truncateAddress(entry.address, 6)}
+                  {isUser ? t('common.you') : truncateAddress(entry.address, 6)}
                 </Text>
                 <Text variant="mono" className="text-sm">
                   {formatValue(entry)}
@@ -179,7 +179,7 @@ export function LeaderboardCard({
               #{userIndex + 1}
             </Text>
             <Text variant="caption" className="flex-1">
-              You
+              {t('common.you')}
             </Text>
             <Text variant="mono" className="text-sm">
               {getUserValue()}

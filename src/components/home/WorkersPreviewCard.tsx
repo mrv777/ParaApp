@@ -11,6 +11,7 @@ import { SkeletonText } from '../SkeletonLoader';
 import { WorkerRow } from './WorkerRow';
 import { WorkerHealthBadge } from './WorkerHealthBadge';
 import { useWorkerHealth } from '@/hooks';
+import { useTranslation } from '@/i18n';
 import type { UserWorker } from '@/types';
 
 export interface WorkersPreviewCardProps {
@@ -30,6 +31,7 @@ export function WorkersPreviewCard({
   connectionStatus = 'connected',
   className = '',
 }: WorkersPreviewCardProps) {
+  const { t } = useTranslation();
   const safeWorkers = Array.isArray(workers) ? workers : [];
   const displayWorkers = safeWorkers.slice(0, maxItems);
   const showSkeleton = isLoading && safeWorkers.length === 0;
@@ -40,7 +42,7 @@ export function WorkersPreviewCard({
       {/* Header */}
       <View className="flex-row items-center justify-between px-3 pt-3 pb-1">
         <View className="flex-row items-center gap-2">
-          <Text variant="subtitle" className="text-base">Workers</Text>
+          <Text variant="subtitle" className="text-base">{t('home.workers')}</Text>
           <WorkerHealthBadge summary={healthSummary} />
         </View>
         <ConnectionStatus status={connectionStatus} />
@@ -60,10 +62,10 @@ export function WorkersPreviewCard({
         ) : safeWorkers.length === 0 ? (
           <View className="py-8 items-center">
             <Text variant="body" color="muted">
-              No workers found
+              {t('home.noWorkersFound')}
             </Text>
             <Text variant="caption" color="muted" className="mt-1">
-              Workers will appear once they submit shares
+              {t('home.workersAppearHint')}
             </Text>
           </View>
         ) : (
@@ -82,7 +84,7 @@ export function WorkersPreviewCard({
             iconPosition="left"
             onPress={onViewAll}
           >
-            View all workers ({safeWorkers.length})
+            {t('home.viewAllWorkersCount', { count: safeWorkers.length })}
           </Button>
         </View>
       )}

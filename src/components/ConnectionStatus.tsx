@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from './Text';
 import { colors } from '@/constants/colors';
+import { useTranslation } from '@/i18n';
 
 export type ConnectionStatusType = 'connected' | 'connecting' | 'offline';
 
@@ -23,13 +24,16 @@ export interface ConnectionStatusProps {
   className?: string;
 }
 
-const statusConfig: Record<
-  ConnectionStatusType,
-  { color: string; label: string }
-> = {
-  connected: { color: colors.success, label: 'Connected' },
-  connecting: { color: colors.warning, label: 'Connecting...' },
-  offline: { color: colors.danger, label: 'Offline' },
+const statusColors: Record<ConnectionStatusType, string> = {
+  connected: colors.success,
+  connecting: colors.warning,
+  offline: colors.danger,
+};
+
+const statusLabelKeys: Record<ConnectionStatusType, string> = {
+  connected: 'common.online',
+  connecting: 'miners.connecting',
+  offline: 'common.offline',
 };
 
 export function ConnectionStatus({
@@ -37,10 +41,12 @@ export function ConnectionStatus({
   showLabel = false,
   className = '',
 }: ConnectionStatusProps) {
+  const { t } = useTranslation();
   const pulseScale = useSharedValue(1);
   const pulseOpacity = useSharedValue(1);
 
-  const config = statusConfig[status];
+  const color = statusColors[status];
+  const labelKey = statusLabelKeys[status];
 
   useEffect(() => {
     if (status === 'connecting') {
@@ -81,14 +87,14 @@ export function ConnectionStatus({
             width: 8,
             height: 8,
             borderRadius: 4,
-            backgroundColor: config.color,
+            backgroundColor: color,
           },
           animatedDotStyle,
         ]}
       />
       {showLabel && (
         <Text variant="caption" color="muted">
-          {config.label}
+          {t(labelKey)}
         </Text>
       )}
     </View>

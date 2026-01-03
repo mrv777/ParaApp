@@ -2,7 +2,7 @@
  * SettingsMainScreen - User preferences and Bitcoin address management
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -10,6 +10,7 @@ import {
   TextInput,
   Linking,
 } from 'react-native';
+import { LanguageSelectorSheet } from '@/components/settings';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -21,9 +22,11 @@ import {
   selectTemperatureUnit,
   selectPollingInterval,
   selectWorkerSortOrder,
+  selectLanguage,
   type PollingInterval,
   type WorkerSortOrder,
 } from '@/store/settingsStore';
+import { useTranslation } from '@/i18n';
 import { isValidBitcoinAddress } from '@/utils/validation';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -52,17 +55,21 @@ const SORT_OPTIONS: { value: WorkerSortOrder; label: string }[] = [
   { value: 'bestDiff', label: 'Best Diff' },
 ];
 
+
 /** External links */
 const LINKS = {
   parasite: 'https://parasite.space',
 };
 
 export function SettingsMainScreen({ navigation }: Props) {
+  const { t } = useTranslation();
+
   // Store
   const bitcoinAddress = useSettingsStore(selectBitcoinAddress);
   const temperatureUnit = useSettingsStore(selectTemperatureUnit);
   const pollingInterval = useSettingsStore(selectPollingInterval);
   const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
+  const language = useSettingsStore(selectLanguage);
 
   // Actions
   const setBitcoinAddress = useSettingsStore((s) => s.setBitcoinAddress);
@@ -74,6 +81,12 @@ export function SettingsMainScreen({ navigation }: Props) {
   const [addressInput, setAddressInput] = useState(bitcoinAddress || '');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isAddressValid, setIsAddressValid] = useState<boolean | null>(null);
+  const [showLanguageSheet, setShowLanguageSheet] = useState(false);
+
+  // Get current language display name
+  const languageDisplayName = useMemo(() => {
+    return t(`settings.languageNames.${language}`);
+  }, [language, t]);
 
   // Sync input with store
   useEffect(() => {
@@ -112,9 +125,9 @@ export function SettingsMainScreen({ navigation }: Props) {
     } else {
       haptics.error();
       setIsAddressValid(false);
-      setValidationError('Invalid Bitcoin address');
+      setValidationError(t('settings.invalidAddress'));
     }
-  }, [addressInput, setBitcoinAddress]);
+  }, [addressInput, setBitcoinAddress, t]);
 
   const handleScanQR = useCallback(() => {
     haptics.light();
@@ -145,6 +158,11 @@ export function SettingsMainScreen({ navigation }: Props) {
     [setWorkerSortOrder]
   );
 
+  const handleOpenLanguageSheet = useCallback(() => {
+    haptics.light();
+    setShowLanguageSheet(true);
+  }, []);
+
   const handleOpenLink = useCallback((url: string) => {
     haptics.light();
     Linking.openURL(url);
@@ -155,7 +173,7 @@ export function SettingsMainScreen({ navigation }: Props) {
       {/* Header */}
       <View className="px-4 py-4 border-b border-border">
         <Text variant="title" className="font-bold">
-          Settings
+          {t('settings.title')}
         </Text>
       </View>
 
@@ -168,7 +186,7 @@ export function SettingsMainScreen({ navigation }: Props) {
           <View className="px-4 py-4">
             <View className="flex-row items-center mb-3">
               <Text variant="caption" color="muted" className="uppercase tracking-wide">
-                Bitcoin Address
+                {t('settings.bitcoinAddress')}
               </Text>
               {bitcoinAddress && (
                 <Ionicons
@@ -228,12 +246,26 @@ export function SettingsMainScreen({ navigation }: Props) {
           {/* Preferences Section */}
           <View className="px-4 py-4 border-t border-border">
             <Text variant="caption" color="muted" className="mb-4 uppercase tracking-wide">
-              Preferences
+              {t('settings.preferences')}
             </Text>
+
+            {/* Language */}
+            <Pressable
+              onPress={handleOpenLanguageSheet}
+              className="flex-row items-center justify-between mb-4 active:opacity-70"
+            >
+              <Text variant="body">{t('settings.language')}</Text>
+              <View className="flex-row items-center">
+                <Text variant="body" color="muted" className="mr-1">
+                  {languageDisplayName}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+            </Pressable>
 
             {/* Temperature Unit */}
             <View className="flex-row items-center justify-between mb-4">
-              <Text variant="body">Temperature</Text>
+              <Text variant="body">{t('settings.temperature')}</Text>
               <View className="flex-row bg-secondary rounded-lg overflow-hidden">
                 {TEMP_OPTIONS.map((opt) => (
                   <Pressable
@@ -260,7 +292,7 @@ export function SettingsMainScreen({ navigation }: Props) {
 
             {/* Polling Interval */}
             <View className="flex-row items-center justify-between mb-4">
-              <Text variant="body">Polling Interval</Text>
+              <Text variant="body">{t('settings.pollingInterval')}</Text>
               <View className="flex-row bg-secondary rounded-lg overflow-hidden">
                 {POLLING_OPTIONS.map((opt) => (
                   <Pressable
@@ -287,7 +319,7 @@ export function SettingsMainScreen({ navigation }: Props) {
 
             {/* Worker Sort Order */}
             <View className="flex-row items-center justify-between">
-              <Text variant="body">Worker Sort</Text>
+              <Text variant="body">{t('settings.workerSort')}</Text>
               <View className="flex-row bg-secondary rounded-lg overflow-hidden">
                 {SORT_OPTIONS.map((opt) => (
                   <Pressable
@@ -316,12 +348,12 @@ export function SettingsMainScreen({ navigation }: Props) {
           {/* About Section */}
           <View className="px-4 py-4 border-t border-border">
             <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-              About
+              {t('settings.about')}
             </Text>
 
             {/* Version */}
             <View className="flex-row items-center justify-between py-3">
-              <Text variant="body">Version</Text>
+              <Text variant="body">{t('settings.version')}</Text>
               <Text variant="body" color="muted">
                 {appVersion}
               </Text>
@@ -332,11 +364,17 @@ export function SettingsMainScreen({ navigation }: Props) {
               onPress={() => handleOpenLink(LINKS.parasite)}
               className="flex-row items-center justify-between py-3 border-t border-border/50 active:opacity-70"
             >
-              <Text variant="body">Parasite Pool</Text>
+              <Text variant="body">{t('settings.website')}</Text>
               <Ionicons name="open-outline" size={18} color={colors.textMuted} />
             </Pressable>
           </View>
         </ScrollView>
+
+      {/* Language Selector Sheet */}
+      <LanguageSelectorSheet
+        visible={showLanguageSheet}
+        onClose={() => setShowLanguageSheet(false)}
+      />
     </SafeAreaView>
   );
 }
