@@ -11,10 +11,12 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 import { PoolScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
+import { Toast } from '@/components/Toast';
 import { HomeStack, MinersStack, SettingsStack } from '@/navigation';
 import { colors } from '@/constants/colors';
 import { changeLanguage } from '@/i18n';
 import { useSettingsStore, selectIsHydrated, selectLanguage } from '@/store/settingsStore';
+import { useNotifications } from '@/hooks/useNotifications';
 import type { MainTabParamList } from '@/types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -36,6 +38,9 @@ const navigationTheme = {
 export default function App() {
   const isHydrated = useSettingsStore(selectIsHydrated);
   const language = useSettingsStore(selectLanguage);
+
+  // Initialize push notifications
+  useNotifications();
 
   // Sync language preference on app startup
   useEffect(() => {
@@ -61,6 +66,8 @@ export default function App() {
               <Tab.Screen name="Miners" component={MinersStack} />
               <Tab.Screen name="Settings" component={SettingsStack} />
             </Tab.Navigator>
+            {/* Toast inside BottomSheetModalProvider to render above bottom sheets */}
+            <Toast />
           </BottomSheetModalProvider>
         </NavigationContainer>
         <StatusBar style="light" />

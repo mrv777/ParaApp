@@ -229,6 +229,13 @@ const en = {
       fr: 'Français',
       pt: 'Português',
     },
+    notifications: 'Notifications',
+    enableNotifications: 'Enable Notifications',
+    blockNotifications: 'Pool Block Found',
+    workerNotifications: 'Worker Status',
+    bestDiffNotifications: 'New Best Difficulty',
+    notificationsDenied: 'Notification permissions were denied. Enable them in system settings to receive alerts.',
+    openSettings: 'Open Settings',
   },
 
   qrScanner: {

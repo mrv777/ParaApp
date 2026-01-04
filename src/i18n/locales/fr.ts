@@ -230,6 +230,13 @@ const fr = {
       fr: 'Français',
       pt: 'Português',
     },
+    notifications: 'Notifications',
+    enableNotifications: 'Activer les notifications',
+    blockNotifications: 'Bloc du pool trouvé',
+    workerNotifications: 'Statut du worker',
+    bestDiffNotifications: 'Nouvelle meilleure difficulté',
+    notificationsDenied: 'Les autorisations de notification ont été refusées. Activez-les dans les paramètres système pour recevoir des alertes.',
+    openSettings: 'Ouvrir les paramètres',
   },
 
   qrScanner: {

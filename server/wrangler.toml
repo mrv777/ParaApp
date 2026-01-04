@@ -1,0 +1,14 @@
+name = "paraapp-notifications"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+PARASITE_API_URL = "https://parasite.space"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "paraapp-notifications-db"
+database_id = "8ae5c792-c025-4c35-a0b5-5872a8f63094"
+
+[triggers]
+crons = ["* * * * *"]  # Every minute

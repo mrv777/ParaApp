@@ -9,6 +9,7 @@ import {
   Pressable,
   TextInput,
   Linking,
+  AppState,
 } from 'react-native';
 import { LanguageSelectorSheet } from '@/components/settings';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,9 +24,19 @@ import {
   selectPollingInterval,
   selectWorkerSortOrder,
   selectLanguage,
+  selectNotificationsEnabled,
+  selectNotificationPrefs,
   type PollingInterval,
   type WorkerSortOrder,
+  type NotificationPrefs,
 } from '@/store/settingsStore';
+import {
+  requestPermissions,
+  getPermissionStatus,
+  openNotificationSettings,
+  canReceivePushNotifications,
+  type PermissionStatus,
+} from '@/utils/notifications';
 import { useTranslation } from '@/i18n';
 import { isValidBitcoinAddress } from '@/utils/validation';
 import { haptics } from '@/utils/haptics';
@@ -70,18 +81,23 @@ export function SettingsMainScreen({ navigation }: Props) {
   const pollingInterval = useSettingsStore(selectPollingInterval);
   const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
   const language = useSettingsStore(selectLanguage);
+  const notificationsEnabled = useSettingsStore(selectNotificationsEnabled);
+  const notificationPrefs = useSettingsStore(selectNotificationPrefs);
 
   // Actions
   const setBitcoinAddress = useSettingsStore((s) => s.setBitcoinAddress);
   const setTemperatureUnit = useSettingsStore((s) => s.setTemperatureUnit);
   const setPollingInterval = useSettingsStore((s) => s.setPollingInterval);
   const setWorkerSortOrder = useSettingsStore((s) => s.setWorkerSortOrder);
+  const setNotificationsEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
+  const setNotificationPrefs = useSettingsStore((s) => s.setNotificationPrefs);
 
   // Local state
   const [addressInput, setAddressInput] = useState(bitcoinAddress || '');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isAddressValid, setIsAddressValid] = useState<boolean | null>(null);
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined');
 
   // Get current language display name
   const languageDisplayName = useMemo(() => {
@@ -95,6 +111,23 @@ export function SettingsMainScreen({ navigation }: Props) {
       setIsAddressValid(true);
     }
   }, [bitcoinAddress]);
+
+  // Check notification permission status on mount
+  useEffect(() => {
+    getPermissionStatus().then(setPermissionStatus);
+  }, []);
+
+  // Refresh permission status when app returns to foreground
+  // (user may have changed permissions in system settings)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        getPermissionStatus().then(setPermissionStatus);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   // App version from expo-constants
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
@@ -166,6 +199,37 @@ export function SettingsMainScreen({ navigation }: Props) {
   const handleOpenLink = useCallback((url: string) => {
     haptics.light();
     Linking.openURL(url);
+  }, []);
+
+  const handleToggleNotifications = useCallback(async () => {
+    haptics.selection();
+
+    if (!notificationsEnabled) {
+      // Enabling - request permissions if needed
+      const status = await requestPermissions();
+      setPermissionStatus(status);
+
+      if (status === 'granted') {
+        setNotificationsEnabled(true);
+      }
+      // If denied, don't enable - user needs to go to settings
+    } else {
+      // Disabling
+      setNotificationsEnabled(false);
+    }
+  }, [notificationsEnabled, setNotificationsEnabled]);
+
+  const handleToggleNotificationPref = useCallback(
+    (key: keyof NotificationPrefs) => {
+      haptics.selection();
+      setNotificationPrefs({ [key]: !notificationPrefs[key] });
+    },
+    [notificationPrefs, setNotificationPrefs]
+  );
+
+  const handleOpenNotificationSettings = useCallback(() => {
+    haptics.light();
+    openNotificationSettings();
   }, []);
 
   return (
@@ -344,6 +408,114 @@ export function SettingsMainScreen({ navigation }: Props) {
               </View>
             </View>
           </View>
+
+          {/* Notifications Section */}
+          {canReceivePushNotifications() && (
+            <View className="px-4 py-4 border-t border-border">
+              <Text variant="caption" color="muted" className="mb-4 uppercase tracking-wide">
+                {t('settings.notifications')}
+              </Text>
+
+              {/* Permission denied banner */}
+              {permissionStatus === 'denied' && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  className="bg-secondary rounded-lg p-3 mb-4"
+                >
+                  <Text variant="caption" color="muted" className="mb-2">
+                    {t('settings.notificationsDenied')}
+                  </Text>
+                  <Pressable
+                    onPress={handleOpenNotificationSettings}
+                    className="flex-row items-center active:opacity-70"
+                  >
+                    <Text variant="body" className="text-primary">
+                      {t('settings.openSettings')}
+                    </Text>
+                    <Ionicons
+                      name="open-outline"
+                      size={16}
+                      color={colors.primary}
+                      style={{ marginLeft: 4 }}
+                    />
+                  </Pressable>
+                </Animated.View>
+              )}
+
+              {/* Master toggle */}
+              <Pressable
+                onPress={handleToggleNotifications}
+                className="flex-row items-center justify-between py-2 active:opacity-70"
+                disabled={permissionStatus === 'denied'}
+              >
+                <Text
+                  variant="body"
+                  color={permissionStatus === 'denied' ? 'muted' : undefined}
+                >
+                  {t('settings.enableNotifications')}
+                </Text>
+                <Ionicons
+                  name={notificationsEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={
+                    permissionStatus === 'denied'
+                      ? colors.textMuted
+                      : notificationsEnabled
+                        ? colors.success
+                        : colors.textMuted
+                  }
+                />
+              </Pressable>
+
+              {/* Sub-toggles (visible when enabled) */}
+              {notificationsEnabled && permissionStatus === 'granted' && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(200)}
+                  className="mt-2 ml-4 border-l-2 border-border pl-4"
+                >
+                  {/* Block found */}
+                  <Pressable
+                    onPress={() => handleToggleNotificationPref('blocks')}
+                    className="flex-row items-center justify-between py-2 active:opacity-70"
+                  >
+                    <Text variant="body">{t('settings.blockNotifications')}</Text>
+                    <Ionicons
+                      name={notificationPrefs.blocks ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={notificationPrefs.blocks ? colors.success : colors.textMuted}
+                    />
+                  </Pressable>
+
+                  {/* Worker status */}
+                  <Pressable
+                    onPress={() => handleToggleNotificationPref('workers')}
+                    className="flex-row items-center justify-between py-2 active:opacity-70"
+                  >
+                    <Text variant="body">{t('settings.workerNotifications')}</Text>
+                    <Ionicons
+                      name={notificationPrefs.workers ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={notificationPrefs.workers ? colors.success : colors.textMuted}
+                    />
+                  </Pressable>
+
+                  {/* Best difficulty */}
+                  <Pressable
+                    onPress={() => handleToggleNotificationPref('bestDiff')}
+                    className="flex-row items-center justify-between py-2 active:opacity-70"
+                  >
+                    <Text variant="body">{t('settings.bestDiffNotifications')}</Text>
+                    <Ionicons
+                      name={notificationPrefs.bestDiff ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={notificationPrefs.bestDiff ? colors.success : colors.textMuted}
+                    />
+                  </Pressable>
+                </Animated.View>
+              )}
+            </View>
+          )}
 
           {/* About Section */}
           <View className="px-4 py-4 border-t border-border">

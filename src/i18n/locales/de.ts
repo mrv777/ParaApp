@@ -230,6 +230,13 @@ const de = {
       fr: 'Français',
       pt: 'Português',
     },
+    notifications: 'Benachrichtigungen',
+    enableNotifications: 'Benachrichtigungen aktivieren',
+    blockNotifications: 'Pool-Block gefunden',
+    workerNotifications: 'Worker-Status',
+    bestDiffNotifications: 'Neue beste Schwierigkeit',
+    notificationsDenied: 'Benachrichtigungsberechtigungen wurden verweigert. Aktiviere sie in den Systemeinstellungen, um Benachrichtigungen zu erhalten.',
+    openSettings: 'Einstellungen öffnen',
   },
 
   qrScanner: {

@@ -1,3 +1,7 @@
+# EAS Build ignore file
+# This file overrides .gitignore for EAS builds
+# See: https://docs.expo.dev/build-reference/eas-json/#easignore
+
 # Dependencies
 node_modules/
 
@@ -33,11 +37,11 @@ android/app/release/
 .kotlin/
 .metro-health-check*
 
-# Environment & secrets
+# Environment (but NOT google-services.json - needed for builds)
 .env
 .env.local
 .env.*.local
-google-services.json
+# google-services.json is NOT ignored here - EAS needs it for Android builds
 paraapp-*.json
 
 # IDE
@@ -63,5 +67,6 @@ yarn-error.*
 .claude/CLAUDE.local.md
 .claude/plans/
 
-# Cloudflare Workers
+# Cloudflare Workers (not needed for mobile builds)
 .wrangler/
+server/

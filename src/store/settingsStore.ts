@@ -12,6 +12,12 @@ export type PollingInterval = 5000 | 10000 | 20000 | 30000;
 export type WorkerSortOrder = 'hashrate' | 'name' | 'bestDiff';
 export type Language = 'auto' | 'en' | 'es' | 'de' | 'fr' | 'pt';
 
+export interface NotificationPrefs {
+  blocks: boolean;
+  workers: boolean;
+  bestDiff: boolean;
+}
+
 interface SettingsState {
   // User preferences
   temperatureUnit: TemperatureUnit;
@@ -26,6 +32,11 @@ interface SettingsState {
 
   // Visibility on leaderboards
   isPublicOnLeaderboard: boolean;
+
+  // Push notifications
+  notificationsEnabled: boolean;
+  notificationPrefs: NotificationPrefs;
+  pushToken: string | null;
 
   // Dismissed tips (persisted)
   dismissedTips: string[];
@@ -47,6 +58,9 @@ interface SettingsActions {
   setBitcoinAddress: (address: string | null) => void;
   setPublicOnLeaderboard: (isPublic: boolean) => void;
   setLanguage: (lang: Language) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
+  setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
+  setPushToken: (token: string | null) => void;
   dismissTip: (tipId: string) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
   setHydrated: (hydrated: boolean) => void;
@@ -61,6 +75,9 @@ const initialState: SettingsState = {
   language: 'auto',
   bitcoinAddress: null,
   isPublicOnLeaderboard: true,
+  notificationsEnabled: false,
+  notificationPrefs: { blocks: true, workers: true, bestDiff: true },
+  pushToken: null,
   dismissedTips: [],
   lastPoolFetch: null,
   lastUserFetch: null,
@@ -88,6 +105,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         set({ isPublicOnLeaderboard: isPublic }),
 
       setLanguage: (lang) => set({ language: lang }),
+
+      setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
+
+      setNotificationPrefs: (prefs) =>
+        set((state) => ({
+          notificationPrefs: { ...state.notificationPrefs, ...prefs },
+        })),
+
+      setPushToken: (token) => set({ pushToken: token }),
 
       dismissTip: (tipId) =>
         set((state) => ({
@@ -119,6 +145,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         language: state.language,
         bitcoinAddress: state.bitcoinAddress,
         isPublicOnLeaderboard: state.isPublicOnLeaderboard,
+        notificationsEnabled: state.notificationsEnabled,
+        notificationPrefs: state.notificationPrefs,
+        pushToken: state.pushToken,
         dismissedTips: state.dismissedTips,
       }),
       onRehydrateStorage: () => (state) => {
@@ -141,3 +170,8 @@ export const selectHasAddress = (state: SettingsState) =>
 export const selectWorkerSortOrder = (state: SettingsState) =>
   state.workerSortOrder;
 export const selectLanguage = (state: SettingsState) => state.language;
+export const selectNotificationsEnabled = (state: SettingsState) =>
+  state.notificationsEnabled;
+export const selectNotificationPrefs = (state: SettingsState) =>
+  state.notificationPrefs;
+export const selectPushToken = (state: SettingsState) => state.pushToken;
