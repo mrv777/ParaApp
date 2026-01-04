@@ -14,6 +14,7 @@ import {
   MaxDevicesExceededError,
 } from './db';
 import { runCronJob } from './cron';
+import { getUser } from './parasite-api';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -36,6 +37,12 @@ app.post('/register', async (c) => {
     }
 
     const { pushToken, btcAddress, preferences } = result.data;
+
+    // Validate address exists on Parasite Pool before registering
+    const userResult = await getUser(c.env.PARASITE_API_URL, btcAddress);
+    if (!userResult.success || !userResult.data) {
+      return c.json({ success: false, error: 'Address not found on Parasite Pool' }, 404);
+    }
 
     await upsertSubscription(c.env.DB, pushToken, btcAddress);
 
