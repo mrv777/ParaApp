@@ -209,9 +209,14 @@ async function processUser(
   const bestDiffEnabled = prefs ? prefs.notify_best_diff === 1 : true;
 
   // Parse stored worker statuses
-  const storedStatuses: WorkerStatusMap = userState?.worker_statuses
-    ? JSON.parse(userState.worker_statuses)
-    : {};
+  let storedStatuses: WorkerStatusMap = {};
+  if (userState?.worker_statuses) {
+    try {
+      storedStatuses = JSON.parse(userState.worker_statuses);
+    } catch {
+      console.warn(`[Cron] Invalid worker_statuses JSON for ${address}`);
+    }
+  }
 
   const newStatuses: WorkerStatusMap = {};
   const offlineWorkers: string[] = [];
