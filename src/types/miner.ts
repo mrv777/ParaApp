@@ -131,8 +131,8 @@ export interface BitaxeSystemInfo {
   temp: number;
   vrTemp: number;
   hashRate: number;
-  bestDiff: string;
-  bestSessionDiff: string;
+  bestDiff: string | number;
+  bestSessionDiff: string | number;
   freeHeap: number;
   coreVoltage: number;
   coreVoltageActual: number;

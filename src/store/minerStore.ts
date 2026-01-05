@@ -162,10 +162,8 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       ...initialState,
 
       addMiner: async (ip) => {
-        const { miners, savedMiners } = get();
-
-        // Check if already added
-        if (miners.some((m) => m.ip === ip)) {
+        // Initial duplicate check
+        if (get().miners.some((m) => m.ip === ip)) {
           return true;
         }
 
@@ -176,10 +174,18 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         if (isSuccess(result)) {
           const miner = parseSystemInfo(ip, result.data);
 
-          set({
-            miners: [...miners, miner],
-            savedMiners: [...savedMiners, { ip }],
-            isLoading: false,
+          // Use functional set() with fresh state to avoid race conditions
+          // when multiple miners are discovered simultaneously
+          set((state) => {
+            // Re-check for duplicates with fresh state
+            if (state.miners.some((m) => m.ip === ip)) {
+              return { isLoading: false };
+            }
+            return {
+              miners: [...state.miners, miner],
+              savedMiners: [...state.savedMiners, { ip }],
+              isLoading: false,
+            };
           });
 
           return true;

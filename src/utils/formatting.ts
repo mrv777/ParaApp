@@ -134,8 +134,14 @@ export function formatNumber(num: number, decimals?: number): string {
  * @param diffStr - Difficulty string with optional unit suffix
  * @returns Numeric difficulty value
  */
-export function parseDifficulty(diffStr: string): number {
-  if (!diffStr) return 0;
+export function parseDifficulty(diffStr: string | number | null | undefined): number {
+  // Handle null, undefined, empty string, or zero
+  if (diffStr == null || diffStr === '') return 0;
+
+  // Handle numeric input (some Bitaxe firmware returns number instead of string)
+  if (typeof diffStr === 'number') {
+    return Number.isFinite(diffStr) ? diffStr : 0;
+  }
 
   const units: Record<string, number> = {
     K: 1e3,

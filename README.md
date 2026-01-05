@@ -2,12 +2,20 @@
 
 A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool and managing local Bitaxe miners.
 
+## Features
+
+- **Mining Dashboard** - Real-time hashrate, workers, and pool leaderboard rankings with interactive charts (1h, 24h, 7d, 30d)
+- **Local Miner Management** - Auto-discover Bitaxe miners on your network, monitor temps, adjust frequency/voltage/fan speed, restart remotely
+- **Fleet Overview** - Aggregate stats across all connected miners with smart alerts for overheating and offline devices
+- **Push Notifications** - Block found, worker status changes, and new difficulty records (Android)
+- **Multi-language** - English, Spanish, French, German, and Portuguese
+
 ## Tech Stack
 
 - React Native + Expo SDK 54 (TypeScript)
 - NativeWind + Tailwind CSS v3 (styling)
 - Zustand (state management)
-- React Navigation (bottom tabs)
+- React Navigation v7 (bottom tabs + stacks)
 - react-native-reanimated (animations)
 - @wuba/react-native-echarts + @shopify/react-native-skia (charts)
 
