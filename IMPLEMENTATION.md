@@ -393,7 +393,7 @@ git tag phase-2-complete
 
 ## Phase 3: Local Miner Management
 
-**Goal:** Implement Bitaxe miner discovery, display, and controls.
+**Goal:** Implement miner discovery, display, and controls.
 
 **Duration:** ~4-5 sessions
 
@@ -406,7 +406,7 @@ I'm starting Phase 3A of ParaApp - Miner Discovery. Please:
 
 1. Implement miner auto-discovery:
    - Detect device's current IP subnet
-   - Scan /24 range for Bitaxe devices (GET /api/system/info)
+   - Scan /24 range for AxeOS devices (GET /api/system/info)
    - Background scan with progress indicator
    - Show miners as they're found in real-time
    - 5 second timeout per IP
@@ -443,7 +443,7 @@ Reference SPEC.md Discovery & Setup section.
 I'm continuing Phase 3B of ParaApp - Miners List Screen. Please:
 
 1. Build the Miners tab screen:
-   - List of saved Bitaxe devices
+   - List of saved miner devices
    - Each item: hostname/alias, hashrate, temp, status indicator
    - Sort options: hashrate, temp, status, name
    - Filter: online/offline/warning
@@ -553,7 +553,7 @@ Reference SPEC.md Miner Controls section.
 - Restart: Uses existing `SwipeToConfirm` component with danger variant
 - After restart success, shows "Reconnecting..." state until miner comes back online (60s timeout)
 - Inline error banner with auto-dismiss (5 seconds) and manual dismiss
-- Fixed `/src/api/bitaxe.ts` restart function to treat network errors/timeouts as success (miner reboots immediately, dropping connection)
+- Fixed `/src/api/axeOS.ts` restart function to treat network errors/timeouts as success (miner reboots immediately, dropping connection)
 - Controls section appears after Device Info, before Linked Worker section
 - Controls hidden when miner is offline (unless reconnecting after restart)
 
@@ -599,7 +599,7 @@ Reference SPEC.md Miner Settings section.
 - Warning badges when custom values exceed recommended options or absMax limits
 - Added `AsicConfig` interface to `/src/types/miner.ts`
 - Added `frequency` field to `LocalMiner` interface for current value display
-- Updated `getAsicSettings()` in `/src/api/bitaxe.ts` with proper return type
+- Updated `getAsicSettings()` in `/src/api/axeOS.ts` with proper return type
 - Fixed `PARASITE_STRATUM_PRESET.stratumUrl` to `stratum.parasite.space` (removed protocol prefix)
 - Settings button (gear icon) in MinerDetailScreen header (only shown when online)
 - Added `MinerSettings` route to MinersStack navigation
@@ -852,7 +852,7 @@ Reference SPEC.md Accessibility section.
 I'm finishing Phase 5D of ParaApp - Integration Testing. Please:
 
 1. Create a testing checklist covering:
-   - All API integrations (Parasite, Bitaxe, mempool)
+   - All API integrations (Parasite, AxeOS, mempool)
    - All user flows (address entry, miner discovery, settings)
    - Error scenarios (network failure, API errors, timeouts)
    - Edge cases (no data, expired cache, concurrent requests)
@@ -980,7 +980,7 @@ Create/update `.claude/CLAUDE.md` with:
 
 **Key Files:**
 - `/src/store/` - Zustand stores (pool, user, miner, settings)
-- `/src/api/` - API clients (parasite.ts, bitaxe.ts, mempool.ts)
+- `/src/api/` - API clients (parasite.ts, axeOS.ts, mempool.ts)
 - `/src/screens/` - Screen components
 - `/src/components/` - Reusable UI components
 - `/src/types/` - TypeScript interfaces
@@ -1092,4 +1092,4 @@ Phases 2 and 3 are largely independent and can be developed in parallel.
 
 - [SPEC.md](./SPEC.md) - Full product specification
 - [Parasite Pool](https://parasite.space/) - Design reference
-- [ESP-Miner API](https://github.com/bitaxeorg/ESP-Miner) - Bitaxe API reference
+- [ESP-Miner API](https://github.com/bitaxeorg/ESP-Miner) - AxeOS API reference

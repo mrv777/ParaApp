@@ -73,7 +73,7 @@ const pt = {
     poolHashrate: 'Hashrate do pool',
     users: 'Usuários',
     editWorkerNote: 'Editar Nota',
-    noteHint: 'ex., Bitaxe da cozinha',
+    noteHint: 'ex., Minerador da cozinha',
   },
 
   pool: {
@@ -139,7 +139,7 @@ const pt = {
     onlineCount: '{{online}} de {{total}} online',
     tipSwipeRemove: 'Deslize para a esquerda em um minerador para removê-lo',
     noMinersFound: 'Nenhum minerador encontrado',
-    noMinersFoundDesc: 'Escaneie sua rede para descobrir mineradores Bitaxe, ou adicione um manualmente por IP.',
+    noMinersFoundDesc: 'Escaneie sua rede para descobrir mineradores, ou adicione um manualmente por IP.',
     discoverMiners: 'Descobrir mineradores',
     scanningProgress: 'Escaneando: {{scanned}}/{{total}}',
     foundCount: 'Encontrados: {{count}}',

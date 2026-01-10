@@ -1,5 +1,5 @@
 /**
- * Local Bitaxe miner data types
+ * Local miner data types
  */
 
 /**
@@ -38,7 +38,7 @@ export interface MinerWarning {
 }
 
 /**
- * Local Bitaxe miner device
+ * Local miner device
  */
 export interface LocalMiner {
   /** IP address of the miner */
@@ -122,9 +122,9 @@ export interface MinerSettings {
 }
 
 /**
- * Bitaxe system info response from /api/system/info
+ * AxeOS system info response from /api/system/info
  */
-export interface BitaxeSystemInfo {
+export interface AxeOSSystemInfo {
   power: number;
   voltage: number;
   current: number;
@@ -143,7 +143,7 @@ export interface BitaxeSystemInfo {
   sharesRejected: number;
   uptimeSeconds: number;
   ASICModel: string;
-  /** Device model name (e.g., "NerdQAxe++", "Bitaxe Gamma") */
+  /** Device model name (e.g., "NerdQAxe++", "Gamma") */
   deviceModel?: string;
   stratumURL: string;
   stratumPort: number;

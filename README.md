@@ -1,12 +1,12 @@
 # ParaApp
 
-A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool and managing local Bitaxe miners.
+A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool and managing local miners.
 
 ## Features
 
 - **Mining Dashboard** - Real-time hashrate, workers, and pool leaderboard rankings with interactive charts (1h, 24h, 7d, 30d)
-- **Worker Notes** - Add custom labels to workers (e.g., "Kitchen Bitaxe") for easy identification
-- **Local Miner Management** - Auto-discover Bitaxe miners on your network, monitor temps, adjust frequency/voltage/fan speed, restart remotely
+- **Worker Notes** - Add custom labels to workers (e.g., "Kitchen miner") for easy identification
+- **Local Miner Management** - Auto-discover AxeOS miners on your network, monitor temps, adjust frequency/voltage/fan speed, restart remotely
 - **Fleet Overview** - Aggregate stats across all connected miners with smart alerts for overheating and offline devices
 - **Push Notifications** - Block found, worker status changes, and new difficulty records (Android)
 - **Multi-language** - English, Spanish, French, German, and Portuguese
@@ -125,7 +125,7 @@ src/
     navigation/   # Navigation components (TabBar)
   navigation/     # Stack navigators (HomeStack, MinersStack, SettingsStack)
   store/          # Zustand stores (pool, user, miner, settings)
-  api/            # API clients (Parasite Pool, Bitaxe, Mempool)
+  api/            # API clients (Parasite Pool, AxeOS, Mempool)
   types/          # TypeScript interfaces
   hooks/          # Custom React hooks (polling, app state)
   utils/          # Utility functions (formatting, validation, discovery, minerAggregation)

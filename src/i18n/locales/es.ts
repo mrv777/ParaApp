@@ -73,7 +73,7 @@ const es = {
     poolHashrate: 'Hashrate del Pool',
     users: 'Usuarios',
     editWorkerNote: 'Editar Nota',
-    noteHint: 'ej., Bitaxe de la cocina',
+    noteHint: 'ej., Minero de la cocina',
   },
 
   pool: {
@@ -139,7 +139,7 @@ const es = {
     onlineCount: '{{online}} de {{total}} conectados',
     tipSwipeRemove: 'Desliza a la izquierda para eliminar un minero',
     noMinersFound: 'No se Encontraron Mineros',
-    noMinersFoundDesc: 'Escanea tu red para descubrir mineros Bitaxe, o añade uno manualmente por IP.',
+    noMinersFoundDesc: 'Escanea tu red para descubrir mineros, o añade uno manualmente por IP.',
     discoverMiners: 'Descubrir Mineros',
     scanningProgress: 'Escaneando: {{scanned}}/{{total}}',
     foundCount: 'Encontrados: {{count}}',

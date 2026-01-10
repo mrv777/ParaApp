@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool and managing local Bitaxe miners. Dark theme matching the Parasite Pool website aesthetic.
+A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool and managing local miners. Dark theme matching the Parasite Pool website aesthetic.
 
 ## Quick Reference
 
@@ -21,7 +21,7 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 - `/src/components/miners/` - Miner discovery & list components
 - `/src/navigation/` - Stack navigators (HomeStack, MinersStack, SettingsStack)
 - `/src/store/` - Zustand stores (pool, user, miner, settings)
-- `/src/api/` - API clients (parasite, bitaxe, mempool)
+- `/src/api/` - API clients (parasite, axeOS, mempool)
 - `/src/hooks/` - Custom hooks (polling, app state)
 - `/src/utils/` - Utilities (formatting, validation, discovery, haptics)
 - `/src/types/` - TypeScript interfaces
@@ -94,7 +94,7 @@ If selectors cause infinite re-renders:
 - Don't return `|| []` from selectors - use a const empty array instead
 - Example: `const EMPTY = []; select = (s) => s.data ?? EMPTY;`
 
-### Bitaxe Restart API
+### AxeOS Restart API
 The restart endpoint causes the miner to reboot immediately, dropping the connection before responding:
 - Set `retries: 0` (no point retrying a rebooting device)
 - Treat `NETWORK_ERROR` or `TIMEOUT` as success (expected behavior)

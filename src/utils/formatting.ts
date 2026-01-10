@@ -130,7 +130,7 @@ export function formatNumber(num: number, decimals?: number): string {
 }
 
 /**
- * Parse difficulty string from Bitaxe API (e.g., "24.3G", "1.05M", "500K")
+ * Parse difficulty string from AxeOS API (e.g., "24.3G", "1.05M", "500K")
  * @param diffStr - Difficulty string with optional unit suffix
  * @returns Numeric difficulty value
  */
@@ -138,7 +138,7 @@ export function parseDifficulty(diffStr: string | number | null | undefined): nu
   // Handle null, undefined, empty string, or zero
   if (diffStr == null || diffStr === '') return 0;
 
-  // Handle numeric input (some Bitaxe firmware returns number instead of string)
+  // Handle numeric input (some AxeOS firmware returns number instead of string)
   if (typeof diffStr === 'number') {
     return Number.isFinite(diffStr) ? diffStr : 0;
   }

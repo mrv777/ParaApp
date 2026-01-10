@@ -1,5 +1,5 @@
 /**
- * MinerRow - List item for a Bitaxe miner with swipe-to-delete
+ * MinerRow - List item for a local miner with swipe-to-delete
  * Shows hostname/alias, hashrate, temperature, and status
  */
 

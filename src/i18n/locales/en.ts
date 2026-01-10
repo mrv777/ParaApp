@@ -72,7 +72,7 @@ const en = {
     poolHashrate: 'Pool Hashrate',
     users: 'Users',
     editWorkerNote: 'Edit Note',
-    noteHint: 'e.g., Kitchen Bitaxe',
+    noteHint: 'e.g., Kitchen miner',
   },
 
   pool: {
@@ -138,7 +138,7 @@ const en = {
     onlineCount: '{{online}} of {{total}} online',
     tipSwipeRemove: 'Swipe left on a miner to remove it',
     noMinersFound: 'No Miners Found',
-    noMinersFoundDesc: 'Scan your network to discover Bitaxe miners, or add one manually by IP address.',
+    noMinersFoundDesc: 'Scan your network to discover miners, or add one manually by IP address.',
     discoverMiners: 'Discover Miners',
     scanningProgress: 'Scanning: {{scanned}}/{{total}}',
     foundCount: 'Found: {{count}}',

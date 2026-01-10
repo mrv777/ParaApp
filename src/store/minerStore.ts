@@ -1,5 +1,5 @@
 /**
- * Miner store for local Bitaxe miners
+ * Miner store for local AxeOS miners
  */
 
 import { create } from 'zustand';
@@ -11,11 +11,11 @@ import type {
   MinerWarning,
   MinerSettings,
   SavedMiner,
-  BitaxeSystemInfo,
+  AxeOSSystemInfo,
   DiscoveryProgress,
   DiscoveryOptions,
 } from '@/types';
-import { bitaxe, isSuccess } from '@/api';
+import { axeOS, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
 import { parseDifficulty } from '@/utils/formatting';
 import { tempThresholds } from '@/constants/theme';
@@ -97,9 +97,9 @@ const initialState: MinerState = {
 let discoveryController: AbortController | null = null;
 
 /**
- * Parse Bitaxe system info into LocalMiner format
+ * Parse AxeOS system info into LocalMiner format
  */
-function parseSystemInfo(ip: string, info: BitaxeSystemInfo): LocalMiner {
+function parseSystemInfo(ip: string, info: AxeOSSystemInfo): LocalMiner {
   return {
     ip,
     hostname: info.hostname,
@@ -169,7 +169,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
         set({ isLoading: true, error: null });
 
-        const result = await bitaxe.getSystemInfo(ip);
+        const result = await axeOS.getSystemInfo(ip);
 
         if (isSuccess(result)) {
           const miner = parseSystemInfo(ip, result.data);
@@ -221,7 +221,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         newLoadingMiners.add(ip);
         set({ loadingMiners: newLoadingMiners });
 
-        const result = await bitaxe.getSystemInfo(ip);
+        const result = await axeOS.getSystemInfo(ip);
 
         // Get fresh state after async operation to avoid race conditions
         const { loadingMiners: currentLoading, miners: currentMiners } = get();
@@ -258,7 +258,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       restartMiner: async (ip) => {
-        const result = await bitaxe.restart(ip);
+        const result = await axeOS.restart(ip);
         if (!isSuccess(result)) {
           set({ error: result.error });
         }
@@ -266,7 +266,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       identifyMiner: async (ip) => {
-        const result = await bitaxe.identify(ip);
+        const result = await axeOS.identify(ip);
         if (!isSuccess(result)) {
           set({ error: result.error });
         }
@@ -274,7 +274,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       updateMinerSettings: async (ip, settings) => {
-        const result = await bitaxe.updateSettings(ip, settings);
+        const result = await axeOS.updateSettings(ip, settings);
         if (isSuccess(result)) {
           // Refresh to get updated values
           get().refreshMiner(ip);

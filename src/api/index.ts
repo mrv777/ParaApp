@@ -11,8 +11,8 @@ export {
 // Parasite Pool API
 export * as parasite from './parasite';
 
-// Bitaxe Miner API
-export * as bitaxe from './bitaxe';
+// AxeOS Miner API
+export * as axeOS from './axeOS';
 
 // Mempool.space API
 export * as mempool from './mempool';

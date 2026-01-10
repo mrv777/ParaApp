@@ -1,5 +1,5 @@
 /**
- * Network discovery utilities for Bitaxe miners
+ * Network discovery utilities for AxeOS miners
  */
 
 import NetInfo from '@react-native-community/netinfo';
@@ -48,11 +48,11 @@ export async function getDeviceSubnet(): Promise<string | null> {
 }
 
 /**
- * Check if a single IP responds as a Bitaxe miner
+ * Check if a single IP responds as an AxeOS miner
  * Uses a fast single-attempt probe (no retries)
  * @param ip - IP address to check
  * @param signal - Optional abort signal
- * @returns true if a Bitaxe miner responds
+ * @returns true if an AxeOS miner responds
  */
 async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
   const controller = new AbortController();
@@ -71,7 +71,7 @@ async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
       return false;
     }
 
-    // Validate it's actually a Bitaxe by checking for expected fields
+    // Validate it's actually an AxeOS miner by checking for expected fields
     const data = await response.json();
     return (
       typeof data === 'object' &&
@@ -88,7 +88,7 @@ async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
 }
 
 /**
- * Scan a subnet for Bitaxe miners using a worker pool pattern
+ * Scan a subnet for AxeOS miners using a worker pool pattern
  *
  * @param callbacks - Progress and result callbacks
  * @param options - Discovery options (subnet, range, concurrency)

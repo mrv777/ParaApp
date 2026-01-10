@@ -1,9 +1,9 @@
 /**
- * Bitaxe Miner local API client
+ * AxeOS Miner local API client
  * Base URL: http://{miner_ip}
  */
 
-import type { ApiResult, AsicConfig, BitaxeSystemInfo, MinerSettings } from '@/types';
+import type { ApiResult, AsicConfig, AxeOSSystemInfo, MinerSettings } from '@/types';
 import { fetchWithTimeout, postJson, postText, patchJson, MINER_TIMEOUT } from './client';
 
 /**
@@ -19,8 +19,8 @@ function minerUrl(ip: string): string {
  */
 export async function getSystemInfo(
   ip: string
-): Promise<ApiResult<BitaxeSystemInfo>> {
-  return fetchWithTimeout<BitaxeSystemInfo>(
+): Promise<ApiResult<AxeOSSystemInfo>> {
+  return fetchWithTimeout<AxeOSSystemInfo>(
     `${minerUrl(ip)}/api/system/info`,
     { timeout: MINER_TIMEOUT, retries: 0 }
   );
@@ -48,7 +48,7 @@ export async function updateSettings(
   ip: string,
   settings: MinerSettings
 ): Promise<ApiResult<void>> {
-  // Map our settings interface to Bitaxe API format
+  // Map our settings interface to AxeOS API format
   const payload: Record<string, unknown> = {};
 
   if (settings.frequency !== undefined) {

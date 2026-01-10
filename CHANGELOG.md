@@ -2,10 +2,16 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.2.5] - 2026-01-10
+
+### Changed
+- **Broader Device Support** - Renamed internal "Bitaxe" references to "AxeOS" to support all AxeOS-compatible miners (Bitaxe, NerdQAxe, etc.)
+- Updated user-facing strings to use generic "miner" terminology
+
 ## [0.2.4] - 2026-01-10
 
 ### Added
-- **Worker Notes** - Add custom labels to your workers (e.g., "Kitchen Bitaxe", "Garage Rig") for easy identification
+- **Worker Notes** - Add custom labels to your workers (e.g., "Kitchen miner", "Garage Rig") for easy identification
 - Bottom sheet editor for adding/editing worker notes
 - Notes persist across app restarts
 

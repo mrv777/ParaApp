@@ -79,7 +79,7 @@ export async function fetchWithTimeout<T>(
         continue;
       }
 
-      // Note: Bitaxe API returns Content-Type: text/html but body is valid JSON
+      // Note: AxeOS API returns Content-Type: text/html but body is valid JSON
       // So we skip content-type validation and let JSON.parse handle it
       const data = (await response.json()) as T;
       return { success: true, data };

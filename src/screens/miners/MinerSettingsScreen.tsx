@@ -22,12 +22,14 @@ import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { useMinerStore, selectMiners } from '@/store/minerStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { getAsicSettings, updateSettings, PARASITE_STRATUM_PRESET } from '@/api/bitaxe';
+import { axeOS } from '@/api';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
 import type { AsicConfig, MinerSettings } from '@/types/miner';
+
+const { getAsicSettings, updateSettings, PARASITE_STRATUM_PRESET } = axeOS;
 
 type Props = MinersStackScreenProps<'MinerSettings'>;
 

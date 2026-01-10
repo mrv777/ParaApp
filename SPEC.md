@@ -1,6 +1,6 @@
 # ParaApp — SPEC.md
 
-A React Native/Expo mobile app for monitoring Bitcoin mining on [Parasite Pool](https://parasite.space/) and managing local Bitaxe miners. Styled as a native mobile extension of the Parasite Pool website aesthetic.
+A React Native/Expo mobile app for monitoring Bitcoin mining on [Parasite Pool](https://parasite.space/) and managing local miners. Styled as a native mobile extension of the Parasite Pool website aesthetic.
 
 ---
 
@@ -9,7 +9,7 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on [Parasite Pool](
 The app provides two core functions:
 
 1. **Pool Monitoring** — View personal and pool-wide stats from Parasite's public API
-2. **Local Miner Management** — Discover and control Bitaxe devices on the same network
+2. **Local Miner Management** — Discover and control AxeOS devices on the same network
 
 ---
 
@@ -20,7 +20,7 @@ The app provides two core functions:
 - **Language:** TypeScript
 - **APIs:**
   - Parasite Pool — public REST API (no auth)
-  - Bitaxe Miners — local HTTP API (same network only)
+  - AxeOS Miners — local HTTP API (same network only)
   - mempool.space — Bitcoin price and network data
 
 ### Recommended Packages
@@ -93,12 +93,12 @@ The app provides two core functions:
 - **Chart Type:** Line chart with touch interaction (tooltip shows point values)
 - **Orientation:** Portrait normally, landscape supported for full-screen chart view
 
-### 2. Local Miner Management (Bitaxe)
+### 2. Local Miner Management (AxeOS)
 
 > **Network Requirement:** Miner controls only available when app and miner are on the same network. Clear "offline/unreachable" indicators when miners can't be reached.
 
 #### Discovery & Setup
-- **Auto-discovery:** Scan local subnet to find Bitaxe devices
+- **Auto-discovery:** Scan local subnet to find AxeOS devices
   - Device IP-based subnet detection (primary)
   - Option to manually specify IP range
   - Background scan with progress indicator
@@ -138,7 +138,7 @@ Bottom tab bar with 4 tabs:
 |-----|------|---------|
 | **Home** | house (custom) | Personal stats + miner fleet overview |
 | **Pool** | chart (custom) | Pool-wide stats, charts, leaderboards |
-| **Miners** | chip (custom) | Local Bitaxe device list |
+| **Miners** | chip (custom) | Local miner device list |
 | **Settings** | gear (custom) | Bitcoin address, preferences, about |
 
 ### Screen Details
@@ -173,7 +173,7 @@ Bottom tab bar with 4 tabs:
 - Tap to expand inline with additional details
 
 #### Miners
-- List of saved Bitaxe devices
+- List of saved miner devices
 - **Ordering:** Most recently added/accessed first
 - **Features:** Sort by hashrate/temp/status/name + filter by online/offline/warning
 - Each item shows: hostname (or alias), hashrate, temp, status indicator
@@ -355,7 +355,7 @@ interface UserWorker {
 }
 ```
 
-### Local Miner (Bitaxe)
+### Local Miner (AxeOS)
 ```ts
 interface LocalMiner {
   ip: string;
@@ -427,7 +427,7 @@ Base URL: `http://{miner_ip}`
 - Wallet/payout tracking
 - Multiple pool support
 - Miner swarm/group management
-- Other miner types (non-Bitaxe)
+- Other miner types (non-AxeOS)
 - Usage analytics
 
 ---
@@ -436,4 +436,4 @@ Base URL: `http://{miner_ip}`
 
 - [Parasite Pool](https://parasite.space/)
 - [Parastats](https://github.com/parasitepool/parastats) — Parasite web app and API
-- [ESP-Miner / AxeOS](https://github.com/bitaxeorg/ESP-Miner) — Bitaxe firmware and local API
+- [ESP-Miner / AxeOS](https://github.com/bitaxeorg/ESP-Miner) — AxeOS firmware and local API

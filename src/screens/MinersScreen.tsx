@@ -1,5 +1,5 @@
 /**
- * MinersScreen - Local Bitaxe miner management
+ * MinersScreen - Local miner management
  * Includes discovery, list of miners, and miner controls
  */
 
