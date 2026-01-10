@@ -2,11 +2,11 @@
  * UserFullScreenChart component - Modal overlay for landscape user hashrate chart view
  */
 
-import { useEffect, useCallback } from 'react';
-import { View, Modal, Pressable, StatusBar, Dimensions } from 'react-native';
+import { useEffect, useCallback, useState } from 'react';
+import { View, Modal, Pressable, StatusBar, Dimensions, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { UserHashrateChart } from './UserHashrateChart';
 import { TimePresetButtons } from './TimePresetButtons';
@@ -35,26 +35,30 @@ export function UserFullScreenChart({
   onPeriodChange,
   isLoading = false,
 }: UserFullScreenChartProps) {
-  // Lock to landscape when modal opens
-  useEffect(() => {
-    if (visible) {
-      ScreenOrientation.lockAsync(
-        ScreenOrientation.OrientationLock.LANDSCAPE
-      ).catch(() => {
-        // Orientation lock may not be supported on all devices
-      });
-    } else {
-      ScreenOrientation.unlockAsync().catch(() => {
-        // Ignore unlock errors
-      });
-    }
+  // Track dimensions for responsive chart sizing
+  const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
 
-    return () => {
-      ScreenOrientation.unlockAsync().catch(() => {
-        // Cleanup
-      });
-    };
+  // Handle orientation (Android only - iOS orientation lock causes crashes)
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      if (visible) {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+      } else {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      }
+      return () => {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+      };
+    }
   }, [visible]);
+
+  // Listen for dimension changes (when user rotates device)
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions(window);
+    });
+    return () => subscription.remove();
+  }, []);
 
   const handleClose = useCallback(() => {
     haptics.light();
@@ -69,25 +73,19 @@ export function UserFullScreenChart({
     [onPeriodChange]
   );
 
-  const { width, height } = Dimensions.get('window');
-  const chartHeight = Math.max(width, height) * 0.6;
+  const chartHeight = dimensions.height > 0 ? dimensions.height * 0.6 : 200;
 
   return (
     <Modal
       visible={visible}
       animationType="fade"
-      transparent
       onRequestClose={handleClose}
       statusBarTranslucent
     >
       <StatusBar hidden={visible} />
-      <Animated.View
-        entering={FadeIn.duration(200)}
-        exiting={FadeOut.duration(200)}
-        className="flex-1 bg-background"
-      >
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000000' }}>
         {/* Header */}
-        <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+        <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
           <View className="flex-1">
             <Text variant="caption" color="muted">
               Your Hashrate
@@ -124,7 +122,7 @@ export function UserFullScreenChart({
             disabled={isLoading}
           />
         </View>
-      </Animated.View>
+      </SafeAreaView>
     </Modal>
   );
 }
