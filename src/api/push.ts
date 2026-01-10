@@ -19,15 +19,11 @@ interface RegisterRequest {
 
 interface RegisterResponse {
   success: boolean;
-}
-
-interface PreferencesResponse {
-  success: boolean;
-  preferences: {
+  preferences?: {
     blocks: boolean;
     workers: boolean;
     bestDiff: boolean;
-  };
+  } | null;
 }
 
 /**
@@ -62,23 +58,14 @@ export async function unregisterDevice(
  * Update notification preferences for an address
  */
 export async function updatePreferences(
+  pushToken: string,
   btcAddress: string,
   preferences: NotificationPrefs
 ): Promise<ApiResult<{ success: boolean }>> {
   return fetchWithTimeout<{ success: boolean }>(`${BASE_URL}/preferences`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ btcAddress, ...preferences }),
+    body: JSON.stringify({ pushToken, btcAddress, ...preferences }),
   });
 }
 
-/**
- * Get notification preferences for an address
- */
-export async function getPreferences(
-  btcAddress: string
-): Promise<ApiResult<PreferencesResponse>> {
-  return fetchWithTimeout<PreferencesResponse>(
-    `${BASE_URL}/preferences/${encodeURIComponent(btcAddress)}`
-  );
-}

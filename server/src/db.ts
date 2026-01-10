@@ -60,6 +60,23 @@ export async function deleteSubscription(
   return result.meta.changes > 0;
 }
 
+/**
+ * Verify that a push token is registered to a specific address
+ */
+export async function verifyTokenOwnership(
+  db: D1Database,
+  pushToken: string,
+  btcAddress: string
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      'SELECT 1 FROM push_subscriptions WHERE push_token = ? AND btc_address = ? AND active = 1'
+    )
+    .bind(pushToken, btcAddress)
+    .first();
+  return result !== null;
+}
+
 export async function upsertPreferences(
   db: D1Database,
   btcAddress: string,

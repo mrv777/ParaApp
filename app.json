@@ -2,7 +2,7 @@
   "expo": {
     "name": "ParaApp",
     "slug": "paraapp",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "scheme": "paraapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.parasite.paraapp"
+      "bundleIdentifier": "app.parasite.paraapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

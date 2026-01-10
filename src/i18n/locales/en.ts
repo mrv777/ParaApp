@@ -244,7 +244,7 @@ const en = {
     loadingCamera: 'Loading camera...',
     cameraRequired: 'Camera Access Required',
     cameraRequiredDesc: 'Allow camera access to scan Bitcoin address QR codes',
-    allowCamera: 'Allow Camera Access',
+    allowCamera: 'Continue',
     cameraDenied: 'Camera permission was denied. Please enable it in Settings.',
     openSettings: 'Open Settings',
     notValidAddress: 'Not a valid Bitcoin address',

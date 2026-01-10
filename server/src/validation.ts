@@ -17,6 +17,7 @@ export const unregisterSchema = z.object({
 });
 
 export const preferencesSchema = z.object({
+  pushToken: z.string().min(1).startsWith('ExponentPushToken['),
   btcAddress: z.string().min(26).max(62),
   blocks: z.boolean().optional(),
   workers: z.boolean().optional(),

@@ -21,7 +21,7 @@ import {
   getExpoPushToken,
   canReceivePushNotifications,
 } from '@/utils/notifications';
-import { registerDevice, unregisterDevice, updatePreferences, getPreferences } from '@/api/push';
+import { registerDevice, unregisterDevice, updatePreferences } from '@/api/push';
 
 // Configure foreground notification behavior
 Notifications.setNotificationHandler({
@@ -83,24 +83,20 @@ export function useNotifications() {
         setPushToken(token);
       }
 
-      // Fetch existing preferences from backend (for cross-device sync)
-      // This ensures preferences are consistent across devices with same BTC address
-      const prefsResult = await getPreferences(bitcoinAddress);
-      let prefsToUse = notificationPrefs;
-      if (prefsResult.success && prefsResult.data?.preferences) {
-        // Backend has preferences - sync them to local store
+      // Register with backend - returns existing preferences for cross-device sync
+      const result = await registerDevice(token, bitcoinAddress, notificationPrefs);
+
+      // Sync preferences from backend if they exist (cross-device sync)
+      if (result.success && result.data?.preferences) {
         const fetchedPrefs = {
-          blocks: prefsResult.data.preferences.blocks,
-          workers: prefsResult.data.preferences.workers,
-          bestDiff: prefsResult.data.preferences.bestDiff,
+          blocks: result.data.preferences.blocks,
+          workers: result.data.preferences.workers,
+          bestDiff: result.data.preferences.bestDiff,
         };
         setNotificationPrefs(fetchedPrefs);
         justFetchedPrefs.current = true;
-        prefsToUse = fetchedPrefs;
       }
 
-      // Register with backend (uses synced preferences if available)
-      const result = await registerDevice(token, bitcoinAddress, prefsToUse);
       if (!result.success) {
         console.warn('[Notifications] Failed to register:', result.error);
 
@@ -119,10 +115,19 @@ export function useNotifications() {
             setPushToken(freshToken);
 
             // Retry registration with fresh token
-            const retryResult = await registerDevice(freshToken, bitcoinAddress, prefsToUse);
+            const retryResult = await registerDevice(freshToken, bitcoinAddress, notificationPrefs);
             if (retryResult.success) {
               console.log('[Notifications] Registration succeeded with fresh token');
               tokenRefreshAttempted.current = false; // Reset for next time
+              // Sync preferences from backend if they exist
+              if (retryResult.data?.preferences) {
+                setNotificationPrefs({
+                  blocks: retryResult.data.preferences.blocks,
+                  workers: retryResult.data.preferences.workers,
+                  bestDiff: retryResult.data.preferences.bestDiff,
+                });
+                justFetchedPrefs.current = true;
+              }
             } else {
               console.warn('[Notifications] Registration failed even with fresh token');
             }
@@ -203,7 +208,7 @@ export function useNotifications() {
 
     // Debounce preference syncs to avoid rapid API calls
     prefsSyncTimeoutRef.current = setTimeout(() => {
-      updatePreferences(bitcoinAddress, notificationPrefs).catch((error) => {
+      updatePreferences(pushToken, bitcoinAddress, notificationPrefs).catch((error) => {
         console.warn('Failed to sync notification preferences:', error);
       });
     }, 500);
@@ -218,14 +223,14 @@ export function useNotifications() {
   // Sync preferences immediately when app goes to background
   // Ensures preferences are saved even if debounce timeout hasn't fired yet
   useEffect(() => {
-    if (!isHydrated || !notificationsEnabled || !bitcoinAddress) return;
+    if (!isHydrated || !notificationsEnabled || !bitcoinAddress || !pushToken) return;
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'background' && prefsSyncTimeoutRef.current) {
         // Clear pending debounced sync and sync immediately
         clearTimeout(prefsSyncTimeoutRef.current);
         prefsSyncTimeoutRef.current = null;
-        updatePreferences(bitcoinAddress, notificationPrefs).catch((error) => {
+        updatePreferences(pushToken, bitcoinAddress, notificationPrefs).catch((error) => {
           console.warn('Failed to sync preferences on background:', error);
         });
       }
@@ -233,7 +238,7 @@ export function useNotifications() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [isHydrated, notificationsEnabled, bitcoinAddress, notificationPrefs]);
+  }, [isHydrated, notificationsEnabled, bitcoinAddress, pushToken, notificationPrefs]);
 
   // Handle foreground notifications
   useEffect(() => {

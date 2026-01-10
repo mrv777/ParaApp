@@ -11,6 +11,7 @@ import {
   deleteSubscription,
   upsertPreferences,
   getPreferences,
+  verifyTokenOwnership,
   MaxDevicesExceededError,
 } from './db';
 import { runCronJob } from './cron';
@@ -50,7 +51,18 @@ app.post('/register', async (c) => {
       await upsertPreferences(c.env.DB, btcAddress, preferences);
     }
 
-    return c.json({ success: true });
+    // Return current preferences for cross-device sync
+    const prefs = await getPreferences(c.env.DB, btcAddress);
+    return c.json({
+      success: true,
+      preferences: prefs
+        ? {
+            blocks: prefs.notify_blocks === 1,
+            workers: prefs.notify_workers === 1,
+            bestDiff: prefs.notify_best_diff === 1,
+          }
+        : null,
+    });
   } catch (error) {
     if (error instanceof MaxDevicesExceededError) {
       return c.json({ success: false, error: 'Maximum of 10 devices per address' }, 400);
@@ -89,44 +101,19 @@ app.patch('/preferences', async (c) => {
       return c.json({ success: false, error: result.error.flatten() }, 400);
     }
 
-    const { btcAddress, ...prefs } = result.data;
+    const { pushToken, btcAddress, ...prefs } = result.data;
+
+    // Verify ownership: pushToken must be registered to this address
+    const isOwner = await verifyTokenOwnership(c.env.DB, pushToken, btcAddress);
+    if (!isOwner) {
+      return c.json({ success: false, error: 'Unauthorized' }, 403);
+    }
+
     await upsertPreferences(c.env.DB, btcAddress, prefs);
 
     return c.json({ success: true });
   } catch (error) {
     console.error('Preferences error:', error);
-    return c.json({ success: false, error: 'Internal server error' }, 500);
-  }
-});
-
-// Get notification preferences
-app.get('/preferences/:address', async (c) => {
-  try {
-    const address = c.req.param('address');
-    const prefs = await getPreferences(c.env.DB, address);
-
-    if (!prefs) {
-      // Return defaults if no preferences set
-      return c.json({
-        success: true,
-        preferences: {
-          blocks: true,
-          workers: true,
-          bestDiff: true,
-        },
-      });
-    }
-
-    return c.json({
-      success: true,
-      preferences: {
-        blocks: prefs.notify_blocks === 1,
-        workers: prefs.notify_workers === 1,
-        bestDiff: prefs.notify_best_diff === 1,
-      },
-    });
-  } catch (error) {
-    console.error('Get preferences error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
 });
