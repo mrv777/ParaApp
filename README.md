@@ -47,18 +47,54 @@ pnpx expo-doctor        # Diagnose project issues (package versions, config, etc
 pnpm expo install --fix # Fix package versions to match Expo SDK
 ```
 
-## Building APK
+## Building & Releasing
 
-Build a local Android APK for testing:
+### Prerequisites
+- EAS CLI (`pnpm add -g eas-cli`)
+- Logged into EAS (`eas login`)
+- For local builds: Android Studio with SDK and `ANDROID_HOME` set
+
+### Local APK (Testing)
 
 ```bash
 eas build --profile preview --platform android --local
 ```
 
-Requirements:
-- Android Studio with SDK installed
-- `ANDROID_HOME` environment variable set
-- EAS CLI (`pnpm add -g eas-cli`)
+### Production Builds
+
+```bash
+# Android (Play Store)
+eas build --platform android --profile production
+
+# iOS (App Store)
+eas build --platform ios --profile production
+```
+
+### Store Submission
+
+```bash
+# Submit to Google Play (internal track)
+eas submit --platform android --profile production
+
+# Submit to App Store Connect
+eas submit --platform ios --profile production
+```
+
+### Build + Submit (Combined)
+
+```bash
+# Android: build and submit to Play Store
+eas build --platform android --profile production --auto-submit
+
+# iOS: build and submit to App Store Connect
+eas build --platform ios --profile production --auto-submit
+```
+
+### After iOS Submission
+1. Go to [App Store Connect](https://appstoreconnect.apple.com)
+2. Wait for build processing (~5-30 min)
+3. TestFlight: Add testers or submit for review
+4. App Store: Submit for review (~24-48 hours)
 
 ### Expo Doctor
 
@@ -98,5 +134,6 @@ src/
 
 ## Documentation
 
+- [CHANGELOG.md](./CHANGELOG.md) - Release notes and version history
 - [SPEC.md](./SPEC.md) - Full product specification
 - [IMPLEMENTATION.md](./IMPLEMENTATION.md) - Phased development guide
