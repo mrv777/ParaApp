@@ -9,10 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Text } from '@/components/Text';
 import { WorkerRow } from '@/components/home/WorkerRow';
+import { WorkerNoteSheet } from '@/components/home/WorkerNoteSheet';
 import { useUserStore, selectUserWorkers, selectIsUserLoading } from '@/store/userStore';
 import {
   useSettingsStore,
   selectWorkerSortOrder,
+  selectWorkerNotes,
   type WorkerSortOrder,
 } from '@/store/settingsStore';
 import { haptics } from '@/utils/haptics';
@@ -37,6 +39,7 @@ type Props = HomeStackScreenProps<'WorkersList'>;
 export function WorkersListScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedWorker, setSelectedWorker] = useState<UserWorker | null>(null);
 
   // Stores
   const workers = useUserStore(selectUserWorkers);
@@ -44,6 +47,8 @@ export function WorkersListScreen({ navigation }: Props) {
   const refreshAll = useUserStore((s) => s.refreshAll);
   const sortOrder = useSettingsStore(selectWorkerSortOrder);
   const setWorkerSortOrder = useSettingsStore((s) => s.setWorkerSortOrder);
+  const workerNotes = useSettingsStore(selectWorkerNotes);
+  const setWorkerNote = useSettingsStore((s) => s.setWorkerNote);
 
   // Sort workers (memoized for referential equality)
   const sortedWorkers = useMemo(
@@ -74,8 +79,17 @@ export function WorkersListScreen({ navigation }: Props) {
 
   // Render worker item
   const renderItem = useCallback(
-    ({ item }: { item: UserWorker }) => <WorkerRow worker={item} />,
-    []
+    ({ item }: { item: UserWorker }) => (
+      <WorkerRow
+        worker={item}
+        note={workerNotes[item.name]}
+        onPress={() => {
+          haptics.light();
+          setSelectedWorker(item);
+        }}
+      />
+    ),
+    [workerNotes]
   );
 
   // Key extractor
@@ -143,6 +157,20 @@ export function WorkersListScreen({ navigation }: Props) {
             colors={[colors.text]}
           />
         }
+      />
+
+      {/* Note editing sheet */}
+      <WorkerNoteSheet
+        visible={selectedWorker !== null}
+        workerName={selectedWorker?.name ?? ''}
+        currentNote={selectedWorker ? (workerNotes[selectedWorker.name] ?? '') : ''}
+        onSave={(note) => {
+          if (selectedWorker) {
+            setWorkerNote(selectedWorker.name, note);
+          }
+          setSelectedWorker(null);
+        }}
+        onClose={() => setSelectedWorker(null)}
       />
     </SafeAreaView>
   );

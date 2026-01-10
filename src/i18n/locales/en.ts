@@ -71,6 +71,8 @@ const en = {
     bestDiffLabel: 'Best Diff',
     poolHashrate: 'Pool Hashrate',
     users: 'Users',
+    editWorkerNote: 'Edit Note',
+    noteHint: 'e.g., Kitchen Bitaxe',
   },
 
   pool: {

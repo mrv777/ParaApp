@@ -72,6 +72,8 @@ const de = {
     bestDiffLabel: 'Beste Diff.',
     poolHashrate: 'Pool-Hashrate',
     users: 'Benutzer',
+    editWorkerNote: 'Notiz bearbeiten',
+    noteHint: 'z.B., Küchen-Bitaxe',
   },
 
   pool: {

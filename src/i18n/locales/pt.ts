@@ -72,6 +72,8 @@ const pt = {
     bestDiffLabel: 'Melhor dif.',
     poolHashrate: 'Hashrate do pool',
     users: 'Usuários',
+    editWorkerNote: 'Editar Nota',
+    noteHint: 'ex., Bitaxe da cozinha',
   },
 
   pool: {

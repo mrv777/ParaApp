@@ -37,7 +37,7 @@ import {
   selectUserError,
 } from '@/store/userStore';
 import { haptics } from '@/utils/haptics';
-import { useSettingsStore, selectHasAddress, selectWorkerSortOrder } from '@/store/settingsStore';
+import { useSettingsStore, selectHasAddress, selectWorkerSortOrder, selectWorkerNotes } from '@/store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useMinerStore, selectFleetStats } from '@/store/minerStore';
 import { sortWorkers } from '@/utils/sorting';
@@ -60,6 +60,7 @@ export function HomeMainScreen({ navigation }: Props) {
   // Settings store
   const hasAddress = useSettingsStore(selectHasAddress);
   const workerSortOrder = useSettingsStore(selectWorkerSortOrder);
+  const workerNotes = useSettingsStore(selectWorkerNotes);
 
   // Miner store - fleet stats for overview card (useShallow prevents infinite loop)
   const fleetStats = useMinerStore(useShallow(selectFleetStats));
@@ -238,6 +239,7 @@ export function HomeMainScreen({ navigation }: Props) {
 
             <WorkersPreviewCard
               workers={sortedWorkers}
+              workerNotes={workerNotes}
               onViewAll={handleViewAllWorkers}
               isLoading={isUserLoading}
             />

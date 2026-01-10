@@ -41,6 +41,9 @@ interface SettingsState {
   // Dismissed tips (persisted)
   dismissedTips: string[];
 
+  // Worker notes (persisted) - keyed by worker name
+  workerNotes: Record<string, string>;
+
   // Cache timestamps
   lastPoolFetch: number | null;
   lastUserFetch: number | null;
@@ -62,6 +65,7 @@ interface SettingsActions {
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
   setPushToken: (token: string | null) => void;
   dismissTip: (tipId: string) => void;
+  setWorkerNote: (workerName: string, note: string | null) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
   setHydrated: (hydrated: boolean) => void;
 }
@@ -79,6 +83,7 @@ const initialState: SettingsState = {
   notificationPrefs: { blocks: true, workers: true, bestDiff: true },
   pushToken: null,
   dismissedTips: [],
+  workerNotes: {},
   lastPoolFetch: null,
   lastUserFetch: null,
   isHydrated: false,
@@ -122,6 +127,18 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
             : [...state.dismissedTips, tipId],
         })),
 
+      setWorkerNote: (workerName, note) =>
+        set((state) => {
+          if (!note || note.trim() === '') {
+            // Remove note if empty or null
+            const { [workerName]: _, ...rest } = state.workerNotes;
+            return { workerNotes: rest };
+          }
+          return {
+            workerNotes: { ...state.workerNotes, [workerName]: note.trim() },
+          };
+        }),
+
       updateCacheTimestamp: (type) => {
         const timestamp = Date.now();
         if (type === 'pool') {
@@ -149,6 +166,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         notificationPrefs: state.notificationPrefs,
         pushToken: state.pushToken,
         dismissedTips: state.dismissedTips,
+        workerNotes: state.workerNotes,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
@@ -175,3 +193,4 @@ export const selectNotificationsEnabled = (state: SettingsState) =>
 export const selectNotificationPrefs = (state: SettingsState) =>
   state.notificationPrefs;
 export const selectPushToken = (state: SettingsState) => state.pushToken;
+export const selectWorkerNotes = (state: SettingsState) => state.workerNotes;

@@ -15,8 +15,11 @@ import { useTranslation } from '@/i18n';
 import { formatHashrate } from '@/utils/formatting';
 import type { UserWorker } from '@/types';
 
+const EMPTY_NOTES: Record<string, string> = {};
+
 export interface WorkersPreviewCardProps {
   workers?: UserWorker[];
+  workerNotes?: Record<string, string>;
   maxItems?: number;
   onViewAll: () => void;
   isLoading?: boolean;
@@ -25,6 +28,7 @@ export interface WorkersPreviewCardProps {
 
 export function WorkersPreviewCard({
   workers = [],
+  workerNotes = EMPTY_NOTES,
   maxItems = 5,
   onViewAll,
   isLoading = false,
@@ -77,7 +81,7 @@ export function WorkersPreviewCard({
           </View>
         ) : (
           displayWorkers.map((worker) => (
-            <WorkerRow key={worker.name} worker={worker} />
+            <WorkerRow key={worker.name} worker={worker} note={workerNotes[worker.name]} />
           ))
         )}
       </View>

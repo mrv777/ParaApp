@@ -17,6 +17,9 @@ export type { ShareableStatsCardProps } from './ShareableStatsCard';
 export { UserStatsCard } from './UserStatsCard';
 export type { UserStatsCardProps } from './UserStatsCard';
 
+export { WorkerNoteSheet } from './WorkerNoteSheet';
+export type { WorkerNoteSheetProps } from './WorkerNoteSheet';
+
 export { WorkerRow } from './WorkerRow';
 export type { WorkerRowProps } from './WorkerRow';
 
