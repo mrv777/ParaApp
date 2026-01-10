@@ -16,6 +16,10 @@ export {
   type FullScreenChartProps,
 } from './FullScreenChart';
 export {
+  FullScreenChartModal,
+  type FullScreenChartModalProps,
+} from './FullScreenChartModal';
+export {
   UserHashrateChart,
   type UserHashrateChartProps,
 } from './UserHashrateChart';
