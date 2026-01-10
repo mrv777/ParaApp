@@ -2,6 +2,13 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.2.4] - 2026-01-10
+
+### Added
+- **Worker Notes** - Add custom labels to your workers (e.g., "Kitchen Bitaxe", "Garage Rig") for easy identification
+- Bottom sheet editor for adding/editing worker notes
+- Notes persist across app restarts
+
 ## [0.2.3] - 2026-01-10
 
 ### Fixed
