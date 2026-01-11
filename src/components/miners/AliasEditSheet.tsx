@@ -99,11 +99,7 @@ export function AliasEditSheet({
           <Text variant="subtitle" className="font-semibold">
             {t('miners.editAlias')}
           </Text>
-          <Pressable
-            onPress={handleDismiss}
-            className="p-2 -mr-2"
-            hitSlop={8}
-          >
+          <Pressable onPress={handleDismiss} className="p-2 -mr-2" hitSlop={8}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
         </View>
@@ -135,11 +131,7 @@ export function AliasEditSheet({
             />
             {alias.length > 0 && (
               <Pressable onPress={handleClear} className="p-3" hitSlop={8}>
-                <Ionicons
-                  name="close-circle"
-                  size={20}
-                  color={colors.textMuted}
-                />
+                <Ionicons name="close-circle" size={20} color={colors.textMuted} />
               </Pressable>
             )}
           </View>
@@ -164,7 +156,7 @@ export function AliasEditSheet({
             className="flex-1 py-3 rounded-lg bg-foreground items-center"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <Text variant="body" className="font-medium text-black">
+            <Text variant="body" className="font-medium text-gray-950">
               {t('common.save')}
             </Text>
           </Pressable>

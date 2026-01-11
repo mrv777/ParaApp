@@ -158,7 +158,7 @@ export function WorkerNoteSheet({
             className="flex-1 py-3 rounded-lg bg-foreground items-center"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <Text variant="body" className="font-medium text-[#000]">
+            <Text variant="body" className="font-medium" style={{ color: '#000000' }}>
               {t('common.save')}
             </Text>
           </Pressable>
