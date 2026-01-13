@@ -17,11 +17,13 @@ interface InfoRowProps {
   value: string;
   /** Allow value to wrap to multiple lines */
   multiline?: boolean;
+  /** Hide bottom border (for last item) */
+  isLast?: boolean;
 }
 
-function InfoRow({ label, value, multiline = false }: InfoRowProps) {
+function InfoRow({ label, value, multiline = false, isLast = false }: InfoRowProps) {
   return (
-    <View className="flex-row justify-between py-2.5 border-b border-border gap-4">
+    <View className={`flex-row justify-between py-2.5 gap-4 ${isLast ? '' : 'border-b border-border'}`}>
       <Text variant="body" color="muted" className="flex-shrink-0">
         {label}
       </Text>
@@ -55,15 +57,7 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
         <InfoRow label={t('miners.hostname')} value={miner.hostname} />
         <InfoRow label={t('miners.pool')} value={poolUrl} />
         <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
-        {/* WiFi row - no bottom border (last item) */}
-        <View className="flex-row justify-between py-2.5 gap-4">
-          <Text variant="body" color="muted" className="flex-shrink-0">
-            {t('miners.wifi')}
-          </Text>
-          <Text variant="body" className="font-medium flex-shrink text-right" numberOfLines={1}>
-            {miner.wifiSSID || '--'}
-          </Text>
-        </View>
+        <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} isLast />
       </View>
     </View>
   );

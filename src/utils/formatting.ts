@@ -7,6 +7,17 @@ export type TemperatureUnit = 'celsius' | 'fahrenheit';
 const HASHRATE_UNITS = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
 
 /**
+ * Format a value to 3 significant digits
+ * @param value - Number to format
+ * @returns Formatted string with appropriate decimal places
+ */
+function formatSignificantDigits(value: number): string {
+  if (value >= 100) return Math.round(value).toString();
+  if (value >= 10) return value.toFixed(1);
+  return value.toFixed(2);
+}
+
+/**
  * Format hashrate with auto-scaling and 3 significant digits
  * @param hashrate - Hashrate in H/s
  * @returns Formatted string like "1.23 TH/s" or "456 GH/s"
@@ -23,15 +34,7 @@ export function formatHashrate(hashrate: number): string {
     unitIndex++;
   }
 
-  // Format to 3 significant digits
-  const formatted =
-    value >= 100
-      ? Math.round(value).toString()
-      : value >= 10
-        ? value.toFixed(1)
-        : value.toFixed(2);
-
-  return `${formatted} ${HASHRATE_UNITS[unitIndex]}`;
+  return `${formatSignificantDigits(value)} ${HASHRATE_UNITS[unitIndex]}`;
 }
 
 /**
@@ -182,15 +185,7 @@ export function formatDifficulty(diff: number): string {
     unitIndex++;
   }
 
-  // Format to 3 significant digits
-  const formatted =
-    value >= 100
-      ? Math.round(value).toString()
-      : value >= 10
-        ? value.toFixed(1)
-        : value.toFixed(2);
-
-  return `${formatted}${units[unitIndex]}`;
+  return `${formatSignificantDigits(value)}${units[unitIndex]}`;
 }
 
 /**
