@@ -6,6 +6,15 @@ import type { UserWorker } from '@/types';
 import type { WorkerSortOrder } from '@/store/settingsStore';
 
 /**
+ * Sort order configuration - labels and icons for each sort option
+ */
+const SORT_ORDER_CONFIG: Record<WorkerSortOrder, { label: string; icon: string }> = {
+  hashrate: { label: 'Hashrate', icon: 'speedometer-outline' },
+  name: { label: 'Name', icon: 'text-outline' },
+  bestDiff: { label: 'Best Diff', icon: 'trophy-outline' },
+};
+
+/**
  * Sort workers by the specified order
  */
 export function sortWorkers(
@@ -38,26 +47,12 @@ export function sortWorkers(
  * Get display label for sort order
  */
 export function getSortOrderLabel(sortOrder: WorkerSortOrder): string {
-  switch (sortOrder) {
-    case 'hashrate':
-      return 'Hashrate';
-    case 'name':
-      return 'Name';
-    case 'bestDiff':
-      return 'Best Diff';
-  }
+  return SORT_ORDER_CONFIG[sortOrder].label;
 }
 
 /**
  * Get icon name for sort order
  */
 export function getSortOrderIcon(sortOrder: WorkerSortOrder): string {
-  switch (sortOrder) {
-    case 'hashrate':
-      return 'speedometer-outline';
-    case 'name':
-      return 'text-outline';
-    case 'bestDiff':
-      return 'trophy-outline';
-  }
+  return SORT_ORDER_CONFIG[sortOrder].icon;
 }

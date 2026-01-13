@@ -11,7 +11,7 @@ import {
   Linking,
   AppState,
 } from 'react-native';
-import { LanguageSelectorSheet } from '@/components/settings';
+import { LanguageSelectorSheet, OptionToggleGroup } from '@/components/settings';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -167,29 +167,6 @@ export function SettingsMainScreen({ navigation }: Props) {
     navigation.navigate('QRScanner');
   }, [navigation]);
 
-  const handleTemperatureSelect = useCallback(
-    (unit: 'celsius' | 'fahrenheit') => {
-      haptics.selection();
-      setTemperatureUnit(unit);
-    },
-    [setTemperatureUnit]
-  );
-
-  const handlePollingSelect = useCallback(
-    (interval: PollingInterval) => {
-      haptics.selection();
-      setPollingInterval(interval);
-    },
-    [setPollingInterval]
-  );
-
-  const handleSortSelect = useCallback(
-    (order: WorkerSortOrder) => {
-      haptics.selection();
-      setWorkerSortOrder(order);
-    },
-    [setWorkerSortOrder]
-  );
 
   const handleOpenLanguageSheet = useCallback(() => {
     haptics.light();
@@ -328,85 +305,33 @@ export function SettingsMainScreen({ navigation }: Props) {
             </Pressable>
 
             {/* Temperature Unit */}
-            <View className="flex-row items-center justify-between mb-4">
-              <Text variant="body">{t('settings.temperature')}</Text>
-              <View className="flex-row bg-secondary rounded-lg overflow-hidden">
-                {TEMP_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => handleTemperatureSelect(opt.value)}
-                    className={`px-4 py-2 ${
-                      temperatureUnit === opt.value ? 'bg-primary' : ''
-                    }`}
-                  >
-                    <Text
-                      variant="body"
-                      className={
-                        temperatureUnit === opt.value
-                          ? 'text-background font-medium'
-                          : ''
-                      }
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+            <View className="mb-4">
+              <OptionToggleGroup
+                options={TEMP_OPTIONS}
+                selected={temperatureUnit}
+                onSelect={setTemperatureUnit}
+                label={t('settings.temperature')}
+                buttonClassName="px-4"
+              />
             </View>
 
             {/* Polling Interval */}
-            <View className="flex-row items-center justify-between mb-4">
-              <Text variant="body">{t('settings.pollingInterval')}</Text>
-              <View className="flex-row bg-secondary rounded-lg overflow-hidden">
-                {POLLING_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => handlePollingSelect(opt.value)}
-                    className={`px-3 py-2 ${
-                      pollingInterval === opt.value ? 'bg-primary' : ''
-                    }`}
-                  >
-                    <Text
-                      variant="body"
-                      className={
-                        pollingInterval === opt.value
-                          ? 'text-background font-medium'
-                          : ''
-                      }
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+            <View className="mb-4">
+              <OptionToggleGroup
+                options={POLLING_OPTIONS}
+                selected={pollingInterval}
+                onSelect={setPollingInterval}
+                label={t('settings.pollingInterval')}
+              />
             </View>
 
             {/* Worker Sort Order */}
-            <View className="flex-row items-center justify-between">
-              <Text variant="body">{t('settings.workerSort')}</Text>
-              <View className="flex-row bg-secondary rounded-lg overflow-hidden">
-                {SORT_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => handleSortSelect(opt.value)}
-                    className={`px-3 py-2 ${
-                      workerSortOrder === opt.value ? 'bg-primary' : ''
-                    }`}
-                  >
-                    <Text
-                      variant="body"
-                      className={
-                        workerSortOrder === opt.value
-                          ? 'text-background font-medium'
-                          : ''
-                      }
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+            <OptionToggleGroup
+              options={SORT_OPTIONS}
+              selected={workerSortOrder}
+              onSelect={setWorkerSortOrder}
+              label={t('settings.workerSort')}
+            />
           </View>
 
           {/* Notifications Section */}

@@ -6,6 +6,7 @@ import { useRef, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { ChartSkeleton } from './ChartSkeleton';
+import { formatXAxisLabel } from './chart-utils';
 import { initEcharts, getEcharts, getSvgChart, isEchartsReady } from './echarts-init';
 import { colors } from '@/constants/colors';
 import { formatHashrate } from '@/utils/formatting';
@@ -35,25 +36,6 @@ function getHashrateField(period: HistoricalPeriod): keyof PoolHistoricalPoint {
       return 'hashrate1d';
     default:
       return 'hashrate15m';
-  }
-}
-
-/**
- * Format X-axis label based on period
- */
-function formatXAxisLabel(timestamp: number, period: HistoricalPeriod): string {
-  const date = new Date(timestamp);
-
-  switch (period) {
-    case '1h':
-    case '24h':
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    case '7d':
-      return date.toLocaleDateString('en-US', { weekday: 'short' });
-    case '30d':
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    default:
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 }
 

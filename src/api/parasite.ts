@@ -23,6 +23,7 @@ import type {
   WorkerStatus,
 } from '@/types';
 import { WORKER_STALE_THRESHOLD_MS } from '@/constants';
+import { parseDifficulty } from '@/utils/formatting';
 import { fetchWithTimeout, patchJson } from './client';
 
 const BASE_URL = 'https://parasite.space';
@@ -30,34 +31,6 @@ const BASE_URL = 'https://parasite.space';
 // ============================================
 // Transformation Helpers
 // ============================================
-
-/**
- * Parse difficulty string like "1.12T" or "88.2G" to raw number
- */
-function parseDifficulty(diffStr: string): number {
-  if (!diffStr || diffStr === 'N/A') return 0;
-
-  const match = diffStr.match(/^([\d.]+)([KMGTP]?)$/i);
-  if (!match) {
-    // Try parsing as plain number
-    const num = parseFloat(diffStr);
-    return isNaN(num) ? 0 : num;
-  }
-
-  const value = parseFloat(match[1]);
-  const suffix = match[2].toUpperCase();
-
-  const multipliers: Record<string, number> = {
-    '': 1,
-    K: 1e3,
-    M: 1e6,
-    G: 1e9,
-    T: 1e12,
-    P: 1e15,
-  };
-
-  return value * (multipliers[suffix] || 1);
-}
 
 /**
  * Determine worker status based on hashrate and last submission time

@@ -14,6 +14,7 @@ import type {
   HistoricalInterval,
 } from '@/types';
 import { parasite, isSuccess } from '@/api';
+import { getIntervalForPeriod } from '@/utils/historical';
 import { useSettingsStore } from './settingsStore';
 
 interface UserState {
@@ -80,24 +81,6 @@ function calculateAverageHashrate(
   // Calculate average
   const sum = relevantPoints.reduce((acc, point) => acc + point.hashrate, 0);
   return sum / relevantPoints.length;
-}
-
-/**
- * Get appropriate interval for a given period
- */
-function getIntervalForPeriod(period: HistoricalPeriod): HistoricalInterval {
-  switch (period) {
-    case '1h':
-      return '5m';
-    case '24h':
-      return '15m';
-    case '7d':
-      return '1h';
-    case '30d':
-      return '4h';
-    default:
-      return '15m';
-  }
 }
 
 // Duration constants

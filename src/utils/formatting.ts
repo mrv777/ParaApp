@@ -207,6 +207,32 @@ export function truncateAddress(address: string, chars: number = 6): string {
 }
 
 /**
+ * Truncate a worker name (often bitcoin address + worker suffix)
+ * @param worker - Full worker string (e.g., "bc1q...xyz.workername")
+ * @param maxLength - Maximum length before truncating (default: 24)
+ * @returns Truncated worker name preserving the worker suffix if present
+ */
+export function truncateWorker(worker: string, maxLength = 24): string {
+  if (!worker || worker.length <= maxLength) return worker;
+
+  // If it contains a dot (address.worker format), try to preserve worker name
+  const dotIndex = worker.lastIndexOf('.');
+  if (dotIndex > 0 && dotIndex < worker.length - 1) {
+    const address = worker.substring(0, dotIndex);
+    const workerName = worker.substring(dotIndex + 1);
+    // Truncate address, keep worker name
+    const truncatedAddr =
+      address.length > 12
+        ? `${address.slice(0, 6)}...${address.slice(-4)}`
+        : address;
+    return `${truncatedAddr}.${workerName}`;
+  }
+
+  // Simple truncation with ellipsis
+  return `${worker.slice(0, 10)}...${worker.slice(-8)}`;
+}
+
+/**
  * Format power consumption
  * @param watts - Power in watts
  * @returns Formatted string like "15.2 W"

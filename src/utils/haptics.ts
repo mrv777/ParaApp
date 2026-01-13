@@ -6,81 +6,52 @@
 import * as Haptics from 'expo-haptics';
 
 /**
- * Light impact feedback - for subtle interactions
+ * Wraps a haptic function with error handling for platforms without haptic support
  */
-export const light = async (): Promise<void> => {
-  try {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  } catch {
-    // Haptics not available on this platform
-  }
+const withHapticFallback = <T extends unknown[]>(
+  fn: (...args: T) => Promise<void>
+) => {
+  return async (...args: T): Promise<void> => {
+    try {
+      await fn(...args);
+    } catch {
+      // Haptics not available on this platform
+    }
+  };
 };
 
-/**
- * Medium impact feedback - for standard interactions
- */
-export const medium = async (): Promise<void> => {
-  try {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  } catch {
-    // Haptics not available on this platform
-  }
-};
+/** Light impact feedback - for subtle interactions */
+export const light = withHapticFallback(() =>
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+);
 
-/**
- * Heavy impact feedback - for significant interactions
- */
-export const heavy = async (): Promise<void> => {
-  try {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-  } catch {
-    // Haptics not available on this platform
-  }
-};
+/** Medium impact feedback - for standard interactions */
+export const medium = withHapticFallback(() =>
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+);
 
-/**
- * Success notification feedback
- */
-export const success = async (): Promise<void> => {
-  try {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  } catch {
-    // Haptics not available on this platform
-  }
-};
+/** Heavy impact feedback - for significant interactions */
+export const heavy = withHapticFallback(() =>
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
+);
 
-/**
- * Warning notification feedback
- */
-export const warning = async (): Promise<void> => {
-  try {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-  } catch {
-    // Haptics not available on this platform
-  }
-};
+/** Success notification feedback */
+export const success = withHapticFallback(() =>
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+);
 
-/**
- * Error notification feedback
- */
-export const error = async (): Promise<void> => {
-  try {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-  } catch {
-    // Haptics not available on this platform
-  }
-};
+/** Warning notification feedback */
+export const warning = withHapticFallback(() =>
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+);
 
-/**
- * Selection feedback - for picker/selection changes
- */
-export const selection = async (): Promise<void> => {
-  try {
-    await Haptics.selectionAsync();
-  } catch {
-    // Haptics not available on this platform
-  }
-};
+/** Error notification feedback */
+export const error = withHapticFallback(() =>
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+);
+
+/** Selection feedback - for picker/selection changes */
+export const selection = withHapticFallback(() => Haptics.selectionAsync());
 
 export const haptics = {
   light,

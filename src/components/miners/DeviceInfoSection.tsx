@@ -5,6 +5,7 @@
 import { View } from 'react-native';
 import { Text } from '../Text';
 import { useTranslation } from '@/i18n';
+import { truncateWorker } from '@/utils/formatting';
 import type { LocalMiner } from '@/types';
 
 export interface DeviceInfoSectionProps {
@@ -33,28 +34,6 @@ function InfoRow({ label, value, multiline = false }: InfoRowProps) {
       </Text>
     </View>
   );
-}
-
-/**
- * Truncate a worker name (often bitcoin address + worker suffix)
- */
-function truncateWorker(worker: string, maxLength = 24): string {
-  if (!worker || worker.length <= maxLength) return worker;
-
-  // If it contains a dot (address.worker format), try to preserve worker name
-  const dotIndex = worker.lastIndexOf('.');
-  if (dotIndex > 0 && dotIndex < worker.length - 1) {
-    const address = worker.substring(0, dotIndex);
-    const workerName = worker.substring(dotIndex + 1);
-    // Truncate address, keep worker name
-    const truncatedAddr = address.length > 12
-      ? `${address.slice(0, 6)}...${address.slice(-4)}`
-      : address;
-    return `${truncatedAddr}.${workerName}`;
-  }
-
-  // Simple truncation with ellipsis
-  return `${worker.slice(0, 10)}...${worker.slice(-8)}`;
 }
 
 export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {

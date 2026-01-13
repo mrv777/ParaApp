@@ -36,6 +36,8 @@ export interface FetchOptions {
   retries?: number;
   /** Base delay in ms between retries, doubles each attempt (default: 1000) */
   retryDelayMs?: number;
+  /** Response type: 'json' (default) or 'text' */
+  responseType?: 'json' | 'text';
 }
 
 /**

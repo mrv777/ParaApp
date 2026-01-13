@@ -48,6 +48,7 @@ export async function fetchWithTimeout<T>(
     timeout = DEFAULT_TIMEOUT,
     retries = DEFAULT_RETRIES,
     retryDelayMs = DEFAULT_RETRY_DELAY,
+    responseType = 'json',
     ...fetchOptions
   } = options;
 
@@ -81,7 +82,10 @@ export async function fetchWithTimeout<T>(
 
       // Note: AxeOS API returns Content-Type: text/html but body is valid JSON
       // So we skip content-type validation and let JSON.parse handle it
-      const data = (await response.json()) as T;
+      const data =
+        responseType === 'text'
+          ? ((await response.text()) as T)
+          : ((await response.json()) as T);
       return { success: true, data };
     } catch (error) {
       clearTimeout(timeoutId);
@@ -136,71 +140,16 @@ export async function postText(
   body: unknown,
   options: FetchOptions & Omit<RequestInit, 'method' | 'body'> = {}
 ): Promise<ApiResult<string>> {
-  const {
-    timeout = DEFAULT_TIMEOUT,
-    retries = DEFAULT_RETRIES,
-    retryDelayMs = DEFAULT_RETRY_DELAY,
-    ...fetchOptions
-  } = options;
-
-  let lastError: ApiError | null = null;
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    if (attempt > 0) {
-      const delay = retryDelayMs * Math.pow(2, attempt - 1);
-      await sleep(delay);
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(url, {
-        ...fetchOptions,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...fetchOptions.headers,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        lastError = createApiError(
-          `HTTP ${response.status}: ${response.statusText}`,
-          response.status
-        );
-        continue;
-      }
-
-      const data = await response.text();
-      return { success: true, data };
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          lastError = createApiError('Request timeout', undefined, 'TIMEOUT');
-        } else {
-          lastError = createApiError(
-            error.message,
-            undefined,
-            'NETWORK_ERROR'
-          );
-        }
-      } else {
-        lastError = createApiError('Unknown error', undefined, 'UNKNOWN');
-      }
-    }
-  }
-
-  return {
-    success: false,
-    error: lastError || createApiError('Request failed'),
-  };
+  return fetchWithTimeout<string>(url, {
+    ...options,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    body: JSON.stringify(body),
+    responseType: 'text',
+  });
 }
 
 /**

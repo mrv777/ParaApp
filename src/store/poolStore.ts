@@ -16,6 +16,7 @@ import type {
   HistoricalInterval,
 } from '@/types';
 import { parasite, mempool, isSuccess } from '@/api';
+import { getIntervalForPeriod } from '@/utils/historical';
 
 interface PoolState {
   // Cached data
@@ -69,24 +70,6 @@ const initialState: PoolState = {
   isLoadingLeaderboards: false,
   error: null,
 };
-
-/**
- * Get appropriate interval for a given period
- */
-function getIntervalForPeriod(period: HistoricalPeriod): HistoricalInterval {
-  switch (period) {
-    case '1h':
-      return '5m';
-    case '24h':
-      return '15m';
-    case '7d':
-      return '1h';
-    case '30d':
-      return '4h';
-    default:
-      return '15m';
-  }
-}
 
 export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
   ...initialState,
