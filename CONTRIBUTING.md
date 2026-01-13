@@ -5,7 +5,7 @@ Thanks for your interest in contributing to ParaApp! This document provides guid
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/mrv777/parasite-app.git`
+2. Clone your fork: `git clone https://github.com/mrv777/ParaApp.git`
 3. Install dependencies: `pnpm install`
 4. Start the dev server: `pnpm start`
 
@@ -95,7 +95,7 @@ We welcome translations! Language files are in `src/i18n/locales/`.
 
 ## Questions?
 
-Open a [GitHub Issue](https://github.com/mrv777/parasite-app/issues) or start a [Discussion](https://github.com/mrv777/parasite-app/discussions).
+Open a [GitHub Issue](https://github.com/mrv777/ParaApp/issues) or start a [Discussion](https://github.com/mrv777/ParaApp/discussions).
 
 ## License
 
