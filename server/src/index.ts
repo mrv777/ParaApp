@@ -39,6 +39,42 @@ app.post('/register', async (c) => {
 
     const { pushToken, btcAddress, preferences } = result.data;
 
+    // Rate limit: Atomically check if recently registered and touch timestamp to prevent race conditions
+    // This UPDATE only succeeds if: token exists, same address, AND was updated > 60s ago
+    const touchResult = await c.env.DB.prepare(
+      `UPDATE push_subscriptions
+       SET updated_at = unixepoch()
+       WHERE push_token = ? AND btc_address = ? AND updated_at <= unixepoch() - 60`
+    )
+      .bind(pushToken, btcAddress)
+      .run();
+
+    // If no rows updated, check if it's because the token was recently registered (rate limited)
+    if (touchResult.meta.changes === 0) {
+      const existing = await c.env.DB.prepare(
+        'SELECT btc_address, updated_at FROM push_subscriptions WHERE push_token = ?'
+      )
+        .bind(pushToken)
+        .first<{ btc_address: string; updated_at: number }>();
+
+      // If token exists with same address and was recently updated, return cached prefs (rate limited)
+      if (existing && existing.btc_address === btcAddress) {
+        const prefs = await getPreferences(c.env.DB, btcAddress);
+        return c.json({
+          success: true,
+          preferences: prefs
+            ? {
+                blocks: prefs.notify_blocks === 1,
+                workers: prefs.notify_workers === 1,
+                bestDiff: prefs.notify_best_diff === 1,
+              }
+            : null,
+        });
+      }
+      // Otherwise: new token or address change - proceed with full registration
+    }
+    // If rows updated: token existed but was stale, we've touched it - proceed with full registration
+
     // Validate address exists on Parasite Pool before registering
     const userResult = await getUser(c.env.PARASITE_API_URL, btcAddress);
     if (!userResult.success || !userResult.data) {
