@@ -132,10 +132,9 @@ async function checkPoolBlock(env: Env): Promise<ExpoPushMessage[]> {
   const poolState = await getPoolState(env.DB);
   const storedBlockTime = poolState?.last_block_time;
 
-  // Detect block change
+  // Detect block change (lastBlockTime is now a block height string or null)
   if (
-    currentBlockTime &&
-    currentBlockTime !== 'N/A' &&
+    currentBlockTime != null &&
     currentBlockTime !== storedBlockTime
   ) {
     console.log(`New block detected: ${currentBlockTime}`);

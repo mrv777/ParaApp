@@ -11,7 +11,6 @@ export type { PollingInterval } from './settingsStore';
 export {
   usePoolStore,
   selectPoolStats,
-  selectLeaderboard,
   selectHistorical,
   selectBitcoinPrice,
   selectIsPoolLoading,
@@ -24,7 +23,6 @@ export {
   selectUserStats,
   selectUserWorkers,
   selectUserHistorical,
-  selectUserDiffs,
   selectIsUserLoading,
   selectUserError,
 } from './userStore';

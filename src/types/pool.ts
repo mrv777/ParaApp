@@ -7,22 +7,14 @@
  */
 export interface PoolStats {
   uptime: string;
-  lastBlockTime: string;
+  /** Block height of last found block (e.g., "938713"), or null */
+  lastBlockTime: string | null;
+  /** Hash of last found block, or null */
+  lastBlockHash: string | null;
   highestDifficulty: string;
   hashrate: number;
   users: number;
   workers: number;
-}
-
-/**
- * Block found by the pool
- */
-export interface PoolBlock {
-  block_height: number;
-  /** Finder address (truncated for privacy) */
-  top_diff_address: string;
-  difficulty: number;
-  block_timestamp: number | null;
 }
 
 /**
@@ -42,12 +34,12 @@ export interface PoolHistoricalPoint {
 }
 
 /**
- * Leaderboard entry from /api/highest-diff (legacy)
+ * Leaderboard entry from /api/highest-diff
  */
 export interface LeaderboardEntry {
   block_height: number;
-  top_diff_address: string;
-  difficulty: number;
+  top_diff_address: string | null;
+  difficulty: number | null;
   block_timestamp: number;
 }
 

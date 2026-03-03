@@ -27,8 +27,9 @@ export interface WorkerHealthSummary {
  * Account metadata from /api/account/{address}
  */
 export interface AccountMetadata {
-  block_count: number;
-  highest_blockheight: number;
+  block_count?: number;
+  highest_blockheight?: number;
+  is_private?: boolean;
 }
 
 /**
@@ -41,8 +42,8 @@ export interface AccountApiResponse {
     past_ln_addresses: string[];
     total_diff: number;
     last_updated: string;
-    metadata: AccountMetadata;
-  };
+    metadata: AccountMetadata | null;
+  } | null;
   lightning: unknown | null;
 }
 
@@ -72,7 +73,6 @@ export interface UserStatsApiResponse {
   lastSubmission: string; // "1m ago"
   bestDifficulty: string; // "1.12T" - formatted string
   uptime: string; // "256d 1h"
-  isPublic: boolean;
 }
 
 // ============================================
@@ -110,8 +110,6 @@ export interface UserStats {
   lastSubmission: string;
   /** Uptime string (e.g., "256d 1h") */
   uptime: string;
-  /** Whether user is visible on leaderboards */
-  isPublic: boolean;
   /** 1-hour average hashrate (computed from historical) */
   hashrate1h?: number;
   /** 24-hour average hashrate (computed from historical) */
@@ -128,6 +126,7 @@ export interface Account {
   lastUpdated: string;
   blockCount: number;
   highestBlockHeight: number;
+  isPrivate?: boolean;
 }
 
 /**
@@ -145,13 +144,4 @@ export interface UserHistoricalPoint {
 export interface UserHistoricalPointApiResponse {
   timestamp: string; // ISO date string
   hashrate: number;
-}
-
-/**
- * User's difficulty entries (for user-diffs endpoint)
- */
-export interface UserDiffEntry {
-  difficulty: number;
-  timestamp: number;
-  block_height?: number;
 }

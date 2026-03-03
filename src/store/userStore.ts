@@ -8,7 +8,6 @@ import type {
   ApiError,
   UserStats,
   UserHistoricalPoint,
-  LeaderboardEntry,
   Account,
   HistoricalPeriod,
   HistoricalInterval,
@@ -20,9 +19,8 @@ import { useSettingsStore } from './settingsStore';
 interface UserState {
   // Cached data
   stats: CachedData<UserStats> | null;
-  account: CachedData<Account> | null;
+  account: CachedData<Account | null> | null;
   historical: CachedData<UserHistoricalPoint[]> | null;
-  userDiffs: CachedData<LeaderboardEntry[]> | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -42,8 +40,6 @@ interface UserActions {
     period: HistoricalPeriod,
     interval?: HistoricalInterval
   ) => Promise<void>;
-  fetchUserDiffs: (limit?: number) => Promise<void>;
-  toggleVisibility: () => Promise<void>;
   setHistoricalPeriod: (period: HistoricalPeriod) => void;
   clearError: () => void;
   clearUserData: () => void;
@@ -54,7 +50,6 @@ const initialState: UserState = {
   stats: null,
   account: null,
   historical: null,
-  userDiffs: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
@@ -176,35 +171,6 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     }
   },
 
-  fetchUserDiffs: async (limit = 50) => {
-    const address = useSettingsStore.getState().bitcoinAddress;
-    if (!address) return;
-
-    const result = await parasite.getUserDiffs(address, limit);
-
-    if (isSuccess(result)) {
-      set({
-        userDiffs: { data: result.data, timestamp: Date.now() },
-      });
-    }
-  },
-
-  toggleVisibility: async () => {
-    const address = useSettingsStore.getState().bitcoinAddress;
-    if (!address) return;
-
-    const result = await parasite.toggleUserVisibility(address);
-
-    if (isSuccess(result)) {
-      // Update settings store
-      useSettingsStore.getState().setPublicOnLeaderboard(result.data.isPublic);
-      // Refresh user stats to get updated visibility
-      get().fetchUserStats();
-    } else {
-      set({ error: result.error });
-    }
-  },
-
   setHistoricalPeriod: (period) => {
     set({ historicalPeriod: period });
     get().fetchHistorical(period);
@@ -217,7 +183,6 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       stats: null,
       account: null,
       historical: null,
-      userDiffs: null,
       error: null,
     }),
 
@@ -225,8 +190,8 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const { fetchUserStats, fetchAccount, fetchUserDiffs } = get();
-    await Promise.all([fetchUserStats(), fetchAccount(), fetchUserDiffs()]);
+    const { fetchUserStats, fetchAccount } = get();
+    await Promise.all([fetchUserStats(), fetchAccount()]);
   },
 }));
 
@@ -240,6 +205,5 @@ export const selectUserWorkers = (state: UserState) =>
   state.stats?.data?.workers ?? EMPTY_WORKERS;
 export const selectUserHistorical = (state: UserState) =>
   state.historical?.data;
-export const selectUserDiffs = (state: UserState) => state.userDiffs?.data;
 export const selectIsUserLoading = (state: UserState) => state.isLoading;
 export const selectUserError = (state: UserState) => state.error;

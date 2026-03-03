@@ -60,13 +60,13 @@ export interface ParasiteUserResponse {
   lastSubmission: string;
   bestDifficulty: string; // e.g., "1.12T"
   uptime: string;
-  isPublic: boolean;
   workerData: ParasiteWorker[];
 }
 
 export interface ParasitePoolStatsResponse {
   uptime: string;
-  lastBlockTime: string; // e.g., "N/A" or timestamp
+  lastBlockTime: string | null; // Block height string (e.g., "938713") or null
+  lastBlockHash: string | null;
   highestDifficulty: string;
   hashrate: number;
   users: number;

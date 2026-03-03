@@ -84,7 +84,9 @@ export function useNotifications() {
       }
 
       // Register with backend - returns existing preferences for cross-device sync
-      const result = await registerDevice(token, bitcoinAddress, notificationPrefs);
+      // Read prefs from store directly to avoid dependency cycle
+      const currentPrefs = useSettingsStore.getState().notificationPrefs;
+      const result = await registerDevice(token, bitcoinAddress, currentPrefs);
 
       // Sync preferences from backend if they exist (cross-device sync)
       if (result.success && result.data?.preferences) {
@@ -114,8 +116,9 @@ export function useNotifications() {
             console.log('[Notifications] Got fresh token, retrying registration');
             setPushToken(freshToken);
 
-            // Retry registration with fresh token
-            const retryResult = await registerDevice(freshToken, bitcoinAddress, notificationPrefs);
+            // Retry registration with fresh token - use store prefs to avoid stale closure
+            const retryPrefs = useSettingsStore.getState().notificationPrefs;
+            const retryResult = await registerDevice(freshToken, bitcoinAddress, retryPrefs);
             if (retryResult.success) {
               console.log('[Notifications] Registration succeeded with fresh token');
               tokenRefreshAttempted.current = false; // Reset for next time
@@ -142,7 +145,7 @@ export function useNotifications() {
     } finally {
       isRegistering.current = false;
     }
-  }, [bitcoinAddress, pushToken, notificationPrefs, setPushToken, setNotificationsEnabled, setNotificationPrefs]);
+  }, [bitcoinAddress, pushToken, setPushToken, setNotificationsEnabled, setNotificationPrefs]);
 
   /**
    * Unregister device from backend

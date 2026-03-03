@@ -7,7 +7,6 @@ import type {
   ApiResult,
   PoolStats,
   PoolHistoricalPoint,
-  LeaderboardEntry,
   DifficultyLeaderboardEntry,
   LoyaltyLeaderboardEntry,
   UserStats,
@@ -24,7 +23,7 @@ import type {
 } from '@/types';
 import { WORKER_STALE_THRESHOLD_MS } from '@/constants';
 import { parseDifficulty } from '@/utils/formatting';
-import { fetchWithTimeout, patchJson } from './client';
+import { fetchWithTimeout } from './client';
 
 const BASE_URL = 'https://parasite.space';
 
@@ -85,7 +84,6 @@ function transformUserStats(raw: UserStatsApiResponse): UserStats {
     bestDifficultyFormatted: raw.bestDifficulty,
     lastSubmission: raw.lastSubmission,
     uptime: raw.uptime,
-    isPublic: raw.isPublic,
     // hashrate1h and hashrate24h will be computed from historical data
   };
 }
@@ -93,14 +91,17 @@ function transformUserStats(raw: UserStatsApiResponse): UserStats {
 /**
  * Transform raw account API response to app format
  */
-function transformAccount(raw: AccountApiResponse): Account {
+function transformAccount(raw: AccountApiResponse): Account | null {
+  if (!raw.account) return null;
+
   return {
     btcAddress: raw.account.btc_address,
     lnAddress: raw.account.ln_address,
     totalDiff: raw.account.total_diff,
     lastUpdated: raw.account.last_updated,
-    blockCount: raw.account.metadata.block_count,
-    highestBlockHeight: raw.account.metadata.highest_blockheight,
+    blockCount: raw.account.metadata?.block_count ?? 0,
+    highestBlockHeight: raw.account.metadata?.highest_blockheight ?? 0,
+    isPrivate: raw.account.metadata?.is_private,
   };
 }
 
@@ -142,7 +143,7 @@ export async function getPoolHistorical(
  * Get account data by Bitcoin address
  * @param address - Bitcoin address
  */
-export async function getAccount(address: string): Promise<ApiResult<Account>> {
+export async function getAccount(address: string): Promise<ApiResult<Account | null>> {
   const result = await fetchWithTimeout<AccountApiResponse>(
     `${BASE_URL}/api/account/${address}`
   );
@@ -150,7 +151,7 @@ export async function getAccount(address: string): Promise<ApiResult<Account>> {
   if (result.success && result.data) {
     return { success: true, data: transformAccount(result.data) };
   }
-  return result as ApiResult<Account>;
+  return result as ApiResult<Account | null>;
 }
 
 /**
@@ -188,48 +189,6 @@ export async function getUserHistorical(
     return { success: true, data: result.data.map(transformHistoricalPoint) };
   }
   return result as ApiResult<UserHistoricalPoint[]>;
-}
-
-/**
- * Toggle user visibility on leaderboards
- * @param address - Bitcoin address
- */
-export async function toggleUserVisibility(
-  address: string
-): Promise<ApiResult<{ isPublic: boolean }>> {
-  return patchJson<{ isPublic: boolean }>(`${BASE_URL}/api/user/${address}`, {});
-}
-
-/**
- * Get top difficulty leaderboard
- * @param limit - Number of entries to return (default: 100)
- */
-export async function getLeaderboard(
-  limit: number = 100
-): Promise<ApiResult<LeaderboardEntry[]>> {
-  const params = new URLSearchParams({ limit: limit.toString() });
-  return fetchWithTimeout<LeaderboardEntry[]>(
-    `${BASE_URL}/api/highest-diff?${params}`
-  );
-}
-
-/**
- * Get user's block difficulties
- * @param address - Bitcoin address
- * @param limit - Number of entries to return (default: 50)
- */
-export async function getUserDiffs(
-  address: string,
-  limit: number = 50
-): Promise<ApiResult<LeaderboardEntry[]>> {
-  const params = new URLSearchParams({
-    address,
-    type: 'user-diffs',
-    limit: limit.toString(),
-  });
-  return fetchWithTimeout<LeaderboardEntry[]>(
-    `${BASE_URL}/api/highest-diff?${params}`
-  );
 }
 
 /**

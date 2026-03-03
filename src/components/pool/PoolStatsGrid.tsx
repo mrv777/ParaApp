@@ -5,11 +5,7 @@
 import { View } from 'react-native';
 import { StatItem } from '../StatItem';
 import { SkeletonStatItem } from '../SkeletonLoader';
-import {
-  formatNumber,
-  formatTimestamp,
-  formatDifficulty,
-} from '@/utils/formatting';
+import { formatNumber, formatDifficulty } from '@/utils/formatting';
 import { useTranslation } from '@/i18n';
 import type { PoolStats } from '@/types';
 
@@ -41,10 +37,8 @@ export function PoolStatsGrid({
     );
   }
 
-  // Parse last block time
-  const lastBlockTimestamp = stats?.lastBlockTime
-    ? new Date(stats.lastBlockTime).getTime()
-    : null;
+  // Last block is now a block height string (e.g., "938713"), or null
+  const lastBlockHeight = stats?.lastBlockTime;
 
   // Parse highest difficulty - could be string like "1.23M" or number
   const highestDiff = stats?.highestDifficulty ?? '--';
@@ -67,9 +61,9 @@ export function PoolStatsGrid({
       </View>
       <View className="w-1/2 px-2 mb-4">
         <StatItem
-          icon="time-outline"
+          icon="cube-outline"
           label={t('pool.lastBlock')}
-          value={lastBlockTimestamp ? formatTimestamp(lastBlockTimestamp) : '--'}
+          value={lastBlockHeight ? `#${lastBlockHeight}` : '--'}
         />
       </View>
       <View className="w-1/2 px-2 mb-4">

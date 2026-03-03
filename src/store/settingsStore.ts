@@ -30,9 +30,6 @@ interface SettingsState {
   // User Bitcoin address (persisted)
   bitcoinAddress: string | null;
 
-  // Visibility on leaderboards
-  isPublicOnLeaderboard: boolean;
-
   // Push notifications
   notificationsEnabled: boolean;
   notificationPrefs: NotificationPrefs;
@@ -59,7 +56,6 @@ interface SettingsActions {
   setMinerSortBy: (sort: MinerSortOption) => void;
   setMinerFilterBy: (filter: MinerFilterOption) => void;
   setBitcoinAddress: (address: string | null) => void;
-  setPublicOnLeaderboard: (isPublic: boolean) => void;
   setLanguage: (lang: Language) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
@@ -78,7 +74,6 @@ const initialState: SettingsState = {
   minerFilterBy: 'all',
   language: 'auto',
   bitcoinAddress: null,
-  isPublicOnLeaderboard: true,
   notificationsEnabled: false,
   notificationPrefs: { blocks: true, workers: true, bestDiff: true },
   pushToken: null,
@@ -105,9 +100,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setMinerFilterBy: (filter) => set({ minerFilterBy: filter }),
 
       setBitcoinAddress: (address) => set({ bitcoinAddress: address }),
-
-      setPublicOnLeaderboard: (isPublic) =>
-        set({ isPublicOnLeaderboard: isPublic }),
 
       setLanguage: (lang) => set({ language: lang }),
 
@@ -161,7 +153,6 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         minerFilterBy: state.minerFilterBy,
         language: state.language,
         bitcoinAddress: state.bitcoinAddress,
-        isPublicOnLeaderboard: state.isPublicOnLeaderboard,
         notificationsEnabled: state.notificationsEnabled,
         notificationPrefs: state.notificationPrefs,
         pushToken: state.pushToken,

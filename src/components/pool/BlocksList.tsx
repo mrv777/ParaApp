@@ -84,7 +84,9 @@ export function BlocksList({
             #{block.block_height}
           </Text>
           <Text variant="caption" color="muted" className="ml-auto">
-            {truncateAddress(block.top_diff_address, 4)}
+            {block.top_diff_address
+              ? truncateAddress(block.top_diff_address, 4)
+              : '—'}
           </Text>
           <Text variant="caption" color="muted" className="ml-3 min-w-[70px] text-right">
             {block.block_timestamp

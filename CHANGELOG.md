@@ -2,6 +2,17 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.2.7] - 2026-03-03
+
+### Changed
+- Pool stats now shows last block height instead of timestamp
+- Leaderboard gracefully handles private/hidden miners
+- Account data handles nullable fields from updated API
+
+### Removed
+- Visibility toggle (privacy now managed via signed messages on website)
+- Legacy leaderboard and user-diffs endpoints
+
 ## [0.2.5] - 2026-01-10
 
 ### Changed
