@@ -125,8 +125,8 @@ export const PARASITE_STRATUM_PRESET: Pick<
   MinerSettings,
   'stratumUrl' | 'stratumPort'
 > = {
-  stratumUrl: 'stratum.parasite.space',
-  stratumPort: 3333,
+  stratumUrl: 'parasite.wtf',
+  stratumPort: 42069,
 };
 
 /**
