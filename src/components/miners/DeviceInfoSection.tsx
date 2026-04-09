@@ -4,6 +4,7 @@
 
 import { View } from 'react-native';
 import { Text } from '../Text';
+import { Badge } from '../Badge';
 import { useTranslation } from '@/i18n';
 import { truncateWorker } from '@/utils/formatting';
 import type { LocalMiner } from '@/types';
@@ -38,6 +39,29 @@ function InfoRow({ label, value, multiline = false, isLast = false }: InfoRowPro
   );
 }
 
+function FallbackPoolRow({ miner }: { miner: LocalMiner }) {
+  const { t } = useTranslation();
+  const fallbackUrl = miner.fallbackStratumUrl
+    ? `${miner.fallbackStratumUrl}:${miner.fallbackStratumPort ?? 3333}`
+    : '--';
+
+  return (
+    <View className="flex-row justify-between py-2.5 gap-4">
+      <Text variant="body" color="muted" className="flex-shrink-0">
+        {t('miners.fallbackPool')}
+      </Text>
+      <View className="flex-row items-center gap-2 flex-shrink">
+        {miner.isUsingFallbackStratum && (
+          <Badge variant="warning" size="sm">{t('miners.active')}</Badge>
+        )}
+        <Text variant="body" className="font-medium text-right" numberOfLines={1}>
+          {fallbackUrl}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
   const { t } = useTranslation();
   const poolUrl = miner.stratumUrl
@@ -57,7 +81,16 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
         <InfoRow label={t('miners.hostname')} value={miner.hostname} />
         <InfoRow label={t('miners.pool')} value={poolUrl} />
         <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
-        <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} isLast />
+        <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} isLast={!miner.rssi && !miner.serialNumber && !miner.fallbackStratumUrl} />
+        {miner.rssi !== undefined && (
+          <InfoRow label={t('miners.wifiSignal')} value={`${miner.rssi} dBm`} isLast={!miner.serialNumber && !miner.fallbackStratumUrl} />
+        )}
+        {miner.serialNumber && (
+          <InfoRow label={t('miners.serialNumber')} value={miner.serialNumber} isLast={!miner.fallbackStratumUrl} />
+        )}
+        {miner.fallbackStratumUrl !== undefined && (
+          <FallbackPoolRow miner={miner} />
+        )}
       </View>
     </View>
   );

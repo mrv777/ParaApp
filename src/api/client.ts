@@ -154,6 +154,9 @@ export async function postText(
 
 /**
  * PATCH request with JSON body
+ * Note: Content-Type header is intentionally omitted because some miner
+ * firmware (Hammer) silently ignores PATCH requests that include it.
+ * The body is still valid JSON and both AxeOS and Hammer parse it correctly.
  */
 export async function patchJson<T>(
   url: string,
@@ -164,7 +167,6 @@ export async function patchJson<T>(
     ...options,
     method: 'PATCH',
     headers: {
-      'Content-Type': 'application/json',
       ...options.headers,
     },
     body: JSON.stringify(body),

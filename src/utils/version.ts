@@ -11,8 +11,9 @@ import type { LocalMiner } from '@/types';
  * @returns -1 if a < b, 0 if a == b, 1 if a > b
  */
 export function compareVersions(a: string, b: string): number {
+  // Strip leading "v" and trailing date suffix (e.g., "2.0.0 20260309")
   const parseVersion = (v: string): number[] =>
-    v.replace(/^v/, '').split('.').map(Number);
+    v.replace(/^v/, '').split('.').map(part => Number(part.replace(/\s.*$/, '')));
 
   const partsA = parseVersion(a);
   const partsB = parseVersion(b);
@@ -36,6 +37,11 @@ const IDENTIFY_MIN_VERSION = 'v2.12.0';
 export function supportsIdentify(miner: LocalMiner): boolean {
   // Guard against missing data
   if (!miner.version || !miner.deviceModel) {
+    return false;
+  }
+
+  // Hammer firmware doesn't support identify LED
+  if (miner.minerType === 'hammer') {
     return false;
   }
 

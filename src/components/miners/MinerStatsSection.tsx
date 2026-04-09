@@ -55,6 +55,12 @@ function getTemperatureColor(temp: number): 'default' | 'warning' | 'danger' {
   return 'default';
 }
 
+function getHwErrorColor(rate: number): 'default' | 'warning' | 'danger' {
+  if (rate > 5) return 'danger';
+  if (rate > 1) return 'warning';
+  return 'default';
+}
+
 export function MinerStatsSection({
   miner,
   temperatureUnit,
@@ -102,6 +108,14 @@ export function MinerStatsSection({
           subValue={t('miners.session', { value: formatDifficulty(miner.bestSessionDiff) })}
         />
         <StatItem label={t('miners.fanSpeed')} value={formatPercent(miner.fanSpeed)} />
+        {miner.hwErrors !== undefined && (
+          <StatItem
+            label={t('miners.hwErrors')}
+            value={formatNumber(miner.hwErrors)}
+            subValue={t('miners.hwErrorRate', { rate: (miner.hwErrorRate ?? 0).toFixed(1) })}
+            color={getHwErrorColor(miner.hwErrorRate ?? 0)}
+          />
+        )}
       </View>
     </View>
   );

@@ -11,6 +11,7 @@ import type { MinerSortOption, MinerFilterOption } from '@/types';
 export type PollingInterval = 5000 | 10000 | 20000 | 30000;
 export type WorkerSortOrder = 'hashrate' | 'name' | 'bestDiff';
 export type Language = 'auto' | 'en' | 'es' | 'de' | 'fr' | 'pt';
+export type RoundMode = 'round' | 'alltime';
 
 export interface NotificationPrefs {
   blocks: boolean;
@@ -35,6 +36,9 @@ interface SettingsState {
   notificationPrefs: NotificationPrefs;
   pushToken: string | null;
 
+  // Leaderboard / rank display mode
+  roundMode: RoundMode;
+
   // Dismissed tips (persisted)
   dismissedTips: string[];
 
@@ -56,6 +60,7 @@ interface SettingsActions {
   setMinerSortBy: (sort: MinerSortOption) => void;
   setMinerFilterBy: (filter: MinerFilterOption) => void;
   setBitcoinAddress: (address: string | null) => void;
+  setRoundMode: (mode: RoundMode) => void;
   setLanguage: (lang: Language) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
@@ -72,6 +77,7 @@ const initialState: SettingsState = {
   workerSortOrder: 'hashrate',
   minerSortBy: 'status',
   minerFilterBy: 'all',
+  roundMode: 'round',
   language: 'auto',
   bitcoinAddress: null,
   notificationsEnabled: false,
@@ -100,6 +106,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setMinerFilterBy: (filter) => set({ minerFilterBy: filter }),
 
       setBitcoinAddress: (address) => set({ bitcoinAddress: address }),
+
+      setRoundMode: (mode) => set({ roundMode: mode }),
 
       setLanguage: (lang) => set({ language: lang }),
 
@@ -151,6 +159,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         workerSortOrder: state.workerSortOrder,
         minerSortBy: state.minerSortBy,
         minerFilterBy: state.minerFilterBy,
+        roundMode: state.roundMode,
         language: state.language,
         bitcoinAddress: state.bitcoinAddress,
         notificationsEnabled: state.notificationsEnabled,
@@ -184,4 +193,5 @@ export const selectNotificationsEnabled = (state: SettingsState) =>
 export const selectNotificationPrefs = (state: SettingsState) =>
   state.notificationPrefs;
 export const selectPushToken = (state: SettingsState) => state.pushToken;
+export const selectRoundMode = (state: SettingsState) => state.roundMode;
 export const selectWorkerNotes = (state: SettingsState) => state.workerNotes;

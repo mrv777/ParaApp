@@ -8,7 +8,8 @@ import {
   selectDifficultyLeaderboard,
   selectLoyaltyLeaderboard,
 } from '@/store/poolStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useSettingsStore, selectRoundMode } from '@/store/settingsStore';
+import { useUserStore, selectUserRounds } from '@/store/userStore';
 import { addressMatches } from '@/utils/address';
 
 export interface UserRanks {
@@ -19,22 +20,34 @@ export interface UserRanks {
 
 export function useUserRanks(): UserRanks {
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
+  const roundMode = useSettingsStore(selectRoundMode);
   const difficultyLeaderboard = usePoolStore(selectDifficultyLeaderboard);
   const loyaltyLeaderboard = usePoolStore(selectLoyaltyLeaderboard);
   const isLoadingLeaderboards = usePoolStore((s) => s.isLoadingLeaderboards);
+  const userRounds = useUserStore(selectUserRounds);
+  const isLoadingUser = useUserStore((s) => s.isLoading);
 
   const ranks = useMemo(() => {
     if (!bitcoinAddress) {
       return { difficultyRank: null, loyaltyRank: null };
     }
 
-    // Find user in difficulty leaderboard (1-indexed rank)
+    if (roundMode === 'round') {
+      if (!userRounds?.current_round) {
+        return { difficultyRank: null, loyaltyRank: null };
+      }
+      return {
+        difficultyRank: userRounds.current_round.rank,
+        loyaltyRank: userRounds.current_round.blocks_rank,
+      };
+    }
+
+    // All-time mode: find user in leaderboard arrays
     const difficultyIndex =
       difficultyLeaderboard?.findIndex((entry) =>
         addressMatches(entry.address, bitcoinAddress)
       ) ?? -1;
 
-    // Find user in loyalty leaderboard (1-indexed rank)
     const loyaltyIndex =
       loyaltyLeaderboard?.findIndex((entry) =>
         addressMatches(entry.address, bitcoinAddress)
@@ -44,10 +57,10 @@ export function useUserRanks(): UserRanks {
       difficultyRank: difficultyIndex !== -1 ? difficultyIndex + 1 : null,
       loyaltyRank: loyaltyIndex !== -1 ? loyaltyIndex + 1 : null,
     };
-  }, [bitcoinAddress, difficultyLeaderboard, loyaltyLeaderboard]);
+  }, [bitcoinAddress, roundMode, userRounds, difficultyLeaderboard, loyaltyLeaderboard]);
 
   return {
     ...ranks,
-    isLoading: isLoadingLeaderboards,
+    isLoading: roundMode === 'round' ? isLoadingUser : isLoadingLeaderboards,
   };
 }

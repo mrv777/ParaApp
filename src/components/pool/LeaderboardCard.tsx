@@ -1,5 +1,5 @@
 /**
- * LeaderboardCard component - Tabbed leaderboard with user highlighting
+ * LeaderboardCard component - Tabbed leaderboard with round toggle and user highlighting
  */
 
 import { useState, useCallback } from 'react';
@@ -13,6 +13,8 @@ import { truncateAddress, formatDifficulty, formatNumber } from '@/utils/formatt
 import { addressMatches } from '@/utils/address';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { useSettingsStore, selectRoundMode } from '@/store/settingsStore';
+import type { RoundMode } from '@/store/settingsStore';
 import type { DifficultyLeaderboardEntry, LoyaltyLeaderboardEntry } from '@/types';
 
 type LeaderboardTab = 'difficulty' | 'loyalty';
@@ -20,6 +22,8 @@ type LeaderboardTab = 'difficulty' | 'loyalty';
 export interface LeaderboardCardProps {
   difficultyEntries: DifficultyLeaderboardEntry[];
   loyaltyEntries: LoyaltyLeaderboardEntry[];
+  roundDifficultyEntries?: DifficultyLeaderboardEntry[];
+  roundLoyaltyEntries?: LoyaltyLeaderboardEntry[];
   userAddress?: string;
   isLoading?: boolean;
   maxHeight?: number;
@@ -49,9 +53,36 @@ function TabButton({ label, isActive, onPress }: TabButtonProps) {
   );
 }
 
+interface RoundToggleButtonProps {
+  label: string;
+  isActive: boolean;
+  onPress: () => void;
+}
+
+function RoundToggleButton({ label, isActive, onPress }: RoundToggleButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={`px-2.5 py-1.5 rounded ${
+        isActive ? 'bg-foreground/15' : ''
+      }`}
+    >
+      <Text
+        variant="caption"
+        color={isActive ? 'default' : 'muted'}
+        className="text-xs font-medium"
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function LeaderboardCard({
   difficultyEntries,
   loyaltyEntries,
+  roundDifficultyEntries,
+  roundLoyaltyEntries,
   userAddress,
   isLoading = false,
   maxHeight = 400,
@@ -59,13 +90,31 @@ export function LeaderboardCard({
 }: LeaderboardCardProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<LeaderboardTab>('difficulty');
+  const roundMode = useSettingsStore(selectRoundMode);
+  const setRoundModeStore = useSettingsStore((s) => s.setRoundMode);
 
   const handleTabChange = useCallback((tab: LeaderboardTab) => {
     haptics.selection();
     setActiveTab(tab);
   }, []);
 
-  const entries = activeTab === 'difficulty' ? difficultyEntries : loyaltyEntries;
+  const handleRoundModeChange = useCallback((mode: RoundMode) => {
+    haptics.selection();
+    setRoundModeStore(mode);
+  }, [setRoundModeStore]);
+
+  // Select entries based on round mode and active tab
+  const entries = (() => {
+    if (roundMode === 'round') {
+      return activeTab === 'difficulty'
+        ? (roundDifficultyEntries ?? [])
+        : (roundLoyaltyEntries ?? []);
+    }
+    return activeTab === 'difficulty' ? difficultyEntries : loyaltyEntries;
+  })();
+
+  const diffLabel = t('pool.topDiff');
+  const loyaltyLabel = t('pool.blocksParticipated');
 
   // Find user's position in current leaderboard using flexible matching
   const userIndex = userAddress
@@ -76,15 +125,28 @@ export function LeaderboardCard({
   if (isLoading && (!entries || entries.length === 0)) {
     return (
       <Card className={className}>
+        {/* Round mode toggle */}
+        <View className="flex-row gap-1 mb-2">
+          <RoundToggleButton
+            label={t('pool.sinceLastBlock')}
+            isActive={true}
+            onPress={() => {}}
+          />
+          <RoundToggleButton
+            label={t('pool.allTime')}
+            isActive={false}
+            onPress={() => {}}
+          />
+        </View>
         {/* Tab buttons */}
         <View className="flex-row gap-2 mb-3">
           <TabButton
-            label={t('pool.topDifficulty')}
+            label={diffLabel}
             isActive={activeTab === 'difficulty'}
             onPress={() => handleTabChange('difficulty')}
           />
           <TabButton
-            label={t('pool.topLoyalty')}
+            label={loyaltyLabel}
             isActive={activeTab === 'loyalty'}
             onPress={() => handleTabChange('loyalty')}
           />
@@ -118,15 +180,29 @@ export function LeaderboardCard({
 
   return (
     <Card className={className}>
+      {/* Round mode toggle */}
+      <View className="flex-row gap-1 mb-2">
+        <RoundToggleButton
+          label={t('pool.sinceLastBlock')}
+          isActive={roundMode === 'round'}
+          onPress={() => handleRoundModeChange('round')}
+        />
+        <RoundToggleButton
+          label={t('pool.allTime')}
+          isActive={roundMode === 'alltime'}
+          onPress={() => handleRoundModeChange('alltime')}
+        />
+      </View>
+
       {/* Tab buttons */}
       <View className="flex-row gap-2 mb-3">
         <TabButton
-          label={t('pool.topDifficulty')}
+          label={diffLabel}
           isActive={activeTab === 'difficulty'}
           onPress={() => handleTabChange('difficulty')}
         />
         <TabButton
-          label={t('pool.topLoyalty')}
+          label={loyaltyLabel}
           isActive={activeTab === 'loyalty'}
           onPress={() => handleTabChange('loyalty')}
         />
@@ -155,13 +231,18 @@ export function LeaderboardCard({
                 <Text
                   variant="mono"
                   color="muted"
-                  className="w-8 text-sm"
+                  className="w-10 text-sm"
                 >
                   #{index + 1}
                 </Text>
-                <Text variant="caption" className="flex-1">
-                  {isUser ? t('common.you') : truncateAddress(entry.address, 6)}
-                </Text>
+                <View className="flex-1 flex-row items-center gap-1">
+                  <Text variant="caption">
+                    {isUser ? t('common.you') : truncateAddress(entry.address, 6)}
+                  </Text>
+                  {entry.claimed && (
+                    <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
+                  )}
+                </View>
                 <Text variant="mono" className="text-sm">
                   {formatValue(entry)}
                 </Text>
@@ -175,7 +256,7 @@ export function LeaderboardCard({
       {userIndex !== -1 && userAddress && (
         <View className="mt-2 pt-2 border-t border-border">
           <View className="flex-row items-center py-2 bg-foreground/5 -mx-2 px-2 rounded">
-            <Text variant="mono" color="muted" className="w-8 text-sm">
+            <Text variant="mono" color="muted" className="w-10 text-sm">
               #{userIndex + 1}
             </Text>
             <Text variant="caption" className="flex-1">

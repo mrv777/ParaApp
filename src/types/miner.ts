@@ -3,6 +3,11 @@
  */
 
 /**
+ * Miner firmware type
+ */
+export type MinerType = 'axeos' | 'hammer' | 'unknown';
+
+/**
  * Miner warning types
  */
 export type MinerWarningType =
@@ -49,8 +54,10 @@ export interface LocalMiner {
   hostname: string;
   /** ASIC model (e.g., "BM1370") */
   ASICModel: string;
-  /** Device model (e.g., "Gamma", "Ultra", "Supra") */
+  /** Device model (e.g., "Gamma", "Ultra", "Hammer BC04") */
   deviceModel: string;
+  /** Detected miner firmware type */
+  minerType: MinerType;
   /** Expected hashrate based on model (GH/s) */
   expectedHashrate: number;
   /** Current hashrate (GH/s) */
@@ -87,7 +94,7 @@ export interface LocalMiner {
   uptimeSeconds: number;
   /** Connected WiFi network */
   wifiSSID?: string;
-  /** WiFi signal strength */
+  /** WiFi signal strength (dBm) */
   rssi?: number;
   /** Overheat protection active */
   overheatMode?: boolean;
@@ -97,6 +104,31 @@ export interface LocalMiner {
   lastSeen: number;
   /** Current online status */
   isOnline: boolean;
+  // Hammer-specific fields
+  /** Hardware error count (Hammer) */
+  hwErrors?: number;
+  /** Hardware error rate % (Hammer) */
+  hwErrorRate?: number;
+  /** Fallback stratum URL (Hammer) */
+  fallbackStratumUrl?: string;
+  /** Fallback stratum port (Hammer) */
+  fallbackStratumPort?: number;
+  /** Fallback stratum user (Hammer) */
+  fallbackStratumUser?: string;
+  /** Whether fallback stratum is active (Hammer) */
+  isUsingFallbackStratum?: boolean;
+  /** Serial number (Hammer) */
+  serialNumber?: string;
+  /** Boot mode — 0=normal, 1=overclock, 2=custom (Hammer) */
+  bootMode?: number;
+  /** Raw device config fields needed for Hammer full-payload PATCH */
+  rawConfig?: {
+    flipscreen: number;
+    invertfanpolarity: number;
+    overheat_mode: number;
+    ntpServer: string;
+    ntpServerBackup: string;
+  };
 }
 
 /**
@@ -119,6 +151,12 @@ export interface MinerSettings {
   stratumUser?: string;
   /** Stratum password */
   stratumPassword?: string;
+  /** Fallback stratum URL (Hammer) */
+  fallbackStratumUrl?: string;
+  /** Fallback stratum port (Hammer) */
+  fallbackStratumPort?: number;
+  /** Fallback stratum user (Hammer) */
+  fallbackStratumUser?: string;
 }
 
 /**
@@ -129,7 +167,8 @@ export interface AxeOSSystemInfo {
   voltage: number;
   current: number;
   temp: number;
-  vrTemp: number;
+  /** VR temperature (AxeOS only) */
+  vrTemp?: number;
   hashRate: number;
   bestDiff: string | number;
   bestSessionDiff: string | number;
@@ -143,8 +182,10 @@ export interface AxeOSSystemInfo {
   sharesRejected: number;
   uptimeSeconds: number;
   ASICModel: string;
-  /** Device model name (e.g., "NerdQAxe++", "Gamma") */
+  /** Device model name — lowercase d (AxeOS: "NerdQAxe++", "Gamma") */
   deviceModel?: string;
+  /** Device model name — uppercase D (Hammer: "BC04") */
+  DeviceModel?: string;
   stratumURL: string;
   stratumPort: number;
   stratumUser: string;
@@ -154,13 +195,58 @@ export interface AxeOSSystemInfo {
   runningPartition: string;
   flipscreen: number;
   overheat_mode: number;
-  invertscreen: number;
+  invertscreen?: number;
   invertfanpolarity: number;
   autofanspeed: number;
   fanspeed: number;
   fanrpm: number;
   /** Number of ASIC chips (multi-chip miners like Hex have 6) */
   asicCount?: number;
+  // Hammer-specific fields
+  /** WiFi signal strength in dBm (Hammer) */
+  wifiRSSI?: number;
+  /** Small core count (Hammer) */
+  smallCoreCount?: number;
+  /** Serial number (Hammer) */
+  sn_str?: string;
+  /** Nonce count (Hammer) */
+  nonceNumber?: number;
+  /** Hardware error count (Hammer) */
+  hwNumber?: number;
+  /** Hardware error rate (Hammer) */
+  hwRate?: number;
+  /** WWW firmware version (Hammer) */
+  WWWVersion?: string;
+  /** IDF version (Hammer) */
+  idfVersion?: string;
+  /** MAC address (Hammer) */
+  macAddr?: string;
+  /** Fallback stratum URL (Hammer) */
+  fallbackStratumURL?: string;
+  /** Fallback stratum port (Hammer) */
+  fallbackStratumPort?: number;
+  /** Fallback stratum user (Hammer) */
+  fallbackStratumUser?: string;
+  /** Is using fallback stratum (Hammer) */
+  isUsingFallbackStratum?: number;
+  /** Stratum difficulty (Hammer) */
+  stratumDiff?: number;
+  /** Max power draw in W (Hammer) */
+  maxPower?: number;
+  /** Nominal voltage in V (Hammer) */
+  nominalVoltage?: number;
+  /** Boot mode (Hammer) */
+  boot_mode?: number;
+  /** Display flash mode (Hammer) */
+  displayFlash?: boolean;
+  /** Current time from device (Hammer) */
+  currentTime?: string;
+  /** AP mode enabled (Hammer) */
+  apEnabled?: number;
+  /** NTP server (Hammer) */
+  ntpServer?: string;
+  /** Backup NTP server (Hammer) */
+  ntpServerBackup?: string;
 }
 
 /**

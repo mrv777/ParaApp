@@ -2,6 +2,43 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.2.9] - 2026-04-09
+
+### Added
+- **Hammer Miner Support** - Auto-detect and manage Hammer firmware miners (BC04) alongside AxeOS devices
+- Hammer-specific stats: hardware errors, HW error rate, serial number, Wi-Fi signal strength
+- Fallback stratum pool display with active/inactive badge on miner detail
+- Fallback stratum configuration in miner settings (Hammer)
+- Hammer performance presets (Normal/Overclock/Custom) for frequency and voltage
+- Firmware type detection (AxeOS vs Hammer) based on API response shape
+
+### Changed
+- Settings screen prevents background polling from overwriting user-edited form values
+- Version comparison handles Hammer date-suffixed versions (e.g., "2.0.0 20260309")
+- Identify LED hidden for Hammer miners (unsupported by firmware)
+
+### Fixed
+- Content-Type header removed from PATCH requests to support Hammer firmware compatibility
+- Miner settings now route through firmware-appropriate update path (partial PATCH for AxeOS, full-payload PATCH for Hammer)
+
+## [0.2.8] - 2026-03-24
+
+### Added
+- **Round Leaderboards** - Toggle between "Since Last Block" and "All-Time" on leaderboards
+- **Achievements Card** - Displays block-win badges on Home screen with links to mempool.space
+- **User Round Stats** - New `/user/{address}/rounds` API integration for per-round rank data
+- Claimed address checkmark indicators on leaderboard entries
+
+### Changed
+- Leaderboard limit increased from 100 to 420 entries
+- Leaderboard rank column widened to support 3-digit ranks
+- User ranks on Home screen now reflect the selected round mode
+- Pull-to-refresh now fetches round leaderboards alongside all-time data
+- Address changes clear stale user data before fetching fresh stats
+
+### Fixed
+- Stale data race condition when Bitcoin address changes mid-fetch
+
 ## [0.2.7] - 2026-03-03
 
 ### Changed

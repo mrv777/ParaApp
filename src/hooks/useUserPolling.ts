@@ -15,10 +15,14 @@ import { usePolling, type UsePollingReturn } from './usePolling';
 export function useUserPolling(): UsePollingReturn {
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const fetchUserStats = useUserStore((s) => s.fetchUserStats);
+  const fetchRounds = useUserStore((s) => s.fetchRounds);
 
   const onPoll = useCallback(async () => {
-    await fetchUserStats({ silent: true });
-  }, [fetchUserStats]);
+    await Promise.all([
+      fetchUserStats({ silent: true }),
+      fetchRounds(),
+    ]);
+  }, [fetchUserStats, fetchRounds]);
 
   return usePolling({
     onPoll,

@@ -145,3 +145,32 @@ export interface UserHistoricalPointApiResponse {
   timestamp: string; // ISO date string
   hashrate: number;
 }
+
+/**
+ * Single round history entry from /api/user/{address}/rounds
+ */
+export interface UserRoundHistoryEntry {
+  block_height: number;
+  rank: number;
+  blocks_rank: number;
+  total_participants: number;
+  top_diff: number;
+  blocks_participated: number;
+  is_winner: boolean;
+}
+
+/**
+ * Response from /api/user/{address}/rounds
+ */
+export interface UserRoundsResponse {
+  current_round: {
+    rank: number;
+    blocks_rank: number;
+    total_participants: number;
+    top_diff: number;
+    blocks_participated: number;
+  } | null;
+  rounds_won: number;
+  total_rounds_participated: number;
+  history: UserRoundHistoryEntry[];
+}

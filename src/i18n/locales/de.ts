@@ -74,6 +74,7 @@ const de = {
     users: 'Benutzer',
     editWorkerNote: 'Notiz bearbeiten',
     noteHint: 'z.B., Küchen-Miner',
+    achievements: 'Erfolge',
   },
 
   pool: {
@@ -95,6 +96,11 @@ const de = {
     noEntries: 'Noch keine Einträge',
     addAddressHint: 'Füge deine Adresse in den Einstellungen hinzu, um deinen Rang zu sehen',
     highestDiff: 'Höchste Diff.',
+    sinceLastBlock: 'Seit letztem Block',
+    allTime: 'Gesamt',
+    topDiff: 'Top Diff.',
+    bestEver: 'Allzeit-Beste',
+    blocksParticipated: 'Blöcke teilgenommen',
   },
 
   miners: {
@@ -200,6 +206,22 @@ const de = {
     sortBy: 'Sortieren Nach',
     filter: 'Filtern',
     networkUnavailable: 'Netzwerk nicht verfügbar - Miner nicht erreichbar',
+    // Hammer-specific
+    performanceMode: 'Leistungsmodus',
+    preset_normal: 'Normal',
+    preset_overclock: 'Overclock',
+    preset_custom: 'Benutzerdefiniert',
+    wifiSignal: 'WLAN-Signal',
+    serialNumber: 'Seriennummer',
+    fallbackPool: 'Fallback-Pool',
+    fallbackPoolConfig: 'Fallback-Pool-Konfiguration',
+    fallbackStratumUrl: 'Fallback-URL',
+    fallbackPort: 'Fallback-Port',
+    fallbackWorker: 'Fallback-Worker',
+    hwErrors: 'HW-Fehler',
+    hwErrorRate: '{{rate}}% Fehlerrate',
+    active: 'Aktiv',
+    fallbackActive: 'Fallback-Pool wird verwendet',
   },
 
   settings: {

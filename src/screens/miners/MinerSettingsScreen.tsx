@@ -2,7 +2,7 @@
  * MinerSettingsScreen - Configure miner hardware and pool settings
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -27,14 +27,21 @@ import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
-import type { AsicConfig, MinerSettings } from '@/types/miner';
+import type { AsicConfig, MinerSettings, MinerType } from '@/types/miner';
 
-const { getAsicSettings, updateSettings, PARASITE_STRATUM_PRESET } = axeOS;
+const { getAsicSettings, PARASITE_STRATUM_PRESET } = axeOS;
 
 type Props = MinersStackScreenProps<'MinerSettings'>;
 
 /** Fan speed options for manual mode */
 const FAN_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+/** Hammer performance presets (frequency MHz, coreVoltage mV) */
+type HammerPreset = 'normal' | 'overclock' | 'custom';
+const HAMMER_PRESETS: Record<Exclude<HammerPreset, 'custom'>, { frequency: number; voltage: number }> = {
+  normal: { frequency: 640, voltage: 470 },
+  overclock: { frequency: 750, voltage: 500 },
+};
 
 /** Generate fallback ASIC config from miner data when /api/system/asic fails */
 function generateFallbackAsicConfig(miner: {
@@ -42,8 +49,23 @@ function generateFallbackAsicConfig(miner: {
   deviceModel: string;
   frequency: number;
   voltage: number;
+  minerType: MinerType;
 }): AsicConfig {
-  // Default options based on BM1370 (most common)
+  // Hammer miners use different voltage/frequency ranges
+  if (miner.minerType === 'hammer') {
+    return {
+      ASICModel: miner.ASICModel,
+      deviceModel: miner.deviceModel,
+      frequencyOptions: [400, 450, 500, 550, 575, 600, 625, 640, 660, 700, 750],
+      voltageOptions: [400, 420, 440, 460, 470, 480, 490, 500, 520],
+      defaultFrequency: 640,
+      defaultVoltage: 470,
+      absMaxFrequency: 800,
+      absMaxVoltage: 600,
+    };
+  }
+
+  // Default options based on BM1370 (most common AxeOS)
   const defaultFreqOptions = [485, 500, 515, 525, 550, 575, 590, 600];
   const defaultVoltOptions = [1100, 1120, 1150, 1170, 1200, 1215, 1250];
 
@@ -74,6 +96,8 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   // Store
   const miners = useMinerStore(selectMiners);
   const refreshMiner = useMinerStore((s) => s.refreshMiner);
+  const updateMinerSettings = useMinerStore((s) => s.updateMinerSettings);
+  const restartMiner = useMinerStore((s) => s.restartMiner);
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
 
   // Find the miner
@@ -93,6 +117,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const [stratumPort, setStratumPort] = useState(0);
   const [stratumUser, setStratumUser] = useState('');
   const [stratumPassword, setStratumPassword] = useState('');
+  // Fallback stratum (Hammer)
+  const [fallbackStratumUrl, setFallbackStratumUrl] = useState('');
+  const [fallbackStratumPort, setFallbackStratumPort] = useState(0);
+  const [fallbackStratumUser, setFallbackStratumUser] = useState('');
 
   // Custom value mode
   const [customFrequency, setCustomFrequency] = useState(false);
@@ -100,8 +128,15 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const [customFrequencyInput, setCustomFrequencyInput] = useState('');
   const [customVoltageInput, setCustomVoltageInput] = useState('');
 
+  // Hammer preset mode
+  const [hammerPreset, setHammerPreset] = useState<HammerPreset>('normal');
+
   // Original values for comparison
   const [originalValues, setOriginalValues] = useState<MinerSettings | null>(null);
+
+  // Track whether form has been initialized (prevents background poll from resetting form)
+  const formInitialized = useRef(false);
+  const hwInitialized = useRef(false);
 
   // Apply state
   const [applying, setApplying] = useState(false);
@@ -130,46 +165,72 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ip, miner?.ASICModel]); // Only re-fetch if IP or ASIC model changes
 
-  // Initialize pool and fan settings from miner data (always, even without asicConfig)
+  // Initialize pool, fan, and fallback stratum from miner data (once only)
   useEffect(() => {
-    if (miner) {
-      // Pool settings
-      setStratumUrl(miner.stratumUrl || '');
-      setStratumPort(miner.stratumPort || 3333);
-      setStratumUser(miner.stratumUser || '');
-      setStratumPassword('x');
-      // Fan settings
-      setFanSpeed(miner.fanSpeed || 50);
-      setAutoFan(miner.autoFanSpeed ?? false);
+    if (!miner || formInitialized.current) return;
+    formInitialized.current = true;
+
+    // Pool settings
+    setStratumUrl(miner.stratumUrl || '');
+    setStratumPort(miner.stratumPort || 3333);
+    setStratumUser(miner.stratumUser || '');
+    setStratumPassword('x');
+    // Fan settings
+    setFanSpeed(miner.fanSpeed || 50);
+    setAutoFan(miner.autoFanSpeed ?? false);
+    // Fallback stratum (Hammer)
+    if (miner.minerType === 'hammer') {
+      setFallbackStratumUrl(miner.fallbackStratumUrl || '');
+      setFallbackStratumPort(miner.fallbackStratumPort || 3333);
+      setFallbackStratumUser(miner.fallbackStratumUser || '');
     }
   }, [miner]);
 
-  // Initialize frequency/voltage when asicConfig is available
+  // Initialize frequency/voltage when asicConfig is available (once only)
   useEffect(() => {
-    if (miner && asicConfig) {
-      setFrequency(miner.frequency || asicConfig.defaultFrequency);
-      setVoltage(miner.voltage || asicConfig.defaultVoltage);
+    if (!miner || !asicConfig || hwInitialized.current) return;
+    hwInitialized.current = true;
+
+    const freq = miner.frequency || asicConfig.defaultFrequency;
+    const volt = miner.voltage || asicConfig.defaultVoltage;
+    setFrequency(freq);
+    setVoltage(volt);
+
+    // Detect initial Hammer preset from current values
+    if (miner.minerType === 'hammer') {
+      if (freq === HAMMER_PRESETS.normal.frequency && volt === HAMMER_PRESETS.normal.voltage) {
+        setHammerPreset('normal');
+      } else if (freq === HAMMER_PRESETS.overclock.frequency && volt === HAMMER_PRESETS.overclock.voltage) {
+        setHammerPreset('overclock');
+      } else {
+        setHammerPreset('custom');
+      }
     }
   }, [miner, asicConfig]);
 
-  // Set original values for change tracking
+  // Set original values for change tracking (once only, after config loads)
   useEffect(() => {
-    if (miner && !configLoading) {
-      const values: MinerSettings = {
-        fanSpeed: miner.fanSpeed || 50,
-        autoFanSpeed: miner.autoFanSpeed ?? false,
-        stratumUrl: miner.stratumUrl || '',
-        stratumPort: miner.stratumPort || 3333,
-        stratumUser: miner.stratumUser || '',
-        stratumPassword: 'x',
-      };
-      if (asicConfig) {
-        values.frequency = miner.frequency || asicConfig.defaultFrequency;
-        values.coreVoltage = miner.voltage || asicConfig.defaultVoltage;
-      }
-      setOriginalValues(values);
+    if (!miner || configLoading || originalValues) return;
+
+    const values: MinerSettings = {
+      fanSpeed: miner.fanSpeed || 50,
+      autoFanSpeed: miner.autoFanSpeed ?? false,
+      stratumUrl: miner.stratumUrl || '',
+      stratumPort: miner.stratumPort || 3333,
+      stratumUser: miner.stratumUser || '',
+      stratumPassword: 'x',
+    };
+    if (asicConfig) {
+      values.frequency = miner.frequency || asicConfig.defaultFrequency;
+      values.coreVoltage = miner.voltage || asicConfig.defaultVoltage;
     }
-  }, [miner, asicConfig, configLoading]);
+    if (miner.minerType === 'hammer') {
+      values.fallbackStratumUrl = miner.fallbackStratumUrl || '';
+      values.fallbackStratumPort = miner.fallbackStratumPort || 3333;
+      values.fallbackStratumUser = miner.fallbackStratumUser || '';
+    }
+    setOriginalValues(values);
+  }, [miner, asicConfig, configLoading, originalValues]);
 
   // Navigate back if miner removed
   useEffect(() => {
@@ -251,9 +312,34 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
         to: '****',
       });
     }
+    // Fallback stratum (Hammer)
+    if (fallbackStratumUrl !== (originalValues.fallbackStratumUrl ?? '')) {
+      changes.push({
+        field: 'fallbackStratumUrl',
+        label: t('miners.fallbackStratumUrl'),
+        from: originalValues.fallbackStratumUrl || '(empty)',
+        to: fallbackStratumUrl || '(empty)',
+      });
+    }
+    if (fallbackStratumPort !== (originalValues.fallbackStratumPort ?? 0)) {
+      changes.push({
+        field: 'fallbackStratumPort',
+        label: t('miners.fallbackPort'),
+        from: String(originalValues.fallbackStratumPort ?? 0),
+        to: String(fallbackStratumPort),
+      });
+    }
+    if (fallbackStratumUser !== (originalValues.fallbackStratumUser ?? '')) {
+      changes.push({
+        field: 'fallbackStratumUser',
+        label: t('miners.fallbackWorker'),
+        from: originalValues.fallbackStratumUser || '(empty)',
+        to: fallbackStratumUser || '(empty)',
+      });
+    }
 
     return changes;
-  }, [frequency, voltage, fanSpeed, autoFan, stratumUrl, stratumPort, stratumUser, stratumPassword, originalValues, asicConfig]);
+  }, [frequency, voltage, fanSpeed, autoFan, stratumUrl, stratumPort, stratumUser, stratumPassword, fallbackStratumUrl, fallbackStratumPort, fallbackStratumUser, originalValues, asicConfig, t]);
 
   const hasChanges = pendingChanges.length > 0;
 
@@ -328,23 +414,38 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     if (stratumPassword !== originalValues?.stratumPassword) {
       settings.stratumPassword = stratumPassword;
     }
+    // Fallback stratum (Hammer)
+    if (fallbackStratumUrl !== (originalValues?.fallbackStratumUrl ?? '')) {
+      settings.fallbackStratumUrl = fallbackStratumUrl;
+    }
+    if (fallbackStratumPort !== (originalValues?.fallbackStratumPort ?? 0)) {
+      settings.fallbackStratumPort = fallbackStratumPort;
+    }
+    if (fallbackStratumUser !== (originalValues?.fallbackStratumUser ?? '')) {
+      settings.fallbackStratumUser = fallbackStratumUser;
+    }
 
-    const result = await updateSettings(ip, settings);
+    const success = await updateMinerSettings(ip, settings);
 
-    if (result.success) {
+    if (success) {
+      // Hammer frequency/voltage changes require a restart to take effect
+      const needsRestart = miner?.minerType === 'hammer' &&
+        (settings.frequency !== undefined || settings.coreVoltage !== undefined);
+      if (needsRestart) {
+        await restartMiner(ip);
+      }
       haptics.success();
-      // Refresh miner data
-      await refreshMiner(ip);
       navigation.goBack();
     } else {
       haptics.error();
-      setApplyError(result.error.message || t('errors.failedToApply'));
+      setApplyError(t('errors.failedToApply'));
     }
 
     setApplying(false);
   }, [
     hasChanges,
     ip,
+    miner,
     frequency,
     voltage,
     fanSpeed,
@@ -353,10 +454,23 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     stratumPort,
     stratumUser,
     stratumPassword,
+    fallbackStratumUrl,
+    fallbackStratumPort,
+    fallbackStratumUser,
     originalValues,
-    refreshMiner,
+    updateMinerSettings,
+    restartMiner,
     navigation,
   ]);
+
+  const handleHammerPreset = useCallback((preset: HammerPreset) => {
+    haptics.selection();
+    setHammerPreset(preset);
+    if (preset !== 'custom') {
+      setFrequency(HAMMER_PRESETS[preset].frequency);
+      setVoltage(HAMMER_PRESETS[preset].voltage);
+    }
+  }, []);
 
   const handleFrequencySelect = useCallback((value: number) => {
     haptics.selection();
@@ -482,151 +596,282 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 {t('miners.hardware')}
               </Text>
 
-              {/* Frequency */}
-              <View className="mb-4">
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text variant="body">{t('miners.frequency')}</Text>
-                  <View className="flex-row items-center gap-2">
-                    {frequencyWarning && (
-                      <Badge variant="warning" size="sm">
-                        {frequencyWarning}
-                      </Badge>
-                    )}
-                    <Text variant="body" className="font-medium">
-                      {frequency} MHz
-                    </Text>
-                  </View>
-                </View>
-                {!customFrequency ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    className="-mx-1"
-                  >
-                    <View className="flex-row gap-2 px-1">
-                      {asicConfig.frequencyOptions.map((opt) => (
+              {/* Hammer: Preset segmented toggle (Normal | Overclock | Custom) */}
+              {miner?.minerType === 'hammer' ? (
+                <>
+                  <View className="mb-4">
+                    <Text variant="body" className="mb-2">{t('miners.performanceMode')}</Text>
+                    <View className="flex-row bg-secondary rounded-lg p-1">
+                      {(['normal', 'overclock', 'custom'] as HammerPreset[]).map((preset) => (
                         <Pressable
-                          key={opt}
-                          onPress={() => handleFrequencySelect(opt)}
-                          className={`px-3 py-2 rounded-lg ${
-                            frequency === opt ? 'bg-primary' : 'bg-secondary'
+                          key={preset}
+                          onPress={() => handleHammerPreset(preset)}
+                          className={`flex-1 py-2 rounded-md ${
+                            hammerPreset === preset ? 'bg-primary' : ''
                           }`}
                         >
                           <Text
                             variant="body"
-                            className={frequency === opt ? 'text-background font-medium' : ''}
+                            className={`text-center ${hammerPreset === preset ? 'text-background font-medium' : ''}`}
                           >
-                            {opt}
+                            {t(`miners.preset_${preset}` as const)}
                           </Text>
                         </Pressable>
                       ))}
-                      <Pressable
-                        onPress={handleCustomFrequencyToggle}
-                        className="px-3 py-2 rounded-lg bg-secondary border border-border"
-                      >
-                        <Text variant="body" color="muted">
-                          {t('common.custom')}
-                        </Text>
-                      </Pressable>
                     </View>
-                  </ScrollView>
-                ) : (
-                  <View className="flex-row items-center gap-2">
-                    <TextInput
-                      value={customFrequencyInput}
-                      onChangeText={setCustomFrequencyInput}
-                      onBlur={handleCustomFrequencySubmit}
-                      onSubmitEditing={handleCustomFrequencySubmit}
-                      keyboardType="number-pad"
-                      returnKeyType="done"
-                      className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
-                      style={{ color: colors.text }}
-                      placeholderTextColor={colors.textMuted}
-                      placeholder={t('miners.enterFrequency')}
-                      autoFocus
-                    />
-                    <Pressable
-                      onPress={() => setCustomFrequency(false)}
-                      className="p-3 bg-secondary rounded-lg"
-                    >
-                      <Ionicons name="close" size={20} color={colors.textMuted} />
-                    </Pressable>
                   </View>
-                )}
-              </View>
 
-              {/* Voltage */}
-              <View className="mb-4">
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text variant="body">{t('miners.voltage')}</Text>
-                  <View className="flex-row items-center gap-2">
-                    {voltageWarning && (
-                      <Badge variant="warning" size="sm">
-                        {voltageWarning}
-                      </Badge>
-                    )}
-                    <Text variant="body" className="font-medium">
-                      {voltage} mV
-                    </Text>
-                  </View>
-                </View>
-                {!customVoltage ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    className="-mx-1"
-                  >
-                    <View className="flex-row gap-2 px-1">
-                      {asicConfig.voltageOptions.map((opt) => (
-                        <Pressable
-                          key={opt}
-                          onPress={() => handleVoltageSelect(opt)}
-                          className={`px-3 py-2 rounded-lg ${
-                            voltage === opt ? 'bg-primary' : 'bg-secondary'
-                          }`}
-                        >
-                          <Text
-                            variant="body"
-                            className={voltage === opt ? 'text-background font-medium' : ''}
-                          >
-                            {opt}
-                          </Text>
-                        </Pressable>
-                      ))}
-                      <Pressable
-                        onPress={handleCustomVoltageToggle}
-                        className="px-3 py-2 rounded-lg bg-secondary border border-border"
-                      >
-                        <Text variant="body" color="muted">
-                          {t('common.custom')}
-                        </Text>
-                      </Pressable>
+                  {/* Preset summary for Normal/Overclock */}
+                  {hammerPreset !== 'custom' && (
+                    <View className="bg-secondary/50 rounded-lg p-3 mb-4">
+                      <View className="flex-row justify-between">
+                        <Text variant="caption" color="muted">{t('miners.frequency')}</Text>
+                        <Text variant="body" className="font-medium">{frequency} MHz</Text>
+                      </View>
+                      <View className="flex-row justify-between mt-1">
+                        <Text variant="caption" color="muted">{t('miners.voltage')}</Text>
+                        <Text variant="body" className="font-medium">{voltage} mV</Text>
+                      </View>
                     </View>
-                  </ScrollView>
-                ) : (
-                  <View className="flex-row items-center gap-2">
-                    <TextInput
-                      value={customVoltageInput}
-                      onChangeText={setCustomVoltageInput}
-                      onBlur={handleCustomVoltageSubmit}
-                      onSubmitEditing={handleCustomVoltageSubmit}
-                      keyboardType="number-pad"
-                      returnKeyType="done"
-                      className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
-                      style={{ color: colors.text }}
-                      placeholderTextColor={colors.textMuted}
-                      placeholder={t('miners.enterVoltage')}
-                      autoFocus
-                    />
-                    <Pressable
-                      onPress={() => setCustomVoltage(false)}
-                      className="p-3 bg-secondary rounded-lg"
-                    >
-                      <Ionicons name="close" size={20} color={colors.textMuted} />
-                    </Pressable>
+                  )}
+
+                  {/* Custom mode: show individual frequency/voltage controls */}
+                  {hammerPreset === 'custom' && (
+                    <>
+                      {/* Frequency */}
+                      <View className="mb-4">
+                        <View className="flex-row justify-between items-center mb-2">
+                          <Text variant="body">{t('miners.frequency')}</Text>
+                          <View className="flex-row items-center gap-2">
+                            {frequencyWarning && (
+                              <Badge variant="warning" size="sm">
+                                {frequencyWarning}
+                              </Badge>
+                            )}
+                            <Text variant="body" className="font-medium">
+                              {frequency} MHz
+                            </Text>
+                          </View>
+                        </View>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          className="-mx-1"
+                        >
+                          <View className="flex-row gap-2 px-1">
+                            {asicConfig.frequencyOptions.map((opt) => (
+                              <Pressable
+                                key={opt}
+                                onPress={() => handleFrequencySelect(opt)}
+                                className={`px-3 py-2 rounded-lg ${
+                                  frequency === opt ? 'bg-primary' : 'bg-secondary'
+                                }`}
+                              >
+                                <Text
+                                  variant="body"
+                                  className={frequency === opt ? 'text-background font-medium' : ''}
+                                >
+                                  {opt}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+
+                      {/* Voltage */}
+                      <View className="mb-4">
+                        <View className="flex-row justify-between items-center mb-2">
+                          <Text variant="body">{t('miners.voltage')}</Text>
+                          <View className="flex-row items-center gap-2">
+                            {voltageWarning && (
+                              <Badge variant="warning" size="sm">
+                                {voltageWarning}
+                              </Badge>
+                            )}
+                            <Text variant="body" className="font-medium">
+                              {voltage} mV
+                            </Text>
+                          </View>
+                        </View>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          className="-mx-1"
+                        >
+                          <View className="flex-row gap-2 px-1">
+                            {asicConfig.voltageOptions.map((opt) => (
+                              <Pressable
+                                key={opt}
+                                onPress={() => handleVoltageSelect(opt)}
+                                className={`px-3 py-2 rounded-lg ${
+                                  voltage === opt ? 'bg-primary' : 'bg-secondary'
+                                }`}
+                              >
+                                <Text
+                                  variant="body"
+                                  className={voltage === opt ? 'text-background font-medium' : ''}
+                                >
+                                  {opt}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    </>
+                  )}
+                </>
+              ) : (
+                /* AxeOS: Original frequency/voltage controls */
+                <>
+                  {/* Frequency */}
+                  <View className="mb-4">
+                    <View className="flex-row justify-between items-center mb-2">
+                      <Text variant="body">{t('miners.frequency')}</Text>
+                      <View className="flex-row items-center gap-2">
+                        {frequencyWarning && (
+                          <Badge variant="warning" size="sm">
+                            {frequencyWarning}
+                          </Badge>
+                        )}
+                        <Text variant="body" className="font-medium">
+                          {frequency} MHz
+                        </Text>
+                      </View>
+                    </View>
+                    {!customFrequency ? (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        className="-mx-1"
+                      >
+                        <View className="flex-row gap-2 px-1">
+                          {asicConfig.frequencyOptions.map((opt) => (
+                            <Pressable
+                              key={opt}
+                              onPress={() => handleFrequencySelect(opt)}
+                              className={`px-3 py-2 rounded-lg ${
+                                frequency === opt ? 'bg-primary' : 'bg-secondary'
+                              }`}
+                            >
+                              <Text
+                                variant="body"
+                                className={frequency === opt ? 'text-background font-medium' : ''}
+                              >
+                                {opt}
+                              </Text>
+                            </Pressable>
+                          ))}
+                          <Pressable
+                            onPress={handleCustomFrequencyToggle}
+                            className="px-3 py-2 rounded-lg bg-secondary border border-border"
+                          >
+                            <Text variant="body" color="muted">
+                              {t('common.custom')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </ScrollView>
+                    ) : (
+                      <View className="flex-row items-center gap-2">
+                        <TextInput
+                          value={customFrequencyInput}
+                          onChangeText={setCustomFrequencyInput}
+                          onBlur={handleCustomFrequencySubmit}
+                          onSubmitEditing={handleCustomFrequencySubmit}
+                          keyboardType="number-pad"
+                          returnKeyType="done"
+                          className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
+                          style={{ color: colors.text }}
+                          placeholderTextColor={colors.textMuted}
+                          placeholder={t('miners.enterFrequency')}
+                          autoFocus
+                        />
+                        <Pressable
+                          onPress={() => setCustomFrequency(false)}
+                          className="p-3 bg-secondary rounded-lg"
+                        >
+                          <Ionicons name="close" size={20} color={colors.textMuted} />
+                        </Pressable>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
+
+                  {/* Voltage */}
+                  <View className="mb-4">
+                    <View className="flex-row justify-between items-center mb-2">
+                      <Text variant="body">{t('miners.voltage')}</Text>
+                      <View className="flex-row items-center gap-2">
+                        {voltageWarning && (
+                          <Badge variant="warning" size="sm">
+                            {voltageWarning}
+                          </Badge>
+                        )}
+                        <Text variant="body" className="font-medium">
+                          {voltage} mV
+                        </Text>
+                      </View>
+                    </View>
+                    {!customVoltage ? (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        className="-mx-1"
+                      >
+                        <View className="flex-row gap-2 px-1">
+                          {asicConfig.voltageOptions.map((opt) => (
+                            <Pressable
+                              key={opt}
+                              onPress={() => handleVoltageSelect(opt)}
+                              className={`px-3 py-2 rounded-lg ${
+                                voltage === opt ? 'bg-primary' : 'bg-secondary'
+                              }`}
+                            >
+                              <Text
+                                variant="body"
+                                className={voltage === opt ? 'text-background font-medium' : ''}
+                              >
+                                {opt}
+                              </Text>
+                            </Pressable>
+                          ))}
+                          <Pressable
+                            onPress={handleCustomVoltageToggle}
+                            className="px-3 py-2 rounded-lg bg-secondary border border-border"
+                          >
+                            <Text variant="body" color="muted">
+                              {t('common.custom')}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </ScrollView>
+                    ) : (
+                      <View className="flex-row items-center gap-2">
+                        <TextInput
+                          value={customVoltageInput}
+                          onChangeText={setCustomVoltageInput}
+                          onBlur={handleCustomVoltageSubmit}
+                          onSubmitEditing={handleCustomVoltageSubmit}
+                          keyboardType="number-pad"
+                          returnKeyType="done"
+                          className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
+                          style={{ color: colors.text }}
+                          placeholderTextColor={colors.textMuted}
+                          placeholder={t('miners.enterVoltage')}
+                          autoFocus
+                        />
+                        <Pressable
+                          onPress={() => setCustomVoltage(false)}
+                          className="p-3 bg-secondary rounded-lg"
+                        >
+                          <Ionicons name="close" size={20} color={colors.textMuted} />
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
 
             </View>
           )}
@@ -804,6 +1049,78 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               {t('miners.setToParasite')}
             </Button>
           </View>
+
+          {/* Fallback Pool Configuration (Hammer only) */}
+          {miner?.minerType === 'hammer' && (
+            <View className="px-4 py-4 border-t border-border">
+              <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
+                {t('miners.fallbackPoolConfig')}
+              </Text>
+
+              {miner.isUsingFallbackStratum && (
+                <View className="bg-warning/10 rounded-lg p-3 mb-3 flex-row items-center gap-2">
+                  <Ionicons name="swap-horizontal" size={16} color={colors.warning} />
+                  <Text variant="caption" color="warning">
+                    {t('miners.fallbackActive')}
+                  </Text>
+                </View>
+              )}
+
+              {/* Fallback URL */}
+              <View className="mb-3">
+                <Text variant="caption" color="muted" className="mb-1">
+                  {t('miners.fallbackStratumUrl')}
+                </Text>
+                <TextInput
+                  value={fallbackStratumUrl}
+                  onChangeText={setFallbackStratumUrl}
+                  className="bg-secondary rounded-lg px-4 py-3"
+                  style={{ color: colors.text }}
+                  placeholderTextColor={colors.textMuted}
+                  placeholder={t('miners.stratumPlaceholder')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              {/* Fallback Port */}
+              <View className="mb-3">
+                <Text variant="caption" color="muted" className="mb-1">
+                  {t('miners.fallbackPort')}
+                </Text>
+                <TextInput
+                  value={String(fallbackStratumPort)}
+                  onChangeText={(text) => {
+                    const num = parseInt(text, 10);
+                    if (!isNaN(num)) setFallbackStratumPort(num);
+                    else if (text === '') setFallbackStratumPort(0);
+                  }}
+                  className="bg-secondary rounded-lg px-4 py-3"
+                  style={{ color: colors.text }}
+                  placeholderTextColor={colors.textMuted}
+                  placeholder={t('miners.portPlaceholder')}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              {/* Fallback Worker */}
+              <View className="mb-3">
+                <Text variant="caption" color="muted" className="mb-1">
+                  {t('miners.fallbackWorker')}
+                </Text>
+                <TextInput
+                  value={fallbackStratumUser}
+                  onChangeText={setFallbackStratumUser}
+                  className="bg-secondary rounded-lg px-4 py-3"
+                  style={{ color: colors.text }}
+                  placeholderTextColor={colors.textMuted}
+                  placeholder={t('miners.workerPlaceholder')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+          )}
 
           {/* Pending Changes Summary */}
           {hasChanges && (

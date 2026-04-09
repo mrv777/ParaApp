@@ -74,6 +74,7 @@ const pt = {
     users: 'Usuários',
     editWorkerNote: 'Editar Nota',
     noteHint: 'ex., Minerador da cozinha',
+    achievements: 'Conquistas',
   },
 
   pool: {
@@ -95,6 +96,11 @@ const pt = {
     noEntries: 'Nenhuma entrada ainda',
     addAddressHint: 'Adicione seu endereço nas Configurações para ver sua posição',
     highestDiff: 'Maior dif.',
+    sinceLastBlock: 'Desde Último Bloco',
+    allTime: 'Histórico',
+    topDiff: 'Top Dif.',
+    bestEver: 'Melhor Sempre',
+    blocksParticipated: 'Blocos Participados',
   },
 
   miners: {
@@ -200,6 +206,22 @@ const pt = {
     sortBy: 'Ordenar por',
     filter: 'Filtrar',
     networkUnavailable: 'Rede indisponível - mineradores inacessíveis',
+    // Hammer-specific
+    performanceMode: 'Modo de desempenho',
+    preset_normal: 'Normal',
+    preset_overclock: 'Overclock',
+    preset_custom: 'Personalizado',
+    wifiSignal: 'Sinal WiFi',
+    serialNumber: 'Número de série',
+    fallbackPool: 'Pool de backup',
+    fallbackPoolConfig: 'Configuração do pool de backup',
+    fallbackStratumUrl: 'URL de backup',
+    fallbackPort: 'Porta de backup',
+    fallbackWorker: 'Worker de backup',
+    hwErrors: 'Erros HW',
+    hwErrorRate: '{{rate}}% taxa de erro',
+    active: 'Ativo',
+    fallbackActive: 'Usando pool de backup',
   },
 
   settings: {

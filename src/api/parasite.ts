@@ -15,6 +15,7 @@ import type {
   UserWorker,
   UserHistoricalPoint,
   UserHistoricalPointApiResponse,
+  UserRoundsResponse,
   Account,
   AccountApiResponse,
   HistoricalPeriod,
@@ -192,16 +193,19 @@ export async function getUserHistorical(
 }
 
 /**
- * Get difficulty leaderboard (new API)
- * @param limit - Number of entries to return (default: 100)
+ * Get difficulty leaderboard
+ * @param limit - Number of entries to return (default: 420)
+ * @param round - Optional round scope ('current' for since last block)
  */
 export async function getDifficultyLeaderboard(
-  limit: number = 100
+  limit: number = 420,
+  round?: 'current'
 ): Promise<ApiResult<DifficultyLeaderboardEntry[]>> {
   const params = new URLSearchParams({
     type: 'difficulty',
     limit: limit.toString(),
   });
+  if (round) params.set('round', round);
   return fetchWithTimeout<DifficultyLeaderboardEntry[]>(
     `${BASE_URL}/api/leaderboard?${params}`
   );
@@ -209,16 +213,34 @@ export async function getDifficultyLeaderboard(
 
 /**
  * Get loyalty leaderboard
- * @param limit - Number of entries to return (default: 100)
+ * @param limit - Number of entries to return (default: 420)
+ * @param round - Optional round scope ('current' for since last block)
  */
 export async function getLoyaltyLeaderboard(
-  limit: number = 100
+  limit: number = 420,
+  round?: 'current'
 ): Promise<ApiResult<LoyaltyLeaderboardEntry[]>> {
   const params = new URLSearchParams({
     type: 'loyalty',
     limit: limit.toString(),
   });
+  if (round) params.set('round', round);
   return fetchWithTimeout<LoyaltyLeaderboardEntry[]>(
     `${BASE_URL}/api/leaderboard?${params}`
+  );
+}
+
+/**
+ * Get user round participation history
+ * @param address - Bitcoin address
+ * @param limit - Max rounds to return (default: 100, API max: 100)
+ */
+export async function getUserRounds(
+  address: string,
+  limit: number = 100
+): Promise<ApiResult<UserRoundsResponse>> {
+  const params = new URLSearchParams({ limit: limit.toString() });
+  return fetchWithTimeout<UserRoundsResponse>(
+    `${BASE_URL}/api/user/${address}/rounds?${params}`
   );
 }

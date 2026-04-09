@@ -10,6 +10,7 @@ import type {
   LocalMiner,
   MinerWarning,
   MinerSettings,
+  MinerType,
   SavedMiner,
   AxeOSSystemInfo,
   DiscoveryProgress,
@@ -97,14 +98,44 @@ const initialState: MinerState = {
 let discoveryController: AbortController | null = null;
 
 /**
- * Parse AxeOS system info into LocalMiner format
+ * Detect miner firmware type from system info response
+ */
+function detectMinerType(info: AxeOSSystemInfo): MinerType {
+  // Hammer uses uppercase DeviceModel and has sn_str
+  if (info.DeviceModel || info.sn_str !== undefined) return 'hammer';
+  // AxeOS uses lowercase deviceModel or has vrTemp
+  if (info.deviceModel || info.vrTemp !== undefined) return 'axeos';
+  return 'unknown';
+}
+
+/**
+ * Map raw Hammer device model codes to display names
+ */
+function getHammerModelDisplay(rawModel: string): string {
+  const displayNames: Record<string, string> = {
+    BC04: 'Hammer BC04',
+  };
+  return displayNames[rawModel] || rawModel;
+}
+
+/**
+ * Parse system info into LocalMiner format (supports AxeOS and Hammer)
  */
 function parseSystemInfo(ip: string, info: AxeOSSystemInfo): LocalMiner {
+  const minerType = detectMinerType(info);
+
+  // Normalize device model: AxeOS uses lowercase, Hammer uses uppercase
+  const deviceModel =
+    info.deviceModel ||
+    (info.DeviceModel ? getHammerModelDisplay(info.DeviceModel) : null) ||
+    getDeviceModel(info.ASICModel);
+
   return {
     ip,
     hostname: info.hostname,
     ASICModel: info.ASICModel,
-    deviceModel: info.deviceModel || getDeviceModel(info.ASICModel),
+    deviceModel,
+    minerType,
     expectedHashrate: getExpectedHashrate(info.ASICModel) * (info.asicCount || 1),
     hashRate: info.hashRate,
     power: info.power,
@@ -124,9 +155,26 @@ function parseSystemInfo(ip: string, info: AxeOSSystemInfo): LocalMiner {
     version: info.version,
     uptimeSeconds: info.uptimeSeconds,
     wifiSSID: info.ssid,
+    rssi: info.wifiRSSI,
     overheatMode: info.overheat_mode === 1,
     lastSeen: Date.now(),
     isOnline: true,
+    // Hammer-specific
+    hwErrors: info.hwNumber,
+    hwErrorRate: info.hwRate,
+    fallbackStratumUrl: info.fallbackStratumURL,
+    fallbackStratumPort: info.fallbackStratumPort,
+    fallbackStratumUser: info.fallbackStratumUser,
+    isUsingFallbackStratum: (info.isUsingFallbackStratum ?? 0) > 0,
+    serialNumber: info.sn_str,
+    bootMode: info.boot_mode,
+    rawConfig: minerType === 'hammer' ? {
+      flipscreen: info.flipscreen,
+      invertfanpolarity: info.invertfanpolarity,
+      overheat_mode: info.overheat_mode,
+      ntpServer: info.ntpServer || 'pool.ntp.org',
+      ntpServerBackup: info.ntpServerBackup || 'ntp.aliyun.com',
+    } : undefined,
   };
 }
 
@@ -274,7 +322,13 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       updateMinerSettings: async (ip, settings) => {
-        const result = await axeOS.updateSettings(ip, settings);
+        const miner = get().miners.find((m) => m.ip === ip);
+
+        // Hammer requires full payload with boot_mode
+        const result = miner?.minerType === 'hammer'
+          ? await axeOS.updateHammerSettings(ip, settings, miner)
+          : await axeOS.updateSettings(ip, settings);
+
         if (isSuccess(result)) {
           // Refresh to get updated values
           get().refreshMiner(ip);
@@ -427,6 +481,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
             hostname: '',
             ASICModel: '',
             deviceModel: 'Unknown',
+            minerType: 'unknown' as MinerType,
             expectedHashrate: 0,
             hashRate: 0,
             power: 0,

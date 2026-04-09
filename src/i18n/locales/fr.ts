@@ -74,6 +74,7 @@ const fr = {
     users: 'Utilisateurs',
     editWorkerNote: 'Modifier la note',
     noteHint: 'ex., Mineur cuisine',
+    achievements: 'Succès',
   },
 
   pool: {
@@ -95,6 +96,11 @@ const fr = {
     noEntries: 'Aucune entrée pour le moment',
     addAddressHint: 'Ajoutez votre adresse dans Paramètres pour voir votre rang',
     highestDiff: 'Plus haute diff.',
+    sinceLastBlock: 'Depuis dernier bloc',
+    allTime: 'Tout temps',
+    topDiff: 'Top Diff.',
+    bestEver: 'Meilleur jamais',
+    blocksParticipated: 'Blocs participés',
   },
 
   miners: {
@@ -200,6 +206,22 @@ const fr = {
     sortBy: 'Trier par',
     filter: 'Filtrer',
     networkUnavailable: 'Réseau indisponible - mineurs inaccessibles',
+    // Hammer-specific
+    performanceMode: 'Mode de performance',
+    preset_normal: 'Normal',
+    preset_overclock: 'Overclock',
+    preset_custom: 'Personnalisé',
+    wifiSignal: 'Signal WiFi',
+    serialNumber: 'Numéro de série',
+    fallbackPool: 'Pool de secours',
+    fallbackPoolConfig: 'Configuration du pool de secours',
+    fallbackStratumUrl: 'URL de secours',
+    fallbackPort: 'Port de secours',
+    fallbackWorker: 'Worker de secours',
+    hwErrors: 'Erreurs HW',
+    hwErrorRate: "{{rate}}% taux d'erreur",
+    active: 'Actif',
+    fallbackActive: 'Utilisation du pool de secours',
   },
 
   settings: {

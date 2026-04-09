@@ -2,7 +2,8 @@
  * PoolScreen - Pool monitoring with stats, charts, and leaderboards
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { View, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +19,14 @@ import {
   SkeletonStatItem,
   Text,
 } from '@/components';
-import { usePoolPolling } from '@/hooks';
+import { usePoolPolling, usePolling } from '@/hooks';
 import {
   usePoolStore,
   selectPoolStats,
   selectDifficultyLeaderboard,
   selectLoyaltyLeaderboard,
+  selectRoundDifficultyLeaderboard,
+  selectRoundLoyaltyLeaderboard,
   selectHistorical,
   selectBitcoinPrice,
   selectPoolError,
@@ -48,6 +51,8 @@ export function PoolScreen(_props: Props) {
   const stats = usePoolStore(selectPoolStats);
   const difficultyLeaderboard = usePoolStore(selectDifficultyLeaderboard);
   const loyaltyLeaderboard = usePoolStore(selectLoyaltyLeaderboard);
+  const roundDifficultyLeaderboard = usePoolStore(selectRoundDifficultyLeaderboard);
+  const roundLoyaltyLeaderboard = usePoolStore(selectRoundLoyaltyLeaderboard);
   const historical = usePoolStore(selectHistorical);
   const bitcoinPrice = usePoolStore(selectBitcoinPrice);
   const error = usePoolStore(selectPoolError);
@@ -65,6 +70,7 @@ export function PoolScreen(_props: Props) {
   const refreshAll = usePoolStore((s) => s.refreshAll);
   const fetchHistorical = usePoolStore((s) => s.fetchHistorical);
   const fetchLeaderboards = usePoolStore((s) => s.fetchLeaderboards);
+  const fetchRoundLeaderboards = usePoolStore((s) => s.fetchRoundLeaderboards);
   const setHistoricalPeriod = usePoolStore((s) => s.setHistoricalPeriod);
   const clearError = usePoolStore((s) => s.clearError);
 
@@ -74,34 +80,49 @@ export function PoolScreen(_props: Props) {
   // Initialize polling
   usePoolPolling();
 
-  // Initial data fetch
+  // Poll round leaderboards only while Pool tab is focused (tabs don't unmount on blur)
+  // immediate: true so data refreshes instantly on tab refocus; 60s interval (round data changes infrequently)
+  const isFocused = useIsFocused();
+  const onPollRoundLeaderboards = useCallback(async () => {
+    await fetchRoundLeaderboards();
+  }, [fetchRoundLeaderboards]);
+  usePolling({ onPoll: onPollRoundLeaderboards, immediate: true, enabled: isFocused, interval: 60000 });
+
+  // Cold start: refreshAll with loading indicators (subsequent polls are silent)
+  const hasMountFetched = useRef(false);
   useEffect(() => {
-    if (!stats) {
+    if (!hasMountFetched.current) {
+      hasMountFetched.current = true;
       refreshAll();
+    } else {
+      // Re-runs: only fill in missing data individually
+      if (!difficultyLeaderboard) {
+        fetchLeaderboards();
+      }
     }
     if (!historical) {
       fetchHistorical(period);
     }
-    if (!difficultyLeaderboard) {
-      fetchLeaderboards();
-    }
-  }, [stats, historical, difficultyLeaderboard, refreshAll, fetchHistorical, fetchLeaderboards, period]);
+  }, [difficultyLeaderboard, historical, refreshAll, fetchLeaderboards, fetchHistorical, period]);
+
+  const isLoadingRoundLeaderboards = usePoolStore((s) => s.isLoadingRoundLeaderboards);
 
   // Determine skeleton display based on cache staleness
   const showStatsSkeleton = isCacheStale(statsCache) && isLoading && !stats;
   const showChartSkeleton = isCacheStale(historicalCache) && isLoadingHistorical && !historical;
-  const showLeaderboardsSkeleton = isCacheStale(difficultyLeaderboardCache) && isLoadingLeaderboards && !difficultyLeaderboard;
+  const showLeaderboardsSkeleton =
+    (isCacheStale(difficultyLeaderboardCache) && isLoadingLeaderboards && !difficultyLeaderboard) ||
+    (isLoadingRoundLeaderboards && !roundDifficultyLeaderboard);
 
-  // Pull-to-refresh handler
+  // Pull-to-refresh handler (refreshAll covers stats + leaderboards + round leaderboards + price)
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
       refreshAll(),
       fetchHistorical(period),
-      fetchLeaderboards(),
     ]);
     setRefreshing(false);
-  }, [refreshAll, fetchHistorical, fetchLeaderboards, period]);
+  }, [refreshAll, fetchHistorical, period]);
 
   // Period change handler
   const handlePeriodChange = useCallback(
@@ -200,6 +221,8 @@ export function PoolScreen(_props: Props) {
           <LeaderboardCard
             difficultyEntries={difficultyLeaderboard ?? []}
             loyaltyEntries={loyaltyLeaderboard ?? []}
+            roundDifficultyEntries={roundDifficultyLeaderboard ?? []}
+            roundLoyaltyEntries={roundLoyaltyLeaderboard ?? []}
             userAddress={userAddress ?? undefined}
             isLoading={showLeaderboardsSkeleton}
           />

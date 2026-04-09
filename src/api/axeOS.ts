@@ -3,7 +3,7 @@
  * Base URL: http://{miner_ip}
  */
 
-import type { ApiResult, AsicConfig, AxeOSSystemInfo, MinerSettings } from '@/types';
+import type { ApiResult, AsicConfig, AxeOSSystemInfo, LocalMiner, MinerSettings } from '@/types';
 import { fetchWithTimeout, postJson, postText, patchJson, MINER_TIMEOUT } from './client';
 
 /**
@@ -75,10 +75,102 @@ export async function updateSettings(
   if (settings.stratumPassword !== undefined) {
     payload.stratumPassword = settings.stratumPassword;
   }
+  if (settings.fallbackStratumUrl !== undefined) {
+    payload.fallbackStratumURL = settings.fallbackStratumUrl;
+  }
+  if (settings.fallbackStratumPort !== undefined) {
+    payload.fallbackStratumPort = settings.fallbackStratumPort;
+  }
+  if (settings.fallbackStratumUser !== undefined) {
+    payload.fallbackStratumUser = settings.fallbackStratumUser;
+  }
 
   return patchJson<void>(`${minerUrl(ip)}/api/system`, payload, {
     timeout: MINER_TIMEOUT,
+    responseType: 'text', // Some miners (Hammer) return empty body on success
   });
+}
+
+/**
+ * Update Hammer miner settings.
+ * Hammer firmware requires the full settings object in every PATCH —
+ * partial updates are silently ignored. Frequency/voltage/boot_mode
+ * changes only take effect after a restart.
+ */
+export async function updateHammerSettings(
+  ip: string,
+  settings: MinerSettings,
+  miner: LocalMiner
+): Promise<ApiResult<void>> {
+  const raw = miner.rawConfig;
+
+  // Build full payload with current values as defaults
+  const payload: Record<string, unknown> = {
+    frequency: settings.frequency ?? miner.frequency,
+    coreVoltage: settings.coreVoltage ?? miner.voltage,
+    fanspeed: settings.fanSpeed ?? miner.fanSpeed,
+    autofanspeed: (settings.autoFanSpeed ?? miner.autoFanSpeed) ? 1 : 0,
+    flipscreen: raw?.flipscreen ?? 1,
+    invertfanpolarity: raw?.invertfanpolarity ?? 0,
+    overheat_mode: raw?.overheat_mode ?? 0,
+    boot_mode: miner.bootMode ?? 0,
+    ntpServer: raw?.ntpServer ?? 'pool.ntp.org',
+    ntpServerBackup: raw?.ntpServerBackup ?? 'ntp.aliyun.com',
+  };
+
+  // If frequency or voltage is being changed, set boot_mode to customize (2)
+  if (settings.frequency !== undefined || settings.coreVoltage !== undefined) {
+    payload.boot_mode = 2;
+  }
+
+  const result = await patchJson<void>(`${minerUrl(ip)}/api/system`, payload, {
+    timeout: MINER_TIMEOUT,
+    responseType: 'text',
+  });
+
+  if (!result.success) return result;
+
+  // Pool settings are a separate PATCH on Hammer
+  const poolPayload: Record<string, unknown> = {};
+  let hasPoolChanges = false;
+
+  if (settings.stratumUrl !== undefined) {
+    poolPayload.stratumURL = settings.stratumUrl;
+    hasPoolChanges = true;
+  }
+  if (settings.stratumPort !== undefined) {
+    poolPayload.stratumPort = settings.stratumPort;
+    hasPoolChanges = true;
+  }
+  if (settings.stratumUser !== undefined) {
+    poolPayload.stratumUser = settings.stratumUser;
+    hasPoolChanges = true;
+  }
+  if (settings.stratumPassword !== undefined) {
+    poolPayload.stratumPassword = settings.stratumPassword;
+    hasPoolChanges = true;
+  }
+  if (settings.fallbackStratumUrl !== undefined) {
+    poolPayload.fallbackStratumURL = settings.fallbackStratumUrl;
+    hasPoolChanges = true;
+  }
+  if (settings.fallbackStratumPort !== undefined) {
+    poolPayload.fallbackStratumPort = settings.fallbackStratumPort;
+    hasPoolChanges = true;
+  }
+  if (settings.fallbackStratumUser !== undefined) {
+    poolPayload.fallbackStratumUser = settings.fallbackStratumUser;
+    hasPoolChanges = true;
+  }
+
+  if (hasPoolChanges) {
+    return patchJson<void>(`${minerUrl(ip)}/api/system`, poolPayload, {
+      timeout: MINER_TIMEOUT,
+      responseType: 'text',
+    });
+  }
+
+  return result;
 }
 
 /**

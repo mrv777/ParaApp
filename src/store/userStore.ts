@@ -8,6 +8,7 @@ import type {
   ApiError,
   UserStats,
   UserHistoricalPoint,
+  UserRoundsResponse,
   Account,
   HistoricalPeriod,
   HistoricalInterval,
@@ -21,6 +22,7 @@ interface UserState {
   stats: CachedData<UserStats> | null;
   account: CachedData<Account | null> | null;
   historical: CachedData<UserHistoricalPoint[]> | null;
+  rounds: CachedData<UserRoundsResponse> | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -36,6 +38,7 @@ interface UserState {
 interface UserActions {
   fetchUserStats: (options?: { silent?: boolean }) => Promise<void>;
   fetchAccount: () => Promise<void>;
+  fetchRounds: () => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
     interval?: HistoricalInterval
@@ -50,6 +53,7 @@ const initialState: UserState = {
   stats: null,
   account: null,
   historical: null,
+  rounds: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
@@ -105,6 +109,9 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       parasite.getUserHistorical(address, '24h', '5m'),
     ]);
 
+    // Skip if address changed during fetch
+    if (useSettingsStore.getState().bitcoinAddress !== address) return;
+
     if (isSuccess(userResult)) {
       let statsWithAverages = userResult.data;
 
@@ -141,9 +148,28 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
 
     const result = await parasite.getAccount(address);
 
+    // Skip if address changed during fetch
+    if (useSettingsStore.getState().bitcoinAddress !== address) return;
+
     if (isSuccess(result)) {
       set({
         account: { data: result.data, timestamp: Date.now() },
+      });
+    }
+  },
+
+  fetchRounds: async () => {
+    const address = useSettingsStore.getState().bitcoinAddress;
+    if (!address) return;
+
+    const result = await parasite.getUserRounds(address);
+
+    // Skip if address changed during fetch
+    if (useSettingsStore.getState().bitcoinAddress !== address) return;
+
+    if (isSuccess(result)) {
+      set({
+        rounds: { data: result.data, timestamp: Date.now() },
       });
     }
   },
@@ -160,6 +186,9 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       period,
       actualInterval
     );
+
+    // Skip if address changed during fetch
+    if (useSettingsStore.getState().bitcoinAddress !== address) return;
 
     if (isSuccess(result)) {
       set({
@@ -183,6 +212,9 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       stats: null,
       account: null,
       historical: null,
+      rounds: null,
+      isLoading: false,
+      isLoadingHistorical: false,
       error: null,
     }),
 
@@ -190,8 +222,8 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const { fetchUserStats, fetchAccount } = get();
-    await Promise.all([fetchUserStats(), fetchAccount()]);
+    const { fetchUserStats, fetchAccount, fetchRounds } = get();
+    await Promise.all([fetchUserStats(), fetchAccount(), fetchRounds()]);
   },
 }));
 
@@ -205,5 +237,6 @@ export const selectUserWorkers = (state: UserState) =>
   state.stats?.data?.workers ?? EMPTY_WORKERS;
 export const selectUserHistorical = (state: UserState) =>
   state.historical?.data;
+export const selectUserRounds = (state: UserState) => state.rounds?.data;
 export const selectIsUserLoading = (state: UserState) => state.isLoading;
 export const selectUserError = (state: UserState) => state.error;

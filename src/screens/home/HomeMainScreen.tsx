@@ -16,6 +16,7 @@ import { TipBanner } from '@/components/TipBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
 import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
+import { AchievementsCard } from '@/components/home/AchievementsCard';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
 import {
@@ -33,6 +34,7 @@ import {
   selectUserStats,
   selectUserWorkers,
   selectUserHistorical,
+  selectUserRounds,
   selectIsUserLoading,
   selectUserError,
 } from '@/store/userStore';
@@ -77,6 +79,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const userStats = useUserStore(selectUserStats);
   const workers = useUserStore(selectUserWorkers);
   const historical = useUserStore(selectUserHistorical);
+  const userRounds = useUserStore(selectUserRounds);
   const historicalPeriod = useUserStore((s) => s.historicalPeriod);
   const isUserLoading = useUserStore(selectIsUserLoading);
   const isLoadingHistorical = useUserStore((s) => s.isLoadingHistorical);
@@ -96,10 +99,28 @@ export function HomeMainScreen({ navigation }: Props) {
   usePoolPolling();
   useUserPolling();
 
-  // Fetch leaderboards on mount (for user rank display)
+  // Fetch leaderboards on mount; handle address changes for user data
+  const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
+  const fetchRounds = useUserStore((s) => s.fetchRounds);
+  const clearUserData = useUserStore((s) => s.clearUserData);
+  const prevAddressRef = useRef(bitcoinAddress);
   useEffect(() => {
     fetchLeaderboards();
-  }, [fetchLeaderboards]);
+    if (bitcoinAddress) {
+      if (prevAddressRef.current && prevAddressRef.current !== bitcoinAddress) {
+        // Address changed — clear stale data then full refresh for new address
+        clearUserData();
+        refreshUser();
+      } else {
+        // Mount or first address set — just fetch rounds (stats come from polling)
+        fetchRounds();
+      }
+    } else if (prevAddressRef.current) {
+      // Address was removed
+      clearUserData();
+    }
+    prevAddressRef.current = bitcoinAddress;
+  }, [fetchLeaderboards, refreshUser, fetchRounds, clearUserData, bitcoinAddress]);
 
   // Refresh miners on mount if any are saved (they start offline after rehydration)
   useEffect(() => {
@@ -126,16 +147,15 @@ export function HomeMainScreen({ navigation }: Props) {
   const isLoading = hasAddress ? isUserLoading : isPoolLoading;
   const connectionStatus = isLoading ? 'connecting' : error ? 'offline' : 'connected';
 
-  // Pull-to-refresh handler
+  // Pull-to-refresh handler (refreshPool covers leaderboards, refreshUser covers rounds)
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([
       hasAddress ? refreshUser() : Promise.resolve(),
       refreshPool(),
-      fetchLeaderboards(),
     ]);
     setRefreshing(false);
-  }, [hasAddress, refreshUser, refreshPool, fetchLeaderboards]);
+  }, [hasAddress, refreshUser, refreshPool]);
 
   // Navigate to Settings to add address
   const handleAddAddress = useCallback(() => {
@@ -209,6 +229,12 @@ export function HomeMainScreen({ navigation }: Props) {
               isLoading={isUserLoading}
               onShare={captureAndShare}
               isSharing={isSharing}
+            />
+
+            {/* Achievements */}
+            <AchievementsCard
+              rounds={userRounds ?? null}
+              isLoading={isUserLoading}
             />
 
             {/* User Hashrate Chart */}

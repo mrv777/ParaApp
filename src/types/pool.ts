@@ -54,6 +54,7 @@ export type LeaderboardType = 'difficulty' | 'loyalty';
 export interface DifficultyLeaderboardEntry {
   id: number;
   address: string;
+  claimed?: boolean;
   diff: number;
 }
 
@@ -63,6 +64,7 @@ export interface DifficultyLeaderboardEntry {
 export interface LoyaltyLeaderboardEntry {
   id: number;
   address: string;
+  claimed?: boolean;
   total_blocks: number;
 }
 
