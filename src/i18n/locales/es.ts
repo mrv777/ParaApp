@@ -243,6 +243,8 @@ const es = {
     github: 'GitHub',
     invalidAddress: 'Dirección Bitcoin no válida',
     addressSaved: 'Dirección guardada',
+    taprootWarning:
+      'Dirección Taproot detectada. En Xverse, esta es tu dirección de Ordinals — usa tu dirección de Pagos (3... o bc1q...) para los pagos de minería.',
     language: 'Idioma',
     workerSort: 'Ordenar Workers',
     preferences: 'Preferencias',

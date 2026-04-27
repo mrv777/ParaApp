@@ -38,7 +38,7 @@ import {
   type PermissionStatus,
 } from '@/utils/notifications';
 import { useTranslation } from '@/i18n';
-import { isValidBitcoinAddress } from '@/utils/validation';
+import { isValidBitcoinAddress, isTaprootAddress } from '@/utils/validation';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import type { SettingsStackScreenProps } from '@/types/navigation';
@@ -103,6 +103,12 @@ export function SettingsMainScreen({ navigation }: Props) {
   const languageDisplayName = useMemo(() => {
     return t(`settings.languageNames.${language}`);
   }, [language, t]);
+
+  // Show a warning when the saved address is taproot (common Xverse footgun).
+  const showTaprootWarning = useMemo(
+    () => isAddressValid === true && !!bitcoinAddress && isTaprootAddress(bitcoinAddress),
+    [isAddressValid, bitcoinAddress]
+  );
 
   // Sync input with store
   useEffect(() => {
@@ -279,6 +285,25 @@ export function SettingsMainScreen({ navigation }: Props) {
                 />
                 <Text variant="caption" color="danger" className="ml-1">
                   {validationError}
+                </Text>
+              </Animated.View>
+            )}
+
+            {/* Taproot / Xverse warning */}
+            {showTaprootWarning && (
+              <Animated.View
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(200)}
+                className="flex-row mt-2"
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={16}
+                  color={colors.warning}
+                  style={{ marginTop: 2 }}
+                />
+                <Text variant="caption" color="warning" className="ml-1 flex-1">
+                  {t('settings.taprootWarning')}
                 </Text>
               </Animated.View>
             )}

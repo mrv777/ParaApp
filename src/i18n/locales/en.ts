@@ -242,6 +242,8 @@ const en = {
     github: 'GitHub',
     invalidAddress: 'Invalid Bitcoin address',
     addressSaved: 'Address saved',
+    taprootWarning:
+      'Taproot address detected. In Xverse wallet, this is your Ordinals address — use your Payments address (3... or bc1q...) for mining payouts instead.',
     language: 'Language',
     workerSort: 'Worker Sort',
     preferences: 'Preferences',

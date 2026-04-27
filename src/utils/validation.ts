@@ -3,6 +3,11 @@
  */
 
 import * as bitcoin from 'bitcoinjs-lib';
+import * as ecc from '@bitcoinerlab/secp256k1';
+
+// Required for taproot (bc1p...) validation — bitcoinjs-lib verifies the
+// x-only pubkey against the secp256k1 curve.
+bitcoin.initEccLib(ecc);
 
 /**
  * Validate a Bitcoin address using bitcoinjs-lib
@@ -14,13 +19,20 @@ export function isValidBitcoinAddress(addr: string): boolean {
   if (!addr || typeof addr !== 'string') return false;
 
   try {
-    // Try mainnet first
     bitcoin.address.toOutputScript(addr, bitcoin.networks.bitcoin);
     return true;
   } catch {
-    // Not a valid mainnet address
     return false;
   }
+}
+
+/**
+ * Check whether an address is a taproot (P2TR / bc1p...) address.
+ * Assumes the input has already been validated.
+ */
+export function isTaprootAddress(addr: string): boolean {
+  if (!addr || typeof addr !== 'string') return false;
+  return addr.toLowerCase().startsWith('bc1p');
 }
 
 /**

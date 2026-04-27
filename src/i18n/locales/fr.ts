@@ -243,6 +243,8 @@ const fr = {
     github: 'GitHub',
     invalidAddress: 'Adresse Bitcoin invalide',
     addressSaved: 'Adresse enregistrée',
+    taprootWarning:
+      'Adresse Taproot détectée. Dans Xverse, il s’agit de votre adresse Ordinals — utilisez plutôt votre adresse Paiements (3... ou bc1q...) pour les paiements de minage.',
     language: 'Langue',
     workerSort: 'Tri des workers',
     preferences: 'Préférences',

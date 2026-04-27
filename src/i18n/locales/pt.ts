@@ -243,6 +243,8 @@ const pt = {
     github: 'GitHub',
     invalidAddress: 'Endereço Bitcoin inválido',
     addressSaved: 'Endereço salvo',
+    taprootWarning:
+      'Endereço Taproot detectado. No Xverse, este é o seu endereço de Ordinals — use o seu endereço de Pagamentos (3... ou bc1q...) para os pagamentos de mineração.',
     language: 'Idioma',
     workerSort: 'Ordenação de workers',
     preferences: 'Preferências',
