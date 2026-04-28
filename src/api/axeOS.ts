@@ -58,10 +58,13 @@ export async function updateSettings(
     payload.coreVoltage = settings.coreVoltage;
   }
   if (settings.autoFanSpeed !== undefined) {
-    payload.autofanspeed = settings.autoFanSpeed ? 1 : 0;
+    payload.autofanspeed = settings.autoFanSpeed;
   }
   if (settings.fanSpeed !== undefined) {
     payload.fanspeed = settings.fanSpeed;
+  }
+  if (settings.targetTemp !== undefined) {
+    payload.temptarget = settings.targetTemp;
   }
   if (settings.stratumUrl !== undefined) {
     payload.stratumURL = settings.stratumUrl;
@@ -109,7 +112,7 @@ export async function updateHammerSettings(
     frequency: settings.frequency ?? miner.frequency,
     coreVoltage: settings.coreVoltage ?? miner.voltage,
     fanspeed: settings.fanSpeed ?? miner.fanSpeed,
-    autofanspeed: (settings.autoFanSpeed ?? miner.autoFanSpeed) ? 1 : 0,
+    autofanspeed: settings.autoFanSpeed ?? miner.autoFanSpeed,
     flipscreen: raw?.flipscreen ?? 1,
     invertfanpolarity: raw?.invertfanpolarity ?? 0,
     overheat_mode: raw?.overheat_mode ?? 0,
@@ -117,6 +120,12 @@ export async function updateHammerSettings(
     ntpServer: raw?.ntpServer ?? 'pool.ntp.org',
     ntpServerBackup: raw?.ntpServerBackup ?? 'ntp.aliyun.com',
   };
+
+  // targetTemp only included when device exposes it (firmware support varies)
+  const effectiveTargetTemp = settings.targetTemp ?? miner.targetTemp;
+  if (effectiveTargetTemp !== undefined) {
+    payload.temptarget = effectiveTargetTemp;
+  }
 
   // If frequency or voltage is being changed, set boot_mode to customize (2)
   if (settings.frequency !== undefined || settings.coreVoltage !== undefined) {

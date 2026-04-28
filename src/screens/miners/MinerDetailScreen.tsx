@@ -49,8 +49,8 @@ export function MinerDetailScreen({ route, navigation }: Props) {
 
   // Compute warnings
   const warnings = useMemo(
-    () => (miner ? getWarnings(miner) : []),
-    [miner, getWarnings]
+    () => (miner ? getWarnings(miner, temperatureUnit) : []),
+    [miner, getWarnings, temperatureUnit]
   );
 
   // Navigate back if miner is removed

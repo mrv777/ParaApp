@@ -25,9 +25,17 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { axeOS } from '@/api';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
+import { formatTemperature } from '@/utils/formatting';
+import { isValidPort, isValidStratumUrl } from '@/utils/validation';
 import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
 import type { AsicConfig, MinerSettings, MinerType } from '@/types/miner';
+
+/** Auto-fan target temperature bounds (°C) — matches AxeOS firmware accepted range */
+const TARGET_TEMP_MIN_C = 20;
+const TARGET_TEMP_MAX_C = 100;
+/** Worker name max length — generous to fit address.worker.subaccount@pool strings */
+const WORKER_NAME_MAX = 128;
 
 const { getAsicSettings, PARASITE_STRATUM_PRESET } = axeOS;
 
@@ -87,6 +95,21 @@ interface PendingChange {
   label: string;
   from: string;
   to: string;
+  /** Pool changes get visual emphasis — a wrong value can disconnect the miner */
+  critical?: boolean;
+}
+
+/** Convert °C to user's preferred unit for input display */
+function celsiusToDisplay(c: number, unit: 'celsius' | 'fahrenheit'): number {
+  return unit === 'fahrenheit' ? Math.round((c * 9) / 5 + 32) : Math.round(c);
+}
+
+/** Parse user input back to °C; returns null on invalid input */
+function displayToCelsius(input: string, unit: 'celsius' | 'fahrenheit'): number | null {
+  if (!/^-?\d+$/.test(input.trim())) return null;
+  const num = Number(input.trim());
+  if (!Number.isFinite(num)) return null;
+  return unit === 'fahrenheit' ? Math.round(((num - 32) * 5) / 9) : num;
 }
 
 export function MinerSettingsScreen({ route, navigation }: Props) {
@@ -99,6 +122,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const updateMinerSettings = useMinerStore((s) => s.updateMinerSettings);
   const restartMiner = useMinerStore((s) => s.restartMiner);
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
+  const temperatureUnit = useSettingsStore((s) => s.temperatureUnit);
 
   // Find the miner
   const miner = useMemo(() => miners.find((m) => m.ip === ip), [miners, ip]);
@@ -113,13 +137,19 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const [voltage, setVoltage] = useState(0);
   const [fanSpeed, setFanSpeed] = useState(0);
   const [autoFan, setAutoFan] = useState(false);
+  const [targetTempInput, setTargetTempInput] = useState('');
   const [stratumUrl, setStratumUrl] = useState('');
   const [stratumPort, setStratumPort] = useState(0);
+  const [stratumPortInput, setStratumPortInput] = useState('');
   const [stratumUser, setStratumUser] = useState('');
   const [stratumPassword, setStratumPassword] = useState('');
+  // Track whether user actually edited the password — protects against the
+  // pre-populated placeholder being accidentally submitted as a real change
+  const [passwordTouched, setPasswordTouched] = useState(false);
   // Fallback stratum (Hammer)
   const [fallbackStratumUrl, setFallbackStratumUrl] = useState('');
   const [fallbackStratumPort, setFallbackStratumPort] = useState(0);
+  const [fallbackStratumPortInput, setFallbackStratumPortInput] = useState('');
   const [fallbackStratumUser, setFallbackStratumUser] = useState('');
 
   // Custom value mode
@@ -127,6 +157,8 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const [customVoltage, setCustomVoltage] = useState(false);
   const [customFrequencyInput, setCustomFrequencyInput] = useState('');
   const [customVoltageInput, setCustomVoltageInput] = useState('');
+  const [customFrequencyError, setCustomFrequencyError] = useState<string | null>(null);
+  const [customVoltageError, setCustomVoltageError] = useState<string | null>(null);
 
   // Hammer preset mode
   const [hammerPreset, setHammerPreset] = useState<HammerPreset>('normal');
@@ -172,19 +204,29 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
     // Pool settings
     setStratumUrl(miner.stratumUrl || '');
-    setStratumPort(miner.stratumPort || 3333);
+    const initialPort = miner.stratumPort || 3333;
+    setStratumPort(initialPort);
+    setStratumPortInput(String(initialPort));
     setStratumUser(miner.stratumUser || '');
-    setStratumPassword('x');
+    // Password starts empty + untouched — we never display the existing pool
+    // password (firmware doesn't return it). Only PATCH it when user actually edits.
+    setStratumPassword('');
+    setPasswordTouched(false);
     // Fan settings
     setFanSpeed(miner.fanSpeed || 50);
-    setAutoFan(miner.autoFanSpeed ?? false);
+    setAutoFan((miner.autoFanSpeed ?? 0) > 0);
+    if (miner.targetTemp !== undefined) {
+      setTargetTempInput(String(celsiusToDisplay(miner.targetTemp, temperatureUnit)));
+    }
     // Fallback stratum (Hammer)
     if (miner.minerType === 'hammer') {
       setFallbackStratumUrl(miner.fallbackStratumUrl || '');
-      setFallbackStratumPort(miner.fallbackStratumPort || 3333);
+      const fbPort = miner.fallbackStratumPort || 3333;
+      setFallbackStratumPort(fbPort);
+      setFallbackStratumPortInput(String(fbPort));
       setFallbackStratumUser(miner.fallbackStratumUser || '');
     }
-  }, [miner]);
+  }, [miner, temperatureUnit]);
 
   // Initialize frequency/voltage when asicConfig is available (once only)
   useEffect(() => {
@@ -214,12 +256,16 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
     const values: MinerSettings = {
       fanSpeed: miner.fanSpeed || 50,
-      autoFanSpeed: miner.autoFanSpeed ?? false,
+      autoFanSpeed: miner.autoFanSpeed ?? 0,
       stratumUrl: miner.stratumUrl || '',
       stratumPort: miner.stratumPort || 3333,
       stratumUser: miner.stratumUser || '',
-      stratumPassword: 'x',
+      // Intentionally omit stratumPassword — firmware doesn't return it,
+      // and we treat password as "no change unless explicitly edited"
     };
+    if (miner.targetTemp !== undefined) {
+      values.targetTemp = miner.targetTemp;
+    }
     if (asicConfig) {
       values.frequency = miner.frequency || asicConfig.defaultFrequency;
       values.coreVoltage = miner.voltage || asicConfig.defaultVoltage;
@@ -239,6 +285,12 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     }
   }, [miner, navigation]);
 
+  // Parse target temp input back to °C for comparisons (once per change)
+  const parsedTargetTempC = useMemo(() => {
+    if (!targetTempInput) return null;
+    return displayToCelsius(targetTempInput, temperatureUnit);
+  }, [targetTempInput, temperatureUnit]);
+
   // Calculate pending changes
   const pendingChanges = useMemo<PendingChange[]>(() => {
     if (!originalValues) return [];
@@ -249,7 +301,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
       if (frequency !== originalValues.frequency) {
         changes.push({
           field: 'frequency',
-          label: 'Frequency',
+          label: t('miners.frequency'),
           from: `${originalValues.frequency} MHz`,
           to: `${frequency} MHz`,
         });
@@ -257,59 +309,90 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
       if (voltage !== originalValues.coreVoltage) {
         changes.push({
           field: 'voltage',
-          label: 'Voltage',
+          label: t('miners.voltage'),
           from: `${originalValues.coreVoltage} mV`,
           to: `${voltage} mV`,
         });
       }
+      // Hammer: freq/voltage edits force boot_mode → 2 (customize). Surface that.
+      if (miner?.minerType === 'hammer'
+        && (frequency !== originalValues.frequency || voltage !== originalValues.coreVoltage)
+        && (miner.bootMode ?? 0) !== 2
+      ) {
+        changes.push({
+          field: 'bootMode',
+          label: t('miners.bootMode'),
+          from: t(`miners.bootMode_${miner.bootMode ?? 0}` as const, { defaultValue: String(miner.bootMode ?? 0) }),
+          to: t('miners.bootMode_2'),
+        });
+      }
     }
     // Fan changes always tracked (doesn't need asicConfig)
-    if (autoFan !== originalValues.autoFanSpeed) {
+    const autoFanWas = (originalValues.autoFanSpeed ?? 0) > 0;
+    if (autoFan !== autoFanWas) {
       changes.push({
         field: 'autoFan',
-        label: 'Fan Mode',
-        from: originalValues.autoFanSpeed ? 'Auto' : 'Manual',
-        to: autoFan ? 'Auto' : 'Manual',
+        label: t('miners.fanMode'),
+        from: autoFanWas ? t('miners.auto') : t('common.manual'),
+        to: autoFan ? t('miners.auto') : t('common.manual'),
       });
     }
     if (!autoFan && fanSpeed !== originalValues.fanSpeed) {
       changes.push({
         field: 'fanSpeed',
-        label: 'Fan Speed',
+        label: t('miners.fanSpeed'),
         from: `${originalValues.fanSpeed}%`,
         to: `${fanSpeed}%`,
+      });
+    }
+    // Target temperature (only when firmware exposes it and auto fan is on)
+    if (autoFan
+      && originalValues.targetTemp !== undefined
+      && parsedTargetTempC !== null
+      && parsedTargetTempC !== originalValues.targetTemp
+    ) {
+      changes.push({
+        field: 'targetTemp',
+        label: t('miners.targetTemp'),
+        from: formatTemperature(originalValues.targetTemp, temperatureUnit),
+        to: formatTemperature(parsedTargetTempC, temperatureUnit),
       });
     }
     if (stratumUrl !== originalValues.stratumUrl) {
       changes.push({
         field: 'stratumUrl',
-        label: 'Pool URL',
+        label: t('miners.stratumUrl'),
         from: originalValues.stratumUrl || '(empty)',
         to: stratumUrl || '(empty)',
+        critical: true,
       });
     }
     if (stratumPort !== originalValues.stratumPort) {
       changes.push({
         field: 'stratumPort',
-        label: 'Port',
+        label: t('miners.port'),
         from: String(originalValues.stratumPort),
         to: String(stratumPort),
+        critical: true,
       });
     }
     if (stratumUser !== originalValues.stratumUser) {
       changes.push({
         field: 'stratumUser',
-        label: 'Worker',
+        label: t('miners.worker'),
         from: originalValues.stratumUser || '(empty)',
         to: stratumUser || '(empty)',
+        critical: true,
       });
     }
-    if (stratumPassword !== originalValues.stratumPassword) {
+    // Password change only counted if user actually edited the field
+    if (passwordTouched) {
       changes.push({
         field: 'stratumPassword',
-        label: 'Password',
+        label: t('miners.password'),
         from: '****',
         to: '****',
+        critical: true,
       });
     }
     // Fallback stratum (Hammer)
@@ -319,6 +402,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
         label: t('miners.fallbackStratumUrl'),
         from: originalValues.fallbackStratumUrl || '(empty)',
         to: fallbackStratumUrl || '(empty)',
+        critical: true,
       });
     }
     if (fallbackStratumPort !== (originalValues.fallbackStratumPort ?? 0)) {
@@ -327,6 +411,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
         label: t('miners.fallbackPort'),
         from: String(originalValues.fallbackStratumPort ?? 0),
         to: String(fallbackStratumPort),
+        critical: true,
       });
     }
     if (fallbackStratumUser !== (originalValues.fallbackStratumUser ?? '')) {
@@ -335,13 +420,69 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
         label: t('miners.fallbackWorker'),
         from: originalValues.fallbackStratumUser || '(empty)',
         to: fallbackStratumUser || '(empty)',
+        critical: true,
       });
     }
 
     return changes;
-  }, [frequency, voltage, fanSpeed, autoFan, stratumUrl, stratumPort, stratumUser, stratumPassword, fallbackStratumUrl, fallbackStratumPort, fallbackStratumUser, originalValues, asicConfig, t]);
+  }, [frequency, voltage, fanSpeed, autoFan, parsedTargetTempC, stratumUrl, stratumPort, stratumUser, passwordTouched, fallbackStratumUrl, fallbackStratumPort, fallbackStratumUser, originalValues, asicConfig, miner, temperatureUnit, t]);
 
   const hasChanges = pendingChanges.length > 0;
+
+  // Validation — block apply when any pool field, fallback unit, or target temp is invalid
+  const stratumUrlError = useMemo(() => {
+    if (!stratumUrl.trim()) return t('miners.urlRequired');
+    if (!isValidStratumUrl(stratumUrl.trim())) return t('miners.invalidStratumUrl');
+    return null;
+  }, [stratumUrl, t]);
+
+  const stratumPortError = useMemo(() => {
+    if (!isValidPort(stratumPort)) return t('miners.invalidPort');
+    return null;
+  }, [stratumPort, t]);
+
+  const workerError = useMemo(() => {
+    if (stratumUser.length > WORKER_NAME_MAX) return t('miners.workerTooLong', { max: WORKER_NAME_MAX });
+    return null;
+  }, [stratumUser, t]);
+
+  // Hammer fallback: validate as a unit — either all empty or all populated
+  const fallbackError = useMemo(() => {
+    if (miner?.minerType !== 'hammer') return null;
+    const urlSet = fallbackStratumUrl.trim().length > 0;
+    const portSet = fallbackStratumPort > 0;
+    const userSet = fallbackStratumUser.trim().length > 0;
+    const anySet = urlSet || portSet || userSet;
+    const allSet = urlSet && portSet && userSet;
+    if (anySet && !allSet) return t('miners.fallbackIncomplete');
+    if (urlSet && !isValidStratumUrl(fallbackStratumUrl.trim())) return t('miners.invalidStratumUrl');
+    if (portSet && !isValidPort(fallbackStratumPort)) return t('miners.invalidPort');
+    return null;
+  }, [miner, fallbackStratumUrl, fallbackStratumPort, fallbackStratumUser, t]);
+
+  const targetTempError = useMemo(() => {
+    if (!autoFan || originalValues?.targetTemp === undefined) return null;
+    if (!targetTempInput.trim()) return null;
+    const c = displayToCelsius(targetTempInput, temperatureUnit);
+    if (c === null) return t('miners.targetTempInvalid');
+    if (c < TARGET_TEMP_MIN_C || c > TARGET_TEMP_MAX_C) {
+      return t('miners.targetTempRange', {
+        min: celsiusToDisplay(TARGET_TEMP_MIN_C, temperatureUnit),
+        max: celsiusToDisplay(TARGET_TEMP_MAX_C, temperatureUnit),
+        unit: temperatureUnit === 'fahrenheit' ? 'F' : 'C',
+      });
+    }
+    return null;
+  }, [autoFan, originalValues, targetTempInput, temperatureUnit, t]);
+
+  const isFormValid =
+    !stratumUrlError &&
+    !stratumPortError &&
+    !workerError &&
+    !fallbackError &&
+    !targetTempError &&
+    !customFrequencyError &&
+    !customVoltageError;
 
   // Check for extreme values
   const frequencyWarning = useMemo(() => {
@@ -375,16 +516,21 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const handleSetParasite = useCallback(() => {
     haptics.selection();
     setStratumUrl(PARASITE_STRATUM_PRESET.stratumUrl ?? 'stratum.parasite.space');
-    setStratumPort(PARASITE_STRATUM_PRESET.stratumPort ?? 3333);
+    const port = PARASITE_STRATUM_PRESET.stratumPort ?? 3333;
+    setStratumPort(port);
+    setStratumPortInput(String(port));
     // Use bitcoin address for worker if available
     if (bitcoinAddress && !stratumUser) {
       setStratumUser(bitcoinAddress);
     }
+    // Most pools (Parasite included) accept any password; "x" is convention.
+    // Mark touched so the change is actually sent.
     setStratumPassword('x');
+    setPasswordTouched(true);
   }, [bitcoinAddress, stratumUser]);
 
   const handleApply = useCallback(async () => {
-    if (!hasChanges) return;
+    if (!hasChanges || !isFormValid) return;
 
     setApplying(true);
     setApplyError(null);
@@ -396,11 +542,27 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     if (voltage !== originalValues?.coreVoltage) {
       settings.coreVoltage = voltage;
     }
-    if (autoFan !== originalValues?.autoFanSpeed) {
-      settings.autoFanSpeed = autoFan;
+    const autoFanWas = (originalValues?.autoFanSpeed ?? 0) > 0;
+    if (autoFan !== autoFanWas) {
+      // Preserve a multi-mode auto value (e.g. 2) if the device originally had
+      // auto enabled with mode > 1; otherwise default-on is 1.
+      if (autoFan) {
+        settings.autoFanSpeed = (originalValues?.autoFanSpeed ?? 0) > 0
+          ? (originalValues?.autoFanSpeed ?? 1)
+          : 1;
+      } else {
+        settings.autoFanSpeed = 0;
+      }
     }
     if (!autoFan && fanSpeed !== originalValues?.fanSpeed) {
       settings.fanSpeed = fanSpeed;
+    }
+    if (autoFan
+      && originalValues?.targetTemp !== undefined
+      && parsedTargetTempC !== null
+      && parsedTargetTempC !== originalValues.targetTemp
+    ) {
+      settings.targetTemp = parsedTargetTempC;
     }
     if (stratumUrl !== originalValues?.stratumUrl) {
       settings.stratumUrl = stratumUrl;
@@ -411,7 +573,9 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     if (stratumUser !== originalValues?.stratumUser) {
       settings.stratumUser = stratumUser;
     }
-    if (stratumPassword !== originalValues?.stratumPassword) {
+    // Only send password when user actually edited it (otherwise the
+    // pre-populated placeholder would overwrite the real pool password)
+    if (passwordTouched) {
       settings.stratumPassword = stratumPassword;
     }
     // Fallback stratum (Hammer)
@@ -444,16 +608,19 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     setApplying(false);
   }, [
     hasChanges,
+    isFormValid,
     ip,
     miner,
     frequency,
     voltage,
     fanSpeed,
     autoFan,
+    parsedTargetTempC,
     stratumUrl,
     stratumPort,
     stratumUser,
     stratumPassword,
+    passwordTouched,
     fallbackStratumUrl,
     fallbackStratumPort,
     fallbackStratumUser,
@@ -461,6 +628,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     updateMinerSettings,
     restartMiner,
     navigation,
+    t,
   ]);
 
   const handleHammerPreset = useCallback((preset: HammerPreset) => {
@@ -506,19 +674,77 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     setCustomVoltageInput(String(voltage));
   }, [voltage]);
 
+  // Strict numeric parse — reject "640abc" rather than silently truncating to 640.
   const handleCustomFrequencySubmit = useCallback(() => {
-    const value = parseInt(customFrequencyInput, 10);
-    if (!isNaN(value) && value > 0) {
-      setFrequency(value);
+    const trimmed = customFrequencyInput.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      setCustomFrequencyError(t('miners.numberOnly'));
+      return;
     }
-  }, [customFrequencyInput]);
+    const value = Number(trimmed);
+    if (!Number.isFinite(value) || value <= 0) {
+      setCustomFrequencyError(t('miners.numberOnly'));
+      return;
+    }
+    setCustomFrequencyError(null);
+    setFrequency(value);
+  }, [customFrequencyInput, t]);
 
   const handleCustomVoltageSubmit = useCallback(() => {
-    const value = parseInt(customVoltageInput, 10);
-    if (!isNaN(value) && value > 0) {
-      setVoltage(value);
+    const trimmed = customVoltageInput.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      setCustomVoltageError(t('miners.numberOnly'));
+      return;
     }
-  }, [customVoltageInput]);
+    const value = Number(trimmed);
+    if (!Number.isFinite(value) || value <= 0) {
+      setCustomVoltageError(t('miners.numberOnly'));
+      return;
+    }
+    setCustomVoltageError(null);
+    setVoltage(value);
+  }, [customVoltageInput, t]);
+
+  const handleCustomFrequencyInputChange = useCallback((text: string) => {
+    setCustomFrequencyInput(text);
+    if (customFrequencyError) setCustomFrequencyError(null);
+  }, [customFrequencyError]);
+
+  const handleCustomVoltageInputChange = useCallback((text: string) => {
+    setCustomVoltageInput(text);
+    if (customVoltageError) setCustomVoltageError(null);
+  }, [customVoltageError]);
+
+  const handleStratumPasswordChange = useCallback((text: string) => {
+    setStratumPassword(text);
+    if (!passwordTouched) setPasswordTouched(true);
+  }, [passwordTouched]);
+
+  const handleStratumPortChange = useCallback((text: string) => {
+    setStratumPortInput(text);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setStratumPort(0);
+      return;
+    }
+    if (/^\d+$/.test(trimmed)) {
+      const num = Number(trimmed);
+      if (Number.isFinite(num)) setStratumPort(num);
+    }
+  }, []);
+
+  const handleFallbackStratumPortChange = useCallback((text: string) => {
+    setFallbackStratumPortInput(text);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setFallbackStratumPort(0);
+      return;
+    }
+    if (/^\d+$/.test(trimmed)) {
+      const num = Number(trimmed);
+      if (Number.isFinite(num)) setFallbackStratumPort(num);
+    }
+  }, []);
 
   // Don't render if miner not found
   if (!miner) {
@@ -774,26 +1000,36 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                         </View>
                       </ScrollView>
                     ) : (
-                      <View className="flex-row items-center gap-2">
-                        <TextInput
-                          value={customFrequencyInput}
-                          onChangeText={setCustomFrequencyInput}
-                          onBlur={handleCustomFrequencySubmit}
-                          onSubmitEditing={handleCustomFrequencySubmit}
-                          keyboardType="number-pad"
-                          returnKeyType="done"
-                          className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
-                          style={{ color: colors.text }}
-                          placeholderTextColor={colors.textMuted}
-                          placeholder={t('miners.enterFrequency')}
-                          autoFocus
-                        />
-                        <Pressable
-                          onPress={() => setCustomFrequency(false)}
-                          className="p-3 bg-secondary rounded-lg"
-                        >
-                          <Ionicons name="close" size={20} color={colors.textMuted} />
-                        </Pressable>
+                      <View>
+                        <View className="flex-row items-center gap-2">
+                          <TextInput
+                            value={customFrequencyInput}
+                            onChangeText={handleCustomFrequencyInputChange}
+                            onBlur={handleCustomFrequencySubmit}
+                            onSubmitEditing={handleCustomFrequencySubmit}
+                            keyboardType="number-pad"
+                            returnKeyType="done"
+                            className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
+                            style={{ color: colors.text }}
+                            placeholderTextColor={colors.textMuted}
+                            placeholder={t('miners.enterFrequency')}
+                            autoFocus
+                          />
+                          <Pressable
+                            onPress={() => {
+                              setCustomFrequency(false);
+                              setCustomFrequencyError(null);
+                            }}
+                            className="p-3 bg-secondary rounded-lg"
+                          >
+                            <Ionicons name="close" size={20} color={colors.textMuted} />
+                          </Pressable>
+                        </View>
+                        {customFrequencyError && (
+                          <Text variant="caption" color="danger" className="mt-1">
+                            {customFrequencyError}
+                          </Text>
+                        )}
                       </View>
                     )}
                   </View>
@@ -847,26 +1083,36 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                         </View>
                       </ScrollView>
                     ) : (
-                      <View className="flex-row items-center gap-2">
-                        <TextInput
-                          value={customVoltageInput}
-                          onChangeText={setCustomVoltageInput}
-                          onBlur={handleCustomVoltageSubmit}
-                          onSubmitEditing={handleCustomVoltageSubmit}
-                          keyboardType="number-pad"
-                          returnKeyType="done"
-                          className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
-                          style={{ color: colors.text }}
-                          placeholderTextColor={colors.textMuted}
-                          placeholder={t('miners.enterVoltage')}
-                          autoFocus
-                        />
-                        <Pressable
-                          onPress={() => setCustomVoltage(false)}
-                          className="p-3 bg-secondary rounded-lg"
-                        >
-                          <Ionicons name="close" size={20} color={colors.textMuted} />
-                        </Pressable>
+                      <View>
+                        <View className="flex-row items-center gap-2">
+                          <TextInput
+                            value={customVoltageInput}
+                            onChangeText={handleCustomVoltageInputChange}
+                            onBlur={handleCustomVoltageSubmit}
+                            onSubmitEditing={handleCustomVoltageSubmit}
+                            keyboardType="number-pad"
+                            returnKeyType="done"
+                            className="flex-1 bg-secondary rounded-lg px-4 py-3 text-foreground"
+                            style={{ color: colors.text }}
+                            placeholderTextColor={colors.textMuted}
+                            placeholder={t('miners.enterVoltage')}
+                            autoFocus
+                          />
+                          <Pressable
+                            onPress={() => {
+                              setCustomVoltage(false);
+                              setCustomVoltageError(null);
+                            }}
+                            className="p-3 bg-secondary rounded-lg"
+                          >
+                            <Ionicons name="close" size={20} color={colors.textMuted} />
+                          </Pressable>
+                        </View>
+                        {customVoltageError && (
+                          <Text variant="caption" color="danger" className="mt-1">
+                            {customVoltageError}
+                          </Text>
+                        )}
                       </View>
                     )}
                   </View>
@@ -931,6 +1177,37 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                     </Text>
                   </View>
                 )}
+                {/* Auto-fan target temperature — only shown when firmware exposes the field */}
+                {autoFan && miner?.targetTemp !== undefined && (
+                  <View className="mt-3">
+                    <Text variant="caption" color="muted" className="mb-1">
+                      {t('miners.targetTemp')} ({temperatureUnit === 'fahrenheit' ? '°F' : '°C'})
+                    </Text>
+                    <TextInput
+                      value={targetTempInput}
+                      onChangeText={setTargetTempInput}
+                      keyboardType="number-pad"
+                      returnKeyType="done"
+                      className="bg-secondary rounded-lg px-4 py-3"
+                      style={{ color: colors.text }}
+                      placeholderTextColor={colors.textMuted}
+                      placeholder={String(celsiusToDisplay(60, temperatureUnit))}
+                    />
+                    {targetTempError ? (
+                      <Text variant="caption" color="danger" className="mt-1">
+                        {targetTempError}
+                      </Text>
+                    ) : (
+                      <Text variant="caption" color="muted" className="mt-1">
+                        {t('miners.targetTempHint', {
+                          min: celsiusToDisplay(TARGET_TEMP_MIN_C, temperatureUnit),
+                          max: celsiusToDisplay(TARGET_TEMP_MAX_C, temperatureUnit),
+                          unit: temperatureUnit === 'fahrenheit' ? 'F' : 'C',
+                        })}
+                      </Text>
+                    )}
+                  </View>
+                )}
                 {/* Manual mode percentage buttons */}
                 {!autoFan && (
                   <ScrollView
@@ -983,6 +1260,11 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              {stratumUrlError && (
+                <Text variant="caption" color="danger" className="mt-1">
+                  {stratumUrlError}
+                </Text>
+              )}
             </View>
 
             {/* Port */}
@@ -991,18 +1273,19 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 {t('miners.port')}
               </Text>
               <TextInput
-                value={String(stratumPort)}
-                onChangeText={(text) => {
-                  const num = parseInt(text, 10);
-                  if (!isNaN(num)) setStratumPort(num);
-                  else if (text === '') setStratumPort(0);
-                }}
+                value={stratumPortInput}
+                onChangeText={handleStratumPortChange}
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
                 placeholder={t('miners.portPlaceholder')}
                 keyboardType="number-pad"
               />
+              {stratumPortError && (
+                <Text variant="caption" color="danger" className="mt-1">
+                  {stratumPortError}
+                </Text>
+              )}
             </View>
 
             {/* Worker */}
@@ -1013,6 +1296,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               <TextInput
                 value={stratumUser}
                 onChangeText={setStratumUser}
+                maxLength={WORKER_NAME_MAX}
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
@@ -1020,6 +1304,11 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              {workerError && (
+                <Text variant="caption" color="danger" className="mt-1">
+                  {workerError}
+                </Text>
+              )}
             </View>
 
             {/* Password */}
@@ -1029,11 +1318,11 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               </Text>
               <TextInput
                 value={stratumPassword}
-                onChangeText={setStratumPassword}
+                onChangeText={handleStratumPasswordChange}
                 className="bg-secondary rounded-lg px-4 py-3"
                 style={{ color: colors.text }}
                 placeholderTextColor={colors.textMuted}
-                placeholder={t('miners.passwordPlaceholder')}
+                placeholder={passwordTouched ? t('miners.passwordPlaceholder') : t('miners.passwordUnchanged')}
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -1089,12 +1378,8 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                   {t('miners.fallbackPort')}
                 </Text>
                 <TextInput
-                  value={String(fallbackStratumPort)}
-                  onChangeText={(text) => {
-                    const num = parseInt(text, 10);
-                    if (!isNaN(num)) setFallbackStratumPort(num);
-                    else if (text === '') setFallbackStratumPort(0);
-                  }}
+                  value={fallbackStratumPortInput}
+                  onChangeText={handleFallbackStratumPortChange}
                   className="bg-secondary rounded-lg px-4 py-3"
                   style={{ color: colors.text }}
                   placeholderTextColor={colors.textMuted}
@@ -1111,6 +1396,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                 <TextInput
                   value={fallbackStratumUser}
                   onChangeText={setFallbackStratumUser}
+                  maxLength={WORKER_NAME_MAX}
                   className="bg-secondary rounded-lg px-4 py-3"
                   style={{ color: colors.text }}
                   placeholderTextColor={colors.textMuted}
@@ -1119,6 +1405,14 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                   autoCorrect={false}
                 />
               </View>
+              {fallbackError && (
+                <View className="bg-danger/10 rounded-lg p-3 flex-row items-center gap-2">
+                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
+                  <Text variant="caption" color="danger" className="flex-1">
+                    {fallbackError}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -1132,22 +1426,53 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
               <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
                 {t('miners.pendingChanges')}
               </Text>
+              {/* Pool changes are flagged critical — getting them wrong drops the miner */}
+              {pendingChanges.some((c) => c.critical) && (
+                <View className="bg-warning/10 rounded-lg p-3 mb-2 flex-row items-center gap-2">
+                  <Ionicons name="warning" size={16} color={colors.warning} />
+                  <Text variant="caption" color="warning" className="flex-1">
+                    {t('miners.poolChangeWarning')}
+                  </Text>
+                </View>
+              )}
               <View className="bg-secondary rounded-lg p-3 gap-2">
                 {pendingChanges.map((change) => (
-                  <View key={change.field} className="flex-row items-center">
-                    <Text variant="body" color="muted" className="w-24">
+                  <View
+                    key={change.field}
+                    className={`flex-row items-center ${
+                      change.critical ? 'bg-warning/10 rounded-md px-2 py-1 -mx-1' : ''
+                    }`}
+                  >
+                    <Text
+                      variant="body"
+                      color={change.critical ? 'warning' : 'muted'}
+                      className="w-24"
+                    >
                       {change.label}
                     </Text>
                     <Text variant="caption" color="muted" className="mx-2">
                       {change.from}
                     </Text>
-                    <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
-                    <Text variant="body" className="ml-2 font-medium">
+                    <Ionicons
+                      name="arrow-forward"
+                      size={14}
+                      color={change.critical ? colors.warning : colors.textMuted}
+                    />
+                    <Text
+                      variant="body"
+                      color={change.critical ? 'warning' : 'default'}
+                      className="ml-2 font-medium"
+                    >
                       {change.to}
                     </Text>
                   </View>
                 ))}
               </View>
+              {!isFormValid && (
+                <Text variant="caption" color="danger" className="mt-2">
+                  {t('miners.fixErrorsBeforeApply')}
+                </Text>
+              )}
             </Animated.View>
           )}
         </ScrollView>
@@ -1173,6 +1498,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                   confirmLabel={t('common.applied')}
                   onConfirm={handleApply}
                   variant="danger"
+                  disabled={!isFormValid}
                 />
               )}
             </SafeAreaView>

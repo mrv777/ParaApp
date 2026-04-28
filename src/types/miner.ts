@@ -72,8 +72,10 @@ export interface LocalMiner {
   frequency: number;
   /** Fan speed (%) */
   fanSpeed: number;
-  /** Auto fan speed enabled */
-  autoFanSpeed: boolean;
+  /** Auto fan mode value — 0 = manual, >0 = auto (firmware may support multiple auto modes) */
+  autoFanSpeed: number;
+  /** Auto-fan target temperature (°C). Undefined when firmware doesn't expose it. */
+  targetTemp?: number;
   /** Fan RPM reading */
   fanRpm: number;
   /** Best difficulty ever achieved */
@@ -141,8 +143,10 @@ export interface MinerSettings {
   coreVoltage?: number;
   /** Fan speed (%) for manual mode */
   fanSpeed?: number;
-  /** Auto fan speed enabled */
-  autoFanSpeed?: boolean;
+  /** Auto fan mode value — 0 = manual, >0 = auto */
+  autoFanSpeed?: number;
+  /** Auto-fan target temperature (°C, 20-100) */
+  targetTemp?: number;
   /** Pool stratum URL */
   stratumUrl?: string;
   /** Pool stratum port */
@@ -200,6 +204,8 @@ export interface AxeOSSystemInfo {
   autofanspeed: number;
   fanspeed: number;
   fanrpm: number;
+  /** Target temperature for auto-fan curve (°C). Optional — older firmware omits it. */
+  temptarget?: number;
   /** Number of ASIC chips (multi-chip miners like Hex have 6) */
   asicCount?: number;
   // Hammer-specific fields

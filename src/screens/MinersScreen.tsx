@@ -47,6 +47,7 @@ export function MinersScreen({ navigation }: Props) {
   const filterBy = useSettingsStore((s) => s.minerFilterBy);
   const setSortBy = useSettingsStore((s) => s.setMinerSortBy);
   const setFilterBy = useSettingsStore((s) => s.setMinerFilterBy);
+  const temperatureUnit = useSettingsStore((s) => s.temperatureUnit);
 
   // Store selectors
   const miners = useMinerStore(selectMiners);
@@ -88,10 +89,10 @@ export function MinersScreen({ navigation }: Props) {
   const minerWarnings = useMemo(() => {
     const map = new Map<string, MinerWarning[]>();
     miners.forEach((m) => {
-      map.set(m.ip, getWarnings(m));
+      map.set(m.ip, getWarnings(m, temperatureUnit));
     });
     return map;
-  }, [miners, getWarnings]);
+  }, [miners, getWarnings, temperatureUnit]);
 
   // Sort miners: online with warnings first, then online without, then offline
   const sortedMiners = useMemo(() => {

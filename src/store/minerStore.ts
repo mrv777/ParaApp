@@ -18,7 +18,8 @@ import type {
 } from '@/types';
 import { axeOS, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
-import { parseDifficulty } from '@/utils/formatting';
+import { formatTemperature, parseDifficulty } from '@/utils/formatting';
+import type { TemperatureUnit } from '@/utils/formatting';
 import { tempThresholds } from '@/constants/theme';
 
 /**
@@ -70,7 +71,7 @@ interface MinerActions {
   ) => Promise<boolean>;
 
   // Warning helpers
-  getWarnings: (miner: LocalMiner) => MinerWarning[];
+  getWarnings: (miner: LocalMiner, temperatureUnit?: TemperatureUnit) => MinerWarning[];
 
   // Discovery actions
   startDiscovery: (options?: DiscoveryOptions) => void;
@@ -143,7 +144,8 @@ function parseSystemInfo(ip: string, info: AxeOSSystemInfo): LocalMiner {
     voltage: info.coreVoltage,
     frequency: info.frequency,
     fanSpeed: info.fanspeed,
-    autoFanSpeed: info.autofanspeed > 0,
+    autoFanSpeed: info.autofanspeed ?? 0,
+    targetTemp: info.temptarget,
     fanRpm: info.fanrpm,
     bestDiff: parseDifficulty(info.bestDiff),
     bestSessionDiff: parseDifficulty(info.bestSessionDiff),
@@ -339,7 +341,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         }
       },
 
-      getWarnings: (miner) => {
+      getWarnings: (miner, temperatureUnit = 'celsius') => {
         const warnings: MinerWarning[] = [];
 
         // Offline check
@@ -352,18 +354,18 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           return warnings; // No other checks needed
         }
 
-        // Temperature checks
+        // Temperature checks — thresholds are stored in °C but messages use display unit
         if (miner.temp >= tempThresholds.danger) {
           warnings.push({
             type: 'temp_danger',
             severity: 'danger',
-            message: `Temperature critical: ${Math.round(miner.temp)}°C`,
+            message: `Temperature critical: ${formatTemperature(miner.temp, temperatureUnit)}`,
           });
         } else if (miner.temp >= tempThresholds.caution) {
           warnings.push({
             type: 'temp_caution',
             severity: 'caution',
-            message: `Temperature warning: ${Math.round(miner.temp)}°C`,
+            message: `Temperature warning: ${formatTemperature(miner.temp, temperatureUnit)}`,
           });
         }
 
@@ -489,7 +491,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
             voltage: 0,
             frequency: 0,
             fanSpeed: 0,
-            autoFanSpeed: false,
+            autoFanSpeed: 0,
             fanRpm: 0,
             bestDiff: sm.lastBestDiff || 0,
             bestSessionDiff: 0,
