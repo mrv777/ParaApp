@@ -198,19 +198,36 @@ export interface MinerSettings {
 }
 
 /**
- * Avalon CGMiner write surface.
+ * The Avalon firmware exposes its full ascset vocabulary via
+ * `ascset|0,help` as a pipe-delimited string of option names.
  *
- * On the Avalon Q firmware, `setpool` is *not* a recognized ascset option
- * (the A10 manual is wrong) — pool config must go through the web CGI.
- * `reboot,0` works without auth via cgminer.
+ * We capture the parsed list as the source of truth for what writes
+ * are possible on this specific firmware build, plus boolean
+ * shortcuts for the options the app actually drives. Option names
+ * that contain hyphens (e.g. `fan-spd`) are preserved verbatim.
+ *
+ * On Avalon Q MM319 the list is:
+ *   help,voltage,fan-spd,lcd,hash-sn-read,hash-sn-write,volt-tuning,
+ *   workmode,worklevel,work_mode_lvl,reboot,softon,softoff,
+ *   filter-clean,facopts,faclock,activate,solo-allowed,frequency,
+ *   loop,password,qr_auth,time
+ *
+ * `setpool` is notably absent — pool config must go through the web
+ * CGI on this firmware.
  */
 export interface AvalonWriteCapabilities {
-  /** Reboot via cgminer ascset (no auth) */
-  rebootViaCgminer: boolean;
-  /** Pool config via cgminer ascset — false on Avalon Q firmware */
-  setPoolViaCgminer: boolean;
-  /** Work-mode change via cgminer ascset — unverified on Q */
-  workModeViaCgminer: boolean;
+  /** All option names returned by `ascset|0,help` */
+  allOptions: string[];
+  /** Shortcut: reboot supported (always true on Q) */
+  reboot: boolean;
+  /** Shortcut: workmode change supported via cgminer */
+  workmode: boolean;
+  /** Shortcut: pool config via cgminer (false on Q — use web CGI) */
+  setpool: boolean;
+  /** Shortcut: LCD on/off toggle */
+  lcd: boolean;
+  /** Shortcut: soft on/off (standby control) */
+  softPower: boolean;
 }
 
 /**

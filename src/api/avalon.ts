@@ -491,44 +491,88 @@ async function ascset(
 
 /**
  * Reboot the miner. Verified working on Avalon Q firmware MM319.
- * The miner takes ~60–90s to come back online; callers should poll
- * `getVersion` until success or a timeout (~3 min).
+ * The miner takes ~3–4 minutes to come back online; callers should
+ * poll `getVersion` until success or a 4-minute timeout.
  */
 export function reboot(ip: string): Promise<ApiResult<void>> {
   return ascset(ip, '0,reboot,0');
 }
 
 /**
- * Change pool config via cgminer. **Unsupported on the Avalon Q
- * firmware** (returns `Unknown option: setpool`). Kept for older
- * Avalon firmware that does support it; callers should fall back to
- * `avalonWeb.setPool` on a CGMINER_120 error.
+ * Read current work mode (0=Eco, 1=Standard, 2=Super on Q).
+ * The cgminer reply is an info message like "ASC 0 set info: workmode 1";
+ * we parse the trailing integer.
  */
-export function setPool(
-  ip: string,
-  args: {
-    /** Privileged username (often "root" on older Avalons) */
-    adminUser: string;
-    /** Privileged password */
-    adminPassword: string;
-    /** Stratum URL e.g. "stratum+tcp://pool.example:3333" */
-    poolUrl: string;
-    /** Worker name */
-    worker: string;
-    /** Worker password (typically "x") */
-    workerPassword: string;
+export async function getWorkMode(
+  ip: string
+): Promise<ApiResult<AvalonWorkMode>> {
+  const env = await sendCommand(ip, 'ascset', '0,workmode,get');
+  if (!env.success) return env;
+  const status = env.data.STATUS?.[0];
+  const match = status?.Msg?.match(/workmode\s+(\d+)/i);
+  if (!match) {
+    return {
+      success: false,
+      error: {
+        message: status?.Msg || 'Could not parse workmode',
+        code: 'PARSE_ERROR',
+      },
+    };
   }
+  const value = Number(match[1]);
+  if (value !== 0 && value !== 1 && value !== 2) {
+    return {
+      success: false,
+      error: {
+        message: `Unexpected workmode value: ${value}`,
+        code: 'PARSE_ERROR',
+      },
+    };
+  }
+  return { success: true, data: value as AvalonWorkMode };
+}
+
+/**
+ * Set the work mode. Returns success on `ASC 0 set OK`. Per Canaan's
+ * Mini 3 KB, **the new mode does not take effect until the miner is
+ * rebooted** — call `reboot()` after a successful set, then poll for
+ * recovery. The app's settings UI should make this prompt explicit.
+ */
+export function setWorkMode(
+  ip: string,
+  mode: AvalonWorkMode
 ): Promise<ApiResult<void>> {
-  const params = [
-    '0',
-    'setpool',
-    args.adminUser,
-    args.adminPassword,
-    args.poolUrl,
-    args.worker,
-    args.workerPassword,
-  ].join(',');
-  return ascset(ip, params);
+  return ascset(ip, `0,workmode,set,${mode}`);
+}
+
+/**
+ * Toggle the LCD on/off. Format: `lcd,<index>:<value>` where index 0
+ * targets the LCD on the Q. `value` 1 = on, 0 = off.
+ */
+export function setLcd(ip: string, on: boolean): Promise<ApiResult<void>> {
+  return ascset(ip, `0,lcd,0:${on ? 1 : 0}`);
+}
+
+/**
+ * Soft-off the miner (enter standby) at the given unix timestamp. Pass
+ * `Math.floor(Date.now() / 1000) + 5` for an "in 5 seconds" trigger,
+ * matching the upstream avalon-q-controller convention.
+ */
+export function softOff(
+  ip: string,
+  unixTimestamp: number
+): Promise<ApiResult<void>> {
+  return ascset(ip, `0,softoff,1:${unixTimestamp}`);
+}
+
+/**
+ * Wake the miner from standby at the given unix timestamp.
+ */
+export function softOn(
+  ip: string,
+  unixTimestamp: number
+): Promise<ApiResult<void>> {
+  return ascset(ip, `0,softon,1:${unixTimestamp}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -536,25 +580,44 @@ export function setPool(
 // ---------------------------------------------------------------------------
 
 /**
- * Probe the device's `ascset` write surface non-destructively.
- * Each option is poked with a deliberately invalid value so a
- * supported option returns "unknown argument" while a missing one
- * returns "Unknown option: <name>". We never apply a write here.
+ * Ask the firmware for its full `ascset` vocabulary in one call. The
+ * Avalon firmware self-describes via `ascset|0,help`, returning a
+ * pipe-delimited option list as an info message. This is the
+ * authoritative way to feature-detect — much more reliable than
+ * probing individual options blind.
  */
-export async function probeWriteCapabilities(
+export async function getCapabilities(
   ip: string
-): Promise<AvalonWriteCapabilities> {
-  const tests = await Promise.all([
-    ascset(ip, '0,reboot,nope'),
-    ascset(ip, '0,setpool'),
-    ascset(ip, '0,workmode,nope'),
-  ]);
-  const isSupported = (r: ApiResult<void>) =>
-    !r.success && !/Unknown option/i.test(r.error.message);
+): Promise<ApiResult<AvalonWriteCapabilities>> {
+  const env = await sendCommand(ip, 'ascset', '0,help');
+  if (!env.success) return env;
+  const status = env.data.STATUS?.[0];
+  // Help reply is "ASC 0 set info: help|voltage|fan-spd|..."
+  const match = status?.Msg?.match(/set info:\s*(.+)/);
+  if (!match) {
+    return {
+      success: false,
+      error: {
+        message: status?.Msg || 'Unexpected help reply',
+        code: 'PARSE_ERROR',
+      },
+    };
+  }
+  const allOptions = match[1]
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const has = (name: string) => allOptions.includes(name);
   return {
-    rebootViaCgminer: isSupported(tests[0]),
-    setPoolViaCgminer: isSupported(tests[1]),
-    workModeViaCgminer: isSupported(tests[2]),
+    success: true,
+    data: {
+      allOptions,
+      reboot: has('reboot'),
+      workmode: has('workmode'),
+      setpool: has('setpool'),
+      lcd: has('lcd'),
+      softPower: has('softon') && has('softoff'),
+    },
   };
 }
 

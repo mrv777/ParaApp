@@ -99,20 +99,76 @@ the firmware doesn't expose the knob at all; "unknown argument" /
 
 #### Avalon Q `ascset` options (probed)
 
-| Option | Status on Avalon Q | A10 docs say |
+**The full ascset option list is self-describing on this firmware.**
+Send `{"command":"ascset","parameter":"0,help"}` and the miner returns
+the complete vocabulary as an info message. On Avalon Q MM319:
+
+```
+help|voltage|fan-spd|lcd|hash-sn-read|hash-sn-write|volt-tuning|
+workmode|worklevel|work_mode_lvl|reboot|softon|softoff|filter-clean|
+facopts|faclock|activate|solo-allowed|frequency|loop|password|
+qr_auth|time
+```
+
+**Argument grammar.** Most options use a `<verb>,<value>` sub-syntax
+that the A10 manual doesn't describe at all:
+
+```
+ascset|0,<option>,get                    → query current value
+ascset|0,<option>,set,<value>            → apply value
+ascset|0,<option>,<value>                → bare-value form (some opts only, e.g. reboot)
+```
+
+The bare-value form (`reboot,0`) is the historical A10 syntax. The
+verb-prefixed form (`workmode,set,1`) is what the Q firmware expects
+for most adjustable knobs. **`workmode,1` fails with "unknown
+argument" — you must write `workmode,set,1`.** This is the single
+biggest gap between the A10 docs and current firmware.
+
+| Option | Verified behavior on Avalon Q | Notes |
 |---|---|---|
-| `reboot,0` | ✅ **Verified working** — returned `Code:119, "ASC 0 set OK"` and rebooted | Restart miner |
-| `setpool,<user>,<pass>,<addr>,<worker>,<workerpass>` | ❌ **NOT supported** (`Unknown option: setpool`) — must use web CGI | Configure mining pool |
-| `frequency,<value>` | **Recognized** (`missing frequency setting` when no value) | Not in A10 docs — Q-specific |
-| `worklevel,<value>` | **Recognized** (`worklevel unknown argument` when value invalid) | Not in A10 docs — Q-specific |
-| `workmode,<n>` | **Recognized** (`workmode unknown argument` — accepts the option but our value was wrong) | A10 supports |
-| `led,1-<n>` | **Rejected** (`Unknown option: led`) | A10 supports |
-| `workingmode,<n>` | **Rejected** (`Unknown option`) | — |
-| `hashpower[,0]` | **Rejected** (`Unknown option`) | A10 supports |
-| `fan,<n>` | **Rejected** (`Unknown option`) | — |
-| `target,<n>` | **Rejected** (`Unknown option`) | — |
-| `ip,<mode>,<ip>,<mask>,<gw>` | Not tested | A10 supports |
-| `dns,<dns1>,<dns2>` | Not tested | A10 supports |
+| `reboot,0` | ✅ Set OK; ~3m49s recovery time | Bare-value form. No reboot for `reboot,get` (no such verb). |
+| `workmode,get` | ✅ Returns `"workmode 1"` (int 0/1/2) | 0=Eco, 1=Standard, 2=Super |
+| `workmode,set,<n>` | ✅ Set OK with `n ∈ {0,1,2}` on Q | **Reboot required** for new mode to take effect (per Canaan Mini 3 KB) |
+| `worklevel,get` | ✅ Returns `"worklevel 0"` | Sub-step within mode |
+| `worklevel,set,<n>` | Not verified — same shape expected | |
+| `work_mode_lvl,get` | ✅ Returns `"workmode 1 worklevel 0"` | Combined query — convenient |
+| `voltage,set,<mV>` | Range exposed via error: `2150~2600` | Per-modular-index voltage in mV |
+| `frequency,get` | Returns Set OK, no info field | Get is not implemented? Use `stats` to read current `Freq[…]`. |
+| `fan-spd,set,<value>` | Needs value (`No value passed to avalon-fan`) | Note: hyphen, not `fan` |
+| `lcd,0:<n>` | `<n>` = `1` on, `0` off | Index-prefixed: `lcd,<idx>:<value>`. Matches `LcdOnoff[1]` in stats. |
+| `softoff,1:<unix-ts>` | Set OK | Index-prefixed; `<unix-ts>` is when to enter standby (use `now+5s`) |
+| `softon,1:<unix-ts>` | Set OK | Same shape; wake from standby at the given timestamp |
+| `loop,get` | ✅ Returns `"LOOP[160 ]"` | Total ASIC count loopback |
+| `time,get` | ✅ Returns `"time t:America/Chicago"` | Timezone string |
+| `time,set,<tz>` | Not verified | Likely takes Olson tz strings |
+| `softon` / `softoff` | See above — uses `1:<ts>` index/timestamp form | Soft-power on/off, no full reboot |
+| `filter-clean,set,<value>` | Needs value | Reset air-filter cleaning reminder |
+| `solo-allowed,set,<value>` | Needs value | Enable/disable solo mining |
+| `facopts` | `Please unlock before setting facopts` | Gated behind `faclock` |
+| `faclock` | `Lock: True` | Factory lock — read-only on shipped units |
+| `activate` | `set activation param error` | Needs activation key (out of scope) |
+| `volt-tuning` | `Invalid modular index` | Different arg shape; not investigated |
+| `password,set,<old>,<new>` | Needs 2 args | **Changes the device admin password** — handle carefully |
+| `qr_auth,get` | Returns Set OK | QR-login token rotation? |
+| `hash-sn-read` / `hash-sn-write` | Not probed | Hashboard serial number |
+| `setpool` | ❌ Not in option list | Pool config must use web CGI `cgpools.cgi` |
+| `led,*` | ❌ Not in option list | No LED-identify equivalent on Q |
+| `hashpower,*` | ❌ Not in option list | A10-only |
+
+**Self-discovery idiom (preferred over A10 docs):**
+
+```js
+// 1. Get the full option list for THIS firmware version
+const help = await ascset('0,help');     // returns "help|voltage|fan-spd|..."
+
+// 2. For each option, query its current value
+const cur = await ascset(`0,${opt},get`);
+
+// 3. To probe write format without applying, send `0,<opt>,set` with no value
+//    → "missing setting" / "No value passed" → format is `,set,<value>`
+const probe = await ascset(`0,${opt},set`);
+```
 
 **Reboot recovery time (Avalon Q, MM319 firmware):** ~3m49s from
 ascset trigger to a successful `version` reply, observed in our test.
@@ -120,14 +176,26 @@ Plan a 4-minute polling timeout for "did the reboot succeed" UX. The
 official Canaan firmware probably warm-restarts faster on subsequent
 reboots; this measurement is for a cold post-mining-load cycle.
 
+**Workmode change UX requirement:** per Canaan's Mini 3 KB article,
+*"after switching modes, you need to reboot the miner to make the new
+working mode take effect."* The app should prompt for a reboot
+immediately after a successful `workmode,set` call.
+
 **Capability detection idiom:** poke each option with a deliberately
 invalid value and inspect the error message:
 - `Unknown option: <name>` → option not present on this firmware
-- `<name> unknown argument` or `missing <name> setting` → option exists,
-  our value was malformed (so the option is supported)
+- `<name> unknown argument` → option exists, value malformed (often
+  means you're missing the `set` verb — try `<name>,set,<value>`)
+- `missing <name> setting` / `No value passed to <name>` → option
+  exists, just needs a value
 
 This lets us feature-detect without applying a write. Used in
 `avalon.probeWriteCapabilities()` in the app.
+
+**Sources for the verb-prefixed grammar discovery:**
+- [avalon-q-controller](https://github.com/gbechtel-beck/avalon-q-controller) — third-party Avalon Q controller using `workmode,set,<n>` form
+- [Canaan Mini 3 modes KB](https://help.canaan.io/hc/en-us/articles/43169816917529-Technical-Documentation-Explanation-of-Avalon-Mini-3-Modes) — official mode list + reboot requirement
+- [Heatpunks forum: Canaan Avalon home miner APIs](https://forum.heatpunks.org/t/canaan-avalon-home-miner-apis/168) — community API discussion
 
 **Important takeaway:** the A10 manual is *not* a reliable spec for the
 Avalon Q. Verify each option per model. The Q uses different option
