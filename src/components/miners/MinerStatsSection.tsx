@@ -16,7 +16,7 @@ import {
   formatPercent,
   formatNumber,
 } from '@/utils/formatting';
-import { tempThresholds } from '@/constants/theme';
+import { getTempThresholdsFor } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 
 export interface MinerStatsSectionProps {
@@ -49,9 +49,13 @@ function StatItem({ label, value, subValue, color = 'default' }: StatItemProps) 
   );
 }
 
-function getTemperatureColor(temp: number): 'default' | 'warning' | 'danger' {
-  if (temp >= tempThresholds.danger) return 'danger';
-  if (temp >= tempThresholds.caution) return 'warning';
+function getTemperatureColor(
+  temp: number,
+  minerType: string | undefined
+): 'default' | 'warning' | 'danger' {
+  const t = getTempThresholdsFor(minerType);
+  if (temp >= t.danger) return 'danger';
+  if (temp >= t.caution) return 'warning';
   return 'default';
 }
 
@@ -98,7 +102,7 @@ export function MinerStatsSection({
         <StatItem
           label={t('miners.temperature')}
           value={formatTemperature(miner.temp, temperatureUnit)}
-          color={getTemperatureColor(miner.temp)}
+          color={getTemperatureColor(miner.temp, miner.minerType)}
           subValue={
             isAvalon &&
             miner.hashboardInletTemp !== undefined &&

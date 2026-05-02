@@ -15,7 +15,7 @@ import {
 } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
-import { tempThresholds } from '@/constants/theme';
+import { getTempThresholdsFor } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import type { LocalMiner, MinerWarning, MinerWarningType } from '@/types';
 
@@ -57,8 +57,9 @@ export function MinerRow({
   // Determine temperature warning level
   const getTempColor = (): 'default' | 'warning' | 'danger' => {
     if (!miner.isOnline) return 'default';
-    if (miner.temp >= tempThresholds.danger) return 'danger';
-    if (miner.temp >= tempThresholds.caution) return 'warning';
+    const t = getTempThresholdsFor(miner.minerType);
+    if (miner.temp >= t.danger) return 'danger';
+    if (miner.temp >= t.caution) return 'warning';
     return 'default';
   };
 

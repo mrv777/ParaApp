@@ -22,14 +22,14 @@ import { axeOS, avalon, avalonWeb, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
 import { formatTemperature, parseDifficulty } from '@/utils/formatting';
 import type { TemperatureUnit } from '@/utils/formatting';
-import { tempThresholds } from '@/constants/theme';
+import { getTempThresholdsFor } from '@/constants/theme';
 
 /**
  * Check if a miner has any warnings (pure function for use in selectors)
  */
 export const hasMinerWarnings = (miner: LocalMiner): boolean => {
   if (!miner.isOnline) return true;
-  if (miner.temp >= tempThresholds.caution) return true;
+  if (miner.temp >= getTempThresholdsFor(miner.minerType).caution) return true;
   if (miner.overheatMode || miner.powerFault) return true;
   if (miner.hashRate < miner.expectedHashrate * 0.8) return true;
   return false;
@@ -254,7 +254,7 @@ async function fetchMiner(ip: string): Promise<ApiResult<LocalMiner>> {
   if (!isSuccess(summary)) return summary;
   const pools = await avalon.getPools(ip);
   if (!isSuccess(pools)) return pools;
-  const stats = await avalon.getStats(ip);
+  const stats = await fetchAvalonStats(ip);
   if (!isSuccess(stats)) return stats;
 
   return {
@@ -281,7 +281,7 @@ async function fetchAvalon(ip: string): Promise<ApiResult<LocalMiner>> {
   if (!isSuccess(summary)) return summary;
   const pools = await avalon.getPools(ip);
   if (!isSuccess(pools)) return pools;
-  const stats = await avalon.getStats(ip);
+  const stats = await fetchAvalonStats(ip);
   if (!isSuccess(stats)) return stats;
   return {
     success: true,
@@ -293,6 +293,26 @@ async function fetchAvalon(ip: string): Promise<ApiResult<LocalMiner>> {
       stats: stats.data,
     }),
   };
+}
+
+/**
+ * Fetch MM stats with an automatic fallback to `estats` when `stats`
+ * returns an empty MM blob. Avalon Q (MM319) intermittently replies
+ * to `stats` with an empty `MM ID0:Summary` value while `estats`
+ * still returns the full blob — observed reproducibly post-reboot
+ * after a workmode change. Falling back keeps the detail screen
+ * populated at the cost of a single extra ~2 KB read.
+ */
+async function fetchAvalonStats(ip: string) {
+  const stats = await avalon.getStats(ip);
+  if (!isSuccess(stats)) return stats;
+  if (Object.keys(stats.data.mm).length === 0) {
+    const estats = await avalon.getEStats(ip);
+    if (isSuccess(estats) && Object.keys(estats.data.mm).length > 0) {
+      return estats;
+    }
+  }
+  return stats;
 }
 
 export const useMinerStore = create<MinerState & MinerActions>()(
@@ -519,13 +539,14 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         }
 
         // Temperature checks — thresholds are stored in °C but messages use display unit
-        if (miner.temp >= tempThresholds.danger) {
+        const thresholds = getTempThresholdsFor(miner.minerType);
+        if (miner.temp >= thresholds.danger) {
           warnings.push({
             type: 'temp_danger',
             severity: 'danger',
             message: `Temperature critical: ${formatTemperature(miner.temp, temperatureUnit)}`,
           });
-        } else if (miner.temp >= tempThresholds.caution) {
+        } else if (miner.temp >= thresholds.caution) {
           warnings.push({
             type: 'temp_caution',
             severity: 'caution',

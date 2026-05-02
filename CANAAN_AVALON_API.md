@@ -324,8 +324,22 @@ and the trailing `);` to get parseable JSON.
 
 ## STATS payload (cgminer `stats`/`estats`)
 
-`STATS[].MM ID0:Summary` is a single string with bracketed key-value
-pairs. Parser pattern: `(\w+)\[([^\]]*)\]`. Notable fields on the Q:
+The `STATS` array is heterogeneous. On Avalon Q (MM319) one row carries
+`MM ID0:Summary` + `HBinfo` (the data we want); other rows carry
+cgminer process-level counters (Pool Calls, Net Bytes, etc.). The MM
+row isn't always at index 0 — scan all rows for a `MM ID\d+` key.
+
+**Quirk:** `stats` intermittently returns `MM ID0:Summary` as an empty
+string (observed reproducibly on the Q after a workmode change +
+reboot — `stats` returns `len=0` while `estats` returns the full
+`len=941` blob). When the MM blob is empty, fall back to `estats`.
+
+`MM ID0:Summary` is a single string with bracketed key-value pairs.
+Parser pattern: `(\w+)\[([^\]]*)\]`. **Some values carry unit
+suffixes** (`FanR`, `DH`, `DHspd` are reported as e.g. `40%`, not `40`)
+— strip a trailing `%` before numeric coercion.
+
+Notable fields on the Q:
 
 | Key | Meaning |
 |---|---|

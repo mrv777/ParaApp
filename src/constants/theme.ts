@@ -62,10 +62,22 @@ export const borderRadius = {
 } as const;
 
 // Temperature thresholds (in Celsius)
+// AxeOS/Bitaxe defaults — the small ASICs throttle around 70°C.
 export const tempThresholds = {
   caution: 68, // Yellow warning
   danger: 70, // Red danger
 } as const;
+
+// Avalon Q runs hot by design. TarT (firmware target) sits around 95°C
+// and TMax of 85–95°C is normal under load. Only flag genuine overheat.
+export const tempThresholdsAvalon = {
+  caution: 98,
+  danger: 102,
+} as const;
+
+export function getTempThresholdsFor(minerType?: string) {
+  return minerType === 'avalon' ? tempThresholdsAvalon : tempThresholds;
+}
 
 // Polling intervals (in milliseconds)
 export const pollingIntervals = {

@@ -383,29 +383,40 @@ async function fetchStats(
   if (!env.success) return env;
   const list = unwrap<Record<string, unknown>>(env.data, 'STATS');
   if (!list.success) return list;
-  const row = list.data[0];
-  if (!row) {
+
+  // cgminer's STATS array can carry the MM blob in any row depending on
+  // firmware build. On Avalon Q (MM319) row 0 holds it; older builds
+  // and other models put it later. Scan all rows instead of trusting
+  // a fixed index.
+  const mmRow = list.data.find((r) =>
+    Object.keys(r).some((k) => /^MM ID\d+/.test(k))
+  );
+  const mmKey = mmRow
+    ? Object.keys(mmRow).find((k) => /^MM ID\d+/.test(k))
+    : undefined;
+  const mm: AvalonMmStats =
+    mmRow && mmKey ? parseMmSummary(String(mmRow[mmKey] ?? '')) : {};
+
+  const hbRow = list.data.find((r) => typeof r.HBinfo === 'string');
+  const hb =
+    hbRow && typeof hbRow.HBinfo === 'string'
+      ? parseHbInfo(hbRow.HBinfo)
+      : undefined;
+
+  const meta = mmRow ?? list.data[0];
+  if (!meta) {
     return {
       success: false,
       error: { message: 'No STATS rows', code: 'EMPTY_STATS' },
     };
   }
-  // The MM blob is keyed differently across firmware versions; older
-  // (A10) used `MM ID0`, current Q firmware uses `MM ID0:Summary`. Be
-  // permissive and grab the first key matching MM ID*.
-  const mmKey = Object.keys(row).find((k) => /^MM ID\d+/.test(k));
-  const mm: AvalonMmStats = mmKey
-    ? parseMmSummary(String(row[mmKey] ?? ''))
-    : {};
-  const hbRaw = row.HBinfo;
-  const hb = typeof hbRaw === 'string' ? parseHbInfo(hbRaw) : undefined;
   return {
     success: true,
     data: {
       mm,
       hb,
-      Elapsed: Number(row.Elapsed ?? 0),
-      ID: String(row.ID ?? ''),
+      Elapsed: Number(meta.Elapsed ?? 0),
+      ID: String(meta.ID ?? ''),
     },
   };
 }
@@ -449,9 +460,16 @@ export function parseHbInfo(blob: string): AvalonHbInfo {
 function coerceMmValue(raw: string): unknown {
   const trimmed = raw.trim();
   if (trimmed === '') return '';
+  // Some percentage fields are reported with a trailing `%` (FanR, DH,
+  // DHspd on Q firmware). Strip it so they coerce to numbers — callers
+  // know from the field name that the unit is %.
+  const pctStripped =
+    trimmed.endsWith('%') && /^-?\d+(\.\d+)?%$/.test(trimmed)
+      ? trimmed.slice(0, -1)
+      : trimmed;
   // Single number? (signed, decimal, scientific not used by firmware)
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-    return Number(trimmed);
+  if (/^-?\d+(\.\d+)?$/.test(pctStripped)) {
+    return Number(pctStripped);
   }
   // Whitespace-separated number list?
   if (/^[-\d\s.]+$/.test(trimmed) && /\s/.test(trimmed)) {
