@@ -186,6 +186,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   useEffect(() => {
     // Skip if already loaded
     if (asicConfig) return;
+    // Avalon miners render a separate view that doesn't use AsicConfig.
+    // Skip the AxeOS HTTP call entirely — port 80 of an Avalon doesn't
+    // serve /api/system/asic and we'd just burn a timeout.
+    if (isAvalon) return;
 
     async function fetchAsicConfig() {
       setConfigLoading(true);

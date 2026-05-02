@@ -23,7 +23,12 @@ import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { AvalonAuthSheet } from './AvalonAuthSheet';
 import { useMinerStore } from '@/store/minerStore';
 import { isValidStratumUrl } from '@/utils/validation';
-import { getAvalonPassword } from '@/utils/avalonAuth';
+import {
+  clearAvalonPassword,
+  getAvalonPassword,
+  setAvalonPassword,
+} from '@/utils/avalonAuth';
+import { isSuccess } from '@/api/client';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import { haptics } from '@/utils/haptics';
@@ -121,13 +126,34 @@ export function AvalonSettingsView({ miner, onSaved }: AvalonSettingsViewProps) 
         slots[2].url.trim() ? submit(slots[2]) : undefined,
       ];
 
-      const ok = await setAvalonPools(miner.ip, password, slotsToSend);
-      if (!ok) {
+      const result = await setAvalonPools(miner.ip, password, slotsToSend);
+      if (!isSuccess(result)) {
         setSaving(false);
         haptics.error();
+        // On auth failure: drop any stored password (it was either
+        // wrong or got rotated on the device) and re-open the sheet
+        // so the user can correct it. Other errors keep the password.
+        // AUTH_FAILED comes from /login.cgi rejecting the password.
+        // AUTH_EXPIRED comes from a follow-up CGI rejecting the
+        // session cookie — same root cause (device disagrees with
+        // our credential), same recovery (clear and re-prompt).
+        if (
+          result.error.code === 'AUTH_FAILED' ||
+          result.error.code === 'AUTH_EXPIRED'
+        ) {
+          await clearAvalonPassword(miner.macAddress ?? miner.ip);
+          setHasStoredPassword(false);
+          setError(t('errors.avalonAuthFailed'));
+          setAuthSheetVisible(true);
+          return;
+        }
         setError(t('errors.failedToSavePools'));
         return;
       }
+
+      // Verified — now safe to persist the password for next time.
+      await setAvalonPassword(miner.macAddress ?? miner.ip, password);
+      setHasStoredPassword(true);
 
       // Pool changes only take effect after a reboot.
       const restartOk = await restartMiner(miner.ip);
@@ -139,7 +165,7 @@ export function AvalonSettingsView({ miner, onSaved }: AvalonSettingsViewProps) 
         setError(t('errors.failedToRestart'));
       }
     },
-    [slots, miner.ip, setAvalonPools, restartMiner, onSaved, t]
+    [slots, miner.ip, miner.macAddress, setAvalonPools, restartMiner, onSaved, t]
   );
 
   const handleSwipeSave = useCallback(async () => {
@@ -158,7 +184,8 @@ export function AvalonSettingsView({ miner, onSaved }: AvalonSettingsViewProps) 
   const handleAuthSubmit = useCallback(
     async (password: string) => {
       setAuthSheetVisible(false);
-      setHasStoredPassword(true);
+      // Persistence happens inside performSave only after the CGI
+      // accepts the password — see the auth-failure branch there.
       await performSave(password);
     },
     [performSave]

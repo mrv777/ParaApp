@@ -74,6 +74,12 @@ interface MinerActions {
 
   // Avalon-specific controls (no-op for non-Avalon miners)
   setAvalonWorkMode: (ip: string, mode: AvalonWorkMode) => Promise<boolean>;
+  /**
+   * Returns ApiResult so the caller can distinguish auth failure
+   * (`error.code === 'AUTH_FAILED'`) from network/CGI errors and
+   * react accordingly — typically clearing the saved password and
+   * re-prompting on AUTH_FAILED.
+   */
   setAvalonPools: (
     ip: string,
     adminPassword: string,
@@ -82,7 +88,7 @@ interface MinerActions {
       avalonWeb.PoolSlot?,
       avalonWeb.PoolSlot?,
     ]
-  ) => Promise<boolean>;
+  ) => Promise<ApiResult<void>>;
 
   // Warning helpers
   getWarnings: (miner: LocalMiner, temperatureUnit?: TemperatureUnit) => MinerWarning[];
@@ -347,22 +353,23 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       refreshMiner: async (ip) => {
-        const { loadingMiners, miners } = get();
+        // Mark as loading BEFORE the network round-trip so list rows
+        // can show a spinner during the slow part. Use functional
+        // set() to avoid clobbering concurrent refreshes of other IPs.
+        set((state) => {
+          const next = new Set(state.loadingMiners);
+          next.add(ip);
+          return { loadingMiners: next };
+        });
 
         // If we already know this is an Avalon, skip the AxeOS probe
         // and go straight to cgminer. Saves one HTTP timeout on every
         // poll cycle.
-        const known = miners.find((m) => m.ip === ip);
+        const known = get().miners.find((m) => m.ip === ip);
         const result =
           known?.minerType === 'avalon'
             ? await fetchAvalon(ip)
             : await fetchMiner(ip);
-
-        // Mark as loading (post-await is fine; the polling hook
-        // doesn't dedupe via this state)
-        const newLoadingMiners = new Set(loadingMiners);
-        newLoadingMiners.add(ip);
-        set({ loadingMiners: newLoadingMiners });
 
         // Get fresh state after async operation to avoid race conditions
         const { loadingMiners: currentLoading, miners: currentMiners } = get();
@@ -455,6 +462,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
        * Update Avalon pool slots via the web CGI. Requires the device
        * admin password (cgminer's setpool isn't supported on Q firmware).
        * The miner needs a reboot for new pool config to take effect.
+       *
+       * Returns the underlying ApiResult so callers can branch on
+       * `error.code === 'AUTH_FAILED'` and clear/reprompt the password.
        */
       setAvalonPools: async (
         ip: string,
@@ -464,18 +474,17 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           avalonWeb.PoolSlot?,
           avalonWeb.PoolSlot?,
         ]
-      ): Promise<boolean> => {
+      ): Promise<ApiResult<void>> => {
         const session = await avalonWeb.login(ip, adminPassword);
         if (!isSuccess(session)) {
           set({ error: session.error });
-          return false;
+          return session;
         }
         const result = await avalonWeb.setPools(ip, session.data, slots);
         if (!isSuccess(result)) {
           set({ error: result.error });
-          return false;
         }
-        return true;
+        return result;
       },
 
       updateMinerSettings: async (ip, settings) => {

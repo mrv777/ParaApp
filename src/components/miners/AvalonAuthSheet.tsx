@@ -2,8 +2,11 @@
  * AvalonAuthSheet - Bottom sheet to collect the device admin password
  * for write operations that go through the web CGI (pool config).
  *
- * Pre-fills with the saved password if one exists for this miner. On
- * submit, persists to expo-secure-store keyed by MAC.
+ * Pre-fills with the saved password if one exists for this miner.
+ * **Does not persist** — the parent should call `setAvalonPassword`
+ * only after the password is verified by a successful CGI call.
+ * Persisting an unverified password locks the user into retrying a
+ * bad value with no recourse.
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
@@ -21,16 +24,17 @@ import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
-import {
-  getAvalonPassword,
-  setAvalonPassword,
-} from '@/utils/avalonAuth';
+import { getAvalonPassword } from '@/utils/avalonAuth';
 
 export interface AvalonAuthSheetProps {
   visible: boolean;
   /** Used as the secure-store key. Falls back to IP if MAC is unknown. */
   macOrIp: string;
-  /** Called with the entered password (already persisted) */
+  /**
+   * Called with the entered password. The parent is responsible for
+   * persisting via `setAvalonPassword` only after the password is
+   * verified by a successful CGI call.
+   */
   onSubmit: (password: string) => void;
   onClose: () => void;
 }
@@ -63,13 +67,12 @@ export function AvalonAuthSheet({
     }
   }, [visible, macOrIp]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(() => {
     haptics.light();
     const trimmed = password.trim();
     if (!trimmed) return;
-    await setAvalonPassword(macOrIp, trimmed);
     onSubmit(trimmed);
-  }, [password, macOrIp, onSubmit]);
+  }, [password, onSubmit]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
