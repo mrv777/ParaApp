@@ -705,6 +705,15 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
       ? Math.round(fanRpms.reduce((a, b) => a + b, 0) / fanRpms.length)
       : 0;
 
+  // Live power draw is PS[6] (the 7th element of the power-supply
+  // telemetry array). MPO is the mode's max-power *setting* — e.g.
+  // Eco shows MPO=800 while the supply actually draws ~865W.
+  // Match the web dashboard by preferring PS[6] when available.
+  const livePower =
+    Array.isArray(mm.PS) && typeof mm.PS[6] === 'number' ? mm.PS[6] : 0;
+  const power =
+    livePower > 0 ? livePower : typeof mm.MPO === 'number' ? mm.MPO : 0;
+
   return {
     ip,
     alias,
@@ -714,7 +723,7 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     minerType: 'avalon' as MinerType,
     expectedHashrate: typeof mm.MPO === 'number' ? hashRateGh : hashRateGh,
     hashRate: hashRateGh,
-    power: typeof mm.MPO === 'number' ? mm.MPO : 0,
+    power,
     temp: typeof mm.TMax === 'number' ? mm.TMax : 0,
     voltage: 0, // Avalon doesn't expose a single board voltage in MM stats
     frequency: typeof mm.Freq === 'number' ? Math.round(mm.Freq) : 0,

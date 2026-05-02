@@ -359,7 +359,7 @@ Notable fields on the Q:
 | `TMax` / `TAvg` / `TarT` | Max / avg / target temperature |
 | `Fan1`..`Fan4` / `FanR` | Per-fan RPM and duty % |
 | `FanErr` | Fan error count |
-| `PS` | Power-supply telemetry (7 ints: enabled, vin, vout?, iin?, iout?, vsense?, watts) — exact mapping not confirmed |
+| `PS` | Power-supply telemetry (7 ints). Index 6 = **live wattage** (matches the web dashboard's `power` field). Indices 1/2/5 look like centivolt rails (~12.15V, 23.0V, 23.0V); 0/3 unidentified. Prefer `PS[6]` over `MPO` for "actual draw" — `MPO` is only the mode's max-power *setting*. |
 | `GHSspd` / `GHSmm` / `GHSavg` | GH/s instantaneous, MM-reported, avg |
 | `WU` | Work units / minute |
 | `Freq` | Current frequency (MHz) |
