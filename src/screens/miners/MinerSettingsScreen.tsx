@@ -20,6 +20,7 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ErrorBanner } from '@/components/ErrorBanner';
+import { AvalonSettingsView } from '@/components/miners';
 import { useMinerStore, selectMiners } from '@/store/minerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { axeOS } from '@/api';
@@ -126,6 +127,13 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
   // Find the miner
   const miner = useMemo(() => miners.find((m) => m.ip === ip), [miners, ip]);
+
+  // Avalon: completely different shape (pool slots only, web CGI auth).
+  // Hand off to a dedicated view rather than crowding the AxeOS form.
+  // Note: this MUST be evaluated before any AxeOS-specific hooks below
+  // would request data the Avalon doesn't expose. We keep the
+  // navigation chrome for visual consistency.
+  const isAvalon = miner?.minerType === 'avalon';
 
   // ASIC config from API
   const [asicConfig, setAsicConfig] = useState<AsicConfig | null>(null);
@@ -752,6 +760,38 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   }
 
   const displayName = miner.alias || miner.hostname || miner.ip;
+
+  // Avalon: render the dedicated pool-config view. Reuses the screen
+  // chrome (header) but replaces the body — Avalon doesn't expose
+  // freq/voltage/fan adjustments over the public API so the AxeOS
+  // form would be all empty fields.
+  if (isAvalon) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <View className="flex-row items-center px-4 py-3 border-b border-border">
+          <Pressable
+            onPress={handleBack}
+            className="p-2 -ml-2 mr-2"
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+          <View className="flex-1">
+            <Text variant="subtitle" className="font-semibold">
+              {t('miners.minerSettings')}
+            </Text>
+            <Text variant="caption" color="muted" numberOfLines={1}>
+              {displayName}
+            </Text>
+          </View>
+        </View>
+        <AvalonSettingsView
+          miner={miner}
+          onSaved={() => navigation.goBack()}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>

@@ -21,7 +21,7 @@ import { haptics } from '@/utils/haptics';
 import { supportsIdentify } from '@/utils/version';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
-import type { LocalMiner } from '@/types';
+import type { LocalMiner, AvalonWorkMode } from '@/types';
 
 export interface MinerControlsSectionProps {
   miner: LocalMiner;
@@ -44,6 +44,8 @@ export function MinerControlsSection({
 
   const restartMiner = useMinerStore((s) => s.restartMiner);
   const identifyMiner = useMinerStore((s) => s.identifyMiner);
+  const setAvalonWorkMode = useMinerStore((s) => s.setAvalonWorkMode);
+  const [pendingMode, setPendingMode] = useState<AvalonWorkMode | null>(null);
 
   // Refs for cleanup
   const identifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,6 +150,46 @@ export function MinerControlsSection({
     showError,
   ]);
 
+  // Handle Avalon work-mode change. Per Canaan's KB the new mode does
+  // not take effect until reboot, so chain a restart automatically.
+  const handleSetWorkMode = useCallback(
+    async (mode: AvalonWorkMode) => {
+      if (pendingMode !== null) return;
+      setPendingMode(mode);
+      dismissError();
+      const ok = await setAvalonWorkMode(miner.ip, mode);
+      if (!ok) {
+        setPendingMode(null);
+        haptics.error();
+        showError(t('errors.failedToSetWorkMode'));
+        return;
+      }
+      haptics.success();
+      // Auto-reboot to apply the new mode.
+      const restartOk = await restartMiner(miner.ip);
+      setPendingMode(null);
+      if (restartOk) {
+        setIsReconnecting(true);
+        onReconnecting?.(true);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          setIsReconnecting(false);
+          onReconnecting?.(false);
+          showError(t('errors.failedToReconnect'));
+        }, RECONNECT_TIMEOUT_MS);
+      }
+    },
+    [
+      pendingMode,
+      miner.ip,
+      setAvalonWorkMode,
+      restartMiner,
+      onReconnecting,
+      dismissError,
+      showError,
+      t,
+    ]
+  );
+
   // Handle restart
   const handleRestart = useCallback(async () => {
     setIsRestarting(true);
@@ -185,6 +227,61 @@ export function MinerControlsSection({
         {t('miners.controls')}
       </Text>
       <View className="bg-secondary rounded-lg p-4 gap-3">
+        {/* Avalon work mode picker — chains an auto-reboot after set */}
+        {miner.minerType === 'avalon' && miner.workMode !== undefined && (
+          <View className="gap-2">
+            <Text variant="caption" color="muted">
+              {t('miners.workMode')}
+            </Text>
+            <View className="flex-row gap-2">
+              {([0, 1, 2] as const).map((mode) => {
+                const isCurrent = miner.workMode === mode;
+                const isPending = pendingMode === mode;
+                const label =
+                  mode === 0
+                    ? t('miners.workModeEco')
+                    : mode === 1
+                      ? t('miners.workModeStandard')
+                      : t('miners.workModeSuper');
+                return (
+                  <Pressable
+                    key={mode}
+                    onPress={() => handleSetWorkMode(mode)}
+                    disabled={
+                      isCurrent || pendingMode !== null || isReconnecting
+                    }
+                    className={`flex-1 py-3 rounded-lg items-center ${
+                      isCurrent
+                        ? 'bg-foreground'
+                        : 'bg-background border border-border'
+                    } ${pendingMode !== null && !isPending ? 'opacity-50' : ''}`}
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.7 : undefined,
+                    })}
+                  >
+                    {isPending ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={isCurrent ? colors.background : colors.text}
+                      />
+                    ) : (
+                      <Text
+                        variant="body"
+                        className={`font-medium ${isCurrent ? 'text-gray-950' : ''}`}
+                      >
+                        {label}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text variant="caption" color="muted">
+              {t('miners.workModeRebootHint')}
+            </Text>
+          </View>
+        )}
+
         {/* Identify LED Button - only for ESP-Miner v2.12.0+ */}
         {supportsIdentify(miner) && (
           <Pressable

@@ -67,6 +67,12 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
   const poolUrl = miner.stratumUrl
     ? `${miner.stratumUrl}:${miner.stratumPort}`
     : '--';
+  const isAvalon = miner.minerType === 'avalon';
+  const hasMac = isAvalon && !!miner.macAddress;
+  const hasAsicCount = isAvalon && !!miner.asicCount;
+  const hasFallback = miner.fallbackStratumUrl !== undefined;
+  const hasSerial = !!miner.serialNumber;
+  const hasRssi = miner.rssi !== undefined;
 
   return (
     <View className="px-4 mb-4">
@@ -76,21 +82,38 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
       <View className="bg-secondary rounded-lg px-4">
         <InfoRow label={t('miners.model')} value={miner.deviceModel} />
         <InfoRow label={t('miners.asic')} value={miner.ASICModel} />
+        {hasAsicCount && (
+          <InfoRow
+            label={t('miners.asicCount')}
+            value={String(miner.asicCount)}
+          />
+        )}
         <InfoRow label={t('miners.firmware')} value={miner.version} />
         <InfoRow label={t('miners.ipAddress')} value={miner.ip} />
+        {hasMac && (
+          <InfoRow
+            label={t('miners.macAddress')}
+            value={miner.macAddress as string}
+          />
+        )}
         <InfoRow label={t('miners.hostname')} value={miner.hostname} />
         <InfoRow label={t('miners.pool')} value={poolUrl} />
         <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
-        <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} isLast={!miner.rssi && !miner.serialNumber && !miner.fallbackStratumUrl} />
-        {miner.rssi !== undefined && (
-          <InfoRow label={t('miners.wifiSignal')} value={`${miner.rssi} dBm`} isLast={!miner.serialNumber && !miner.fallbackStratumUrl} />
+        {/* Avalons report no WiFi info — skip the row entirely */}
+        {!isAvalon && (
+          <InfoRow
+            label={t('miners.wifi')}
+            value={miner.wifiSSID || ''}
+            isLast={!hasRssi && !hasSerial && !hasFallback}
+          />
         )}
-        {miner.serialNumber && (
-          <InfoRow label={t('miners.serialNumber')} value={miner.serialNumber} isLast={!miner.fallbackStratumUrl} />
+        {hasRssi && (
+          <InfoRow label={t('miners.wifiSignal')} value={`${miner.rssi} dBm`} isLast={!hasSerial && !hasFallback} />
         )}
-        {miner.fallbackStratumUrl !== undefined && (
-          <FallbackPoolRow miner={miner} />
+        {hasSerial && (
+          <InfoRow label={t('miners.serialNumber')} value={miner.serialNumber as string} isLast={!hasFallback} />
         )}
+        {hasFallback && <FallbackPoolRow miner={miner} />}
       </View>
     </View>
   );

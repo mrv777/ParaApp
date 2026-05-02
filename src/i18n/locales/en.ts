@@ -239,6 +239,27 @@ const en = {
     hwErrorRate: '{{rate}}% error rate',
     active: 'Active',
     fallbackActive: 'Using fallback pool',
+    // Avalon-specific
+    workMode: 'Work Mode',
+    workModeEco: 'Eco',
+    workModeStandard: 'Standard',
+    workModeSuper: 'Super',
+    workModeRebootHint: 'Switching modes reboots the miner (~3 min)',
+    poolPing: 'Pool Latency',
+    asicCount: 'ASIC Count',
+    macAddress: 'MAC Address',
+    asicHeatmap: 'Per-ASIC Temperatures',
+    asicHeatmapLoading: 'Loading…',
+    asicHeatmapEmpty: 'No per-ASIC data available',
+    avalonAdminPasswordTitle: 'Avalon Admin Password',
+    avalonAdminPasswordHint:
+      "Pool config requires the device's web admin password. Default is 'admin'. Stored securely on this device only.",
+    avalonAdminPasswordPlaceholder: 'admin',
+    avalonPoolConfig: 'Pool Configuration',
+    avalonPoolConfigHint:
+      'Up to 3 pool slots. The miner will reboot to apply changes.',
+    avalonPoolSlot: 'Pool {{n}}',
+    swipeToSavePools: 'Swipe to save & reboot',
   },
 
   settings: {
@@ -316,6 +337,7 @@ const en = {
     daysAgo: '{{count}}d ago',
   },
 
+  // (Avalon-specific error keys are inserted into this section below)
   errors: {
     networkError: 'Network error',
     timeout: 'Request timed out',
@@ -331,6 +353,9 @@ const en = {
     failedToShare: 'Failed to share',
     failedToLoadConfig: 'Failed to load ASIC configuration',
     failedToApply: 'Failed to apply settings',
+    failedToSetWorkMode: 'Failed to change work mode',
+    failedToSavePools: 'Failed to save pool config',
+    avalonAuthFailed: 'Wrong admin password',
   },
 
   discovery: {

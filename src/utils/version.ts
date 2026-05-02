@@ -45,6 +45,13 @@ export function supportsIdentify(miner: LocalMiner): boolean {
     return false;
   }
 
+  // Avalon Q firmware has no LED-identify equivalent (no `led` option in
+  // ascset help on MM319). Other Canaan models may differ; revisit
+  // if/when we test on a Nano or Mini.
+  if (miner.minerType === 'avalon') {
+    return false;
+  }
+
   // NerdQAxe++ and other forks don't support identify
   if (miner.deviceModel.toLowerCase().includes('nerd')) {
     return false;

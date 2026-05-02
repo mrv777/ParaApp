@@ -10,6 +10,7 @@ import { Text } from '@/components/Text';
 import { Badge } from '@/components/Badge';
 import {
   AliasEditSheet,
+  AsicHeatmap,
   MinerStatsSection,
   DeviceInfoSection,
   LinkedWorkerSection,
@@ -218,6 +219,11 @@ export function MinerDetailScreen({ route, navigation }: Props) {
               </View>
             </View>
           </View>
+        )}
+
+        {/* Per-ASIC heatmap (Avalon only). Self-fetches estats while expanded. */}
+        {miner.isOnline && miner.minerType === 'avalon' && (
+          <AsicHeatmap ip={miner.ip} />
         )}
 
         {/* Device info */}

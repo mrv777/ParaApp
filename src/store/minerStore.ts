@@ -7,6 +7,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   ApiError,
+  ApiResult,
+  AvalonWorkMode,
   LocalMiner,
   MinerWarning,
   MinerSettings,
@@ -16,7 +18,7 @@ import type {
   DiscoveryProgress,
   DiscoveryOptions,
 } from '@/types';
-import { axeOS, isSuccess } from '@/api';
+import { axeOS, avalon, avalonWeb, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
 import { formatTemperature, parseDifficulty } from '@/utils/formatting';
 import type { TemperatureUnit } from '@/utils/formatting';
@@ -68,6 +70,18 @@ interface MinerActions {
   updateMinerSettings: (
     ip: string,
     settings: MinerSettings
+  ) => Promise<boolean>;
+
+  // Avalon-specific controls (no-op for non-Avalon miners)
+  setAvalonWorkMode: (ip: string, mode: AvalonWorkMode) => Promise<boolean>;
+  setAvalonPools: (
+    ip: string,
+    adminPassword: string,
+    slots: [
+      avalonWeb.PoolSlot,
+      avalonWeb.PoolSlot?,
+      avalonWeb.PoolSlot?,
+    ]
   ) => Promise<boolean>;
 
   // Warning helpers
@@ -206,6 +220,75 @@ function getExpectedHashrate(asicModel: string): number {
   return hashrates[asicModel] || 500;
 }
 
+/**
+ * Fetch a miner over whichever protocol responds. Tries AxeOS HTTP
+ * first (cheap), falls back to Avalon's CGMiner JSON RPC. Returns the
+ * first successful result, or the AxeOS error if both fail.
+ *
+ * On the Avalon path the LocalMiner is composed from version + summary
+ * + pools + stats — three TCP round-trips. We don't fetch `estats`
+ * here; the per-ASIC heatmap lives behind a "show details" toggle on
+ * the detail screen and pulls estats on demand.
+ */
+async function fetchMiner(ip: string): Promise<ApiResult<LocalMiner>> {
+  const axeOsResult = await axeOS.getSystemInfo(ip);
+  if (isSuccess(axeOsResult)) {
+    return { success: true, data: parseSystemInfo(ip, axeOsResult.data) };
+  }
+
+  // AxeOS failed — try Avalon. Cgminer is single-threaded; serialize.
+  const version = await avalon.getVersion(ip);
+  if (!isSuccess(version)) {
+    // Surface the original AxeOS error since that was the primary
+    // protocol attempt. The Avalon failure is usually identical
+    // (network unreachable) and not actionable separately.
+    return axeOsResult;
+  }
+  const summary = await avalon.getSummary(ip);
+  if (!isSuccess(summary)) return summary;
+  const pools = await avalon.getPools(ip);
+  if (!isSuccess(pools)) return pools;
+  const stats = await avalon.getStats(ip);
+  if (!isSuccess(stats)) return stats;
+
+  return {
+    success: true,
+    data: avalon.adaptToLocalMiner({
+      ip,
+      version: version.data,
+      summary: summary.data,
+      pools: pools.data,
+      stats: stats.data,
+    }),
+  };
+}
+
+/**
+ * Fast path for already-known Avalons: skip the AxeOS HTTP probe (and
+ * its 5s timeout) and go straight to cgminer. Use from refreshMiner
+ * when we already know the miner's type.
+ */
+async function fetchAvalon(ip: string): Promise<ApiResult<LocalMiner>> {
+  const version = await avalon.getVersion(ip);
+  if (!isSuccess(version)) return version;
+  const summary = await avalon.getSummary(ip);
+  if (!isSuccess(summary)) return summary;
+  const pools = await avalon.getPools(ip);
+  if (!isSuccess(pools)) return pools;
+  const stats = await avalon.getStats(ip);
+  if (!isSuccess(stats)) return stats;
+  return {
+    success: true,
+    data: avalon.adaptToLocalMiner({
+      ip,
+      version: version.data,
+      summary: summary.data,
+      pools: pools.data,
+      stats: stats.data,
+    }),
+  };
+}
+
 export const useMinerStore = create<MinerState & MinerActions>()(
   persist(
     (set, get) => ({
@@ -219,10 +302,10 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
         set({ isLoading: true, error: null });
 
-        const result = await axeOS.getSystemInfo(ip);
+        const result = await fetchMiner(ip);
 
         if (isSuccess(result)) {
-          const miner = parseSystemInfo(ip, result.data);
+          const miner = result.data;
 
           // Use functional set() with fresh state to avoid race conditions
           // when multiple miners are discovered simultaneously
@@ -264,14 +347,22 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       refreshMiner: async (ip) => {
-        const { loadingMiners } = get();
+        const { loadingMiners, miners } = get();
 
-        // Mark as loading
+        // If we already know this is an Avalon, skip the AxeOS probe
+        // and go straight to cgminer. Saves one HTTP timeout on every
+        // poll cycle.
+        const known = miners.find((m) => m.ip === ip);
+        const result =
+          known?.minerType === 'avalon'
+            ? await fetchAvalon(ip)
+            : await fetchMiner(ip);
+
+        // Mark as loading (post-await is fine; the polling hook
+        // doesn't dedupe via this state)
         const newLoadingMiners = new Set(loadingMiners);
         newLoadingMiners.add(ip);
         set({ loadingMiners: newLoadingMiners });
-
-        const result = await axeOS.getSystemInfo(ip);
 
         // Get fresh state after async operation to avoid race conditions
         const { loadingMiners: currentLoading, miners: currentMiners } = get();
@@ -280,7 +371,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
         if (isSuccess(result)) {
           const existingMiner = currentMiners.find((m) => m.ip === ip);
-          const updatedMiner = parseSystemInfo(ip, result.data);
+          const updatedMiner = result.data;
 
           // Preserve alias
           if (existingMiner?.alias) {
@@ -308,7 +399,11 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       restartMiner: async (ip) => {
-        const result = await axeOS.restart(ip);
+        const miner = get().miners.find((m) => m.ip === ip);
+        const result =
+          miner?.minerType === 'avalon'
+            ? await avalon.reboot(ip)
+            : await axeOS.restart(ip);
         if (!isSuccess(result)) {
           set({ error: result.error });
         }
@@ -316,11 +411,71 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       identifyMiner: async (ip) => {
+        const miner = get().miners.find((m) => m.ip === ip);
+        // Avalon Q firmware doesn't expose an LED-identify equivalent.
+        // The MinerControlsSection hides the button for Avalon, so this
+        // path is defensive — return false without setting an error.
+        if (miner?.minerType === 'avalon') {
+          return false;
+        }
         const result = await axeOS.identify(ip);
         if (!isSuccess(result)) {
           set({ error: result.error });
         }
         return isSuccess(result);
+      },
+
+      /**
+       * Set Avalon work mode. Per Canaan's KB the new mode does not
+       * take effect until reboot, so callers should follow up with
+       * `restartMiner(ip)` and surface the recovery time (~3-4 min).
+       */
+      setAvalonWorkMode: async (
+        ip: string,
+        mode: AvalonWorkMode
+      ): Promise<boolean> => {
+        const miner = get().miners.find((m) => m.ip === ip);
+        if (miner?.minerType !== 'avalon') return false;
+        const result = await avalon.setWorkMode(ip, mode);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return false;
+        }
+        // Optimistic local update — UI reflects intent immediately.
+        // Real read happens after the post-set reboot completes.
+        set((state) => ({
+          miners: state.miners.map((m) =>
+            m.ip === ip ? { ...m, workMode: mode } : m
+          ),
+        }));
+        return true;
+      },
+
+      /**
+       * Update Avalon pool slots via the web CGI. Requires the device
+       * admin password (cgminer's setpool isn't supported on Q firmware).
+       * The miner needs a reboot for new pool config to take effect.
+       */
+      setAvalonPools: async (
+        ip: string,
+        adminPassword: string,
+        slots: [
+          avalonWeb.PoolSlot,
+          avalonWeb.PoolSlot?,
+          avalonWeb.PoolSlot?,
+        ]
+      ): Promise<boolean> => {
+        const session = await avalonWeb.login(ip, adminPassword);
+        if (!isSuccess(session)) {
+          set({ error: session.error });
+          return false;
+        }
+        const result = await avalonWeb.setPools(ip, session.data, slots);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return false;
+        }
+        return true;
       },
 
       updateMinerSettings: async (ip, settings) => {
