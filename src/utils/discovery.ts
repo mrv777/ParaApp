@@ -1,16 +1,25 @@
 /**
- * Network discovery utilities for AxeOS miners
+ * Network discovery utilities for local miners.
+ *
+ * Probes both port 80 (AxeOS / Hammer HTTP) and port 4028 (Canaan
+ * Avalon CGMiner JSON RPC) per IP, in parallel, returning as soon as
+ * either probe succeeds.
  */
 
 import NetInfo from '@react-native-community/netinfo';
 import type { DiscoveryProgress, DiscoveryOptions } from '@/types';
+import { isAvalon } from '@/api/avalon';
 import { extractSubnet } from './validation';
 
 /** Timeout for discovery probes (ms) - no retries, fast fail */
 const DISCOVERY_TIMEOUT = 5000;
 
-/** Default concurrent connections */
-const DEFAULT_CONCURRENCY = 50;
+/**
+ * Default concurrent connections. We probe two ports per IP, so the
+ * effective socket count is ~2× this. Halved from the original 50 to
+ * keep total in-flight connections sensible.
+ */
+const DEFAULT_CONCURRENCY = 30;
 
 /**
  * Discovery callbacks for progress reporting
@@ -48,17 +57,13 @@ export async function getDeviceSubnet(): Promise<string | null> {
 }
 
 /**
- * Check if a single IP responds as an AxeOS miner
- * Uses a fast single-attempt probe (no retries)
- * @param ip - IP address to check
- * @param signal - Optional abort signal
- * @returns true if an AxeOS miner responds
+ * Check if a single IP responds as an AxeOS / Hammer miner via the
+ * standard /api/system/info HTTP endpoint.
  */
-async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
+async function probeAxeOS(ip: string, signal?: AbortSignal): Promise<boolean> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT);
 
-  // Link our timeout controller with the passed signal
   const handleAbort = () => controller.abort();
   signal?.addEventListener('abort', handleAbort);
 
@@ -71,7 +76,6 @@ async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
       return false;
     }
 
-    // Validate it's actually an AxeOS miner by checking for expected fields
     const data = await response.json();
     return (
       typeof data === 'object' &&
@@ -88,7 +92,31 @@ async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
 }
 
 /**
- * Scan a subnet for AxeOS miners using a worker pool pattern
+ * Probe both supported miner protocols against a single IP. Returns
+ * true as soon as either responds. The two probes run concurrently so
+ * scan wall-clock time stays close to the original AxeOS-only path.
+ *
+ * AbortSignal is honored by the AxeOS probe; the Avalon TCP probe
+ * uses its own short timeout via `isAvalon`.
+ */
+async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
+  // Promise.any resolves on first true; we wrap each probe so a false
+  // result *rejects* (so .any can pick the first true) and convert
+  // back at the end.
+  const probes = [
+    probeAxeOS(ip, signal).then((ok) => (ok ? true : Promise.reject())),
+    isAvalon(ip).then((ok) => (ok ? true : Promise.reject())),
+  ];
+  try {
+    return await Promise.any(probes);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Scan a subnet for local miners (AxeOS, Hammer, Avalon) using a
+ * worker pool pattern.
  *
  * @param callbacks - Progress and result callbacks
  * @param options - Discovery options (subnet, range, concurrency)

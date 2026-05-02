@@ -1,0 +1,675 @@
+/**
+ * Canaan Avalon CGMiner API client.
+ *
+ * Targets the JSON RPC interface on TCP port 4028 that ships on Avalon
+ * Q / Nano / Mini and most Canaan ASIC firmware. Read commands are
+ * unauthenticated; the same applies to `ascset` writes.
+ *
+ * Pool config and admin-only knobs are NOT reachable here on the
+ * Avalon Q firmware (the A10 manual is wrong about `setpool`); use
+ * `avalonWeb.ts` with the device's admin password for those.
+ *
+ * See CANAAN_AVALON_API.md for protocol details and per-model quirks.
+ */
+
+import TcpSocket from 'react-native-tcp-socket';
+import type {
+  ApiResult,
+  AvalonWorkMode,
+  AvalonWriteCapabilities,
+  LocalMiner,
+  MinerType,
+} from '@/types';
+
+/** Standard CGMiner API port */
+export const AVALON_PORT = 4028;
+
+/** Per-command timeout. Local LAN; matches MINER_TIMEOUT for AxeOS. */
+export const AVALON_TIMEOUT = 5000;
+
+/**
+ * Discovery probe timeout — kept tight so a full /24 scan doesn't drag.
+ * One TCP RTT to a non-Avalon host is sub-millisecond; one to a real
+ * miner takes a few ms. 2.5s gives ~2× headroom for slow/loaded boxes.
+ */
+export const AVALON_DISCOVERY_TIMEOUT = 2500;
+
+// ---------------------------------------------------------------------------
+// Wire-format types
+// ---------------------------------------------------------------------------
+
+interface CgminerStatus {
+  STATUS: 'S' | 'I' | 'E';
+  When: number;
+  Code: number;
+  Msg: string;
+  Description?: string;
+}
+
+interface CgminerEnvelope {
+  STATUS: CgminerStatus[];
+  id?: number;
+  // Section is dynamic and depends on the command (e.g. VERSION, SUMMARY...)
+  [section: string]: unknown;
+}
+
+export interface AvalonVersion {
+  CGMiner: string;
+  API: string;
+  PROD: string; // e.g. "Avalon Q"
+  MODEL: string; // e.g. "Q"
+  HWTYPE: string;
+  SWTYPE: string;
+  LVERSION: string;
+  BVERSION: string;
+  CGVERSION: string;
+  HBMCUVERSION?: string;
+  FANMCUVERSION?: string;
+  DNA: string;
+  MAC: string;
+}
+
+export interface AvalonSummary {
+  Elapsed: number;
+  /** Aggregate hashrate in MH/s */
+  'MHS av': number;
+  'MHS 5s': number;
+  'MHS 1m': number;
+  'MHS 5m': number;
+  'MHS 15m': number;
+  'Found Blocks': number;
+  Getworks: number;
+  Accepted: number;
+  Rejected: number;
+  'Hardware Errors': number;
+  Utility: number;
+  'Difficulty Accepted': number;
+  'Difficulty Rejected': number;
+  'Best Share': number;
+  'Device Hardware%': number;
+  'Device Rejected%': number;
+  'Pool Rejected%': number;
+}
+
+export interface AvalonPool {
+  POOL: number;
+  URL: string;
+  Status: 'Alive' | 'Dead' | 'Disabled' | 'Sick' | 'NoStart';
+  Priority: number;
+  User: string;
+  Password: string;
+  Accepted: number;
+  Rejected: number;
+  'Last Share Time': number;
+  'Last Share Difficulty': number;
+  'Stratum Active': boolean;
+  'Stratum URL'?: string;
+  'Best Share': number;
+  'Current Block Height'?: number;
+}
+
+/**
+ * Bracketed key-value blob from cgminer `stats` / `estats`. We expose it
+ * as a typed record after parsing — see {@link parseMmSummary}.
+ */
+export interface AvalonMmStats {
+  Ver?: string;
+  LVer?: string;
+  BVer?: string;
+  HashMcu0Ver?: string;
+  FanMcuVer?: string;
+  CPU?: string;
+  DNA?: string;
+  STATE?: number;
+  MEMFREE?: number;
+  Elapsed?: number;
+  LW?: number;
+  HW?: number;
+  DH?: number;
+  /** Inlet ambient temp °C */
+  ITemp?: number;
+  /** Hashboard inlet temp °C */
+  HBITemp?: number;
+  /** Hashboard outlet temp °C */
+  HBOTemp?: number;
+  /** Max ASIC temp °C */
+  TMax?: number;
+  /** Average ASIC temp °C */
+  TAvg?: number;
+  /** Target temp °C the firmware steers towards */
+  TarT?: number;
+  Fan1?: number;
+  Fan2?: number;
+  Fan3?: number;
+  Fan4?: number;
+  /** Fan duty cycle 0–100 */
+  FanR?: number;
+  FanErr?: number;
+  /** Real-time hashrate in GH/s */
+  GHSspd?: number;
+  /** Reported hashrate from the MM in GH/s */
+  GHSmm?: number;
+  /** Average hashrate in GH/s */
+  GHSavg?: number;
+  /** Work units / minute */
+  WU?: number;
+  /** Current operating frequency in MHz */
+  Freq?: number;
+  /** Total ASIC count */
+  TA?: number;
+  /** ASIC core revision (e.g. "A3197S") */
+  Core?: string;
+  BIN?: number;
+  /** Pool RTT in ms */
+  PING?: number;
+  /** Working mode (matches dashboard `workingmode`) */
+  WORKMODE?: AvalonWorkMode;
+  WORKLEVEL?: number;
+  /** Max power at the current mode (W) */
+  MPO?: number;
+  /** Power supply telemetry — 7 ints, mapping not fully decoded */
+  PS?: number[];
+  // Raw fallthrough for fields we haven't typed yet.
+  [key: string]: unknown;
+}
+
+export interface AvalonHbInfo {
+  /** Per-ASIC inlet temperatures (one entry per ASIC, ~160 on the Q) */
+  PVT_T0?: number[];
+  /** Per-ASIC voltages in mV */
+  PVT_V0?: number[];
+  /** Per-ASIC megawork counters */
+  MW0?: number[];
+  [key: string]: unknown;
+}
+
+export interface AvalonStats {
+  /** Parsed MM ID0:Summary blob */
+  mm: AvalonMmStats;
+  /** Parsed HBinfo (only present when fetched via `estats`) */
+  hb?: AvalonHbInfo;
+  /** Cgminer-level stats wrapper fields */
+  Elapsed: number;
+  ID: string;
+}
+
+// ---------------------------------------------------------------------------
+// TCP transport
+// ---------------------------------------------------------------------------
+
+/**
+ * Send a single CGMiner command and return the parsed envelope.
+ *
+ * Cgminer uses short connections: open socket, send one command, read
+ * until close-or-NUL, close. Reusing a socket for a second command is
+ * unsupported and the device is single-threaded — serialize calls.
+ */
+export function sendCommand(
+  ip: string,
+  command: string,
+  parameter?: string,
+  timeoutMs: number = AVALON_TIMEOUT
+): Promise<ApiResult<CgminerEnvelope>> {
+  return new Promise((resolve) => {
+    const payload = JSON.stringify(
+      parameter !== undefined ? { command, parameter } : { command }
+    );
+
+    let buffer = '';
+    let settled = false;
+    const settle = (result: ApiResult<CgminerEnvelope>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        socket.destroy();
+      } catch {
+        // ignore — already closed
+      }
+      resolve(result);
+    };
+
+    const socket = TcpSocket.createConnection(
+      { host: ip, port: AVALON_PORT },
+      () => {
+        socket.write(payload);
+      }
+    );
+
+    const timer = setTimeout(() => {
+      settle({
+        success: false,
+        error: { message: 'Timeout', code: 'TIMEOUT' },
+      });
+    }, timeoutMs);
+
+    socket.on('data', (chunk: string | { toString(encoding?: string): string }) => {
+      buffer +=
+        typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      // Cgminer terminates the JSON object with a NUL byte. As soon as
+      // we see one, we have the full reply.
+      if (buffer.includes('\0')) {
+        finish();
+      }
+    });
+
+    socket.on('close', () => {
+      // Some firmware variants close without a NUL terminator.
+      finish();
+    });
+
+    socket.on('error', (err: Error) => {
+      settle({
+        success: false,
+        error: { message: err.message || 'Socket error', code: 'NETWORK_ERROR' },
+      });
+    });
+
+    const finish = () => {
+      const text = buffer.replace(/\0+$/g, '').trim();
+      if (!text) {
+        settle({
+          success: false,
+          error: { message: 'Empty response', code: 'EMPTY_RESPONSE' },
+        });
+        return;
+      }
+      try {
+        const parsed = JSON.parse(text) as CgminerEnvelope;
+        settle({ success: true, data: parsed });
+      } catch (err) {
+        settle({
+          success: false,
+          error: {
+            message: `Parse error: ${(err as Error).message}`,
+            code: 'PARSE_ERROR',
+          },
+        });
+      }
+    };
+  });
+}
+
+/**
+ * Type-narrow a CGMiner envelope into a successful result with the
+ * named section, or surface an error if the device returned STATUS:E.
+ */
+function unwrap<TSection>(
+  envelope: CgminerEnvelope,
+  section: string
+): ApiResult<TSection[]> {
+  const status = envelope.STATUS?.[0];
+  if (status?.STATUS === 'E') {
+    return {
+      success: false,
+      error: {
+        message: status.Msg || 'Cgminer error',
+        code: `CGMINER_${status.Code}`,
+      },
+    };
+  }
+  const data = envelope[section];
+  if (!Array.isArray(data)) {
+    return {
+      success: false,
+      error: {
+        message: `Missing ${section} section`,
+        code: 'MISSING_SECTION',
+      },
+    };
+  }
+  return { success: true, data: data as TSection[] };
+}
+
+// ---------------------------------------------------------------------------
+// Read commands
+// ---------------------------------------------------------------------------
+
+export async function getVersion(
+  ip: string,
+  timeoutMs?: number
+): Promise<ApiResult<AvalonVersion>> {
+  const env = await sendCommand(ip, 'version', undefined, timeoutMs);
+  if (!env.success) return env;
+  const list = unwrap<AvalonVersion>(env.data, 'VERSION');
+  if (!list.success) return list;
+  return { success: true, data: list.data[0] };
+}
+
+export async function getSummary(
+  ip: string,
+  timeoutMs?: number
+): Promise<ApiResult<AvalonSummary>> {
+  const env = await sendCommand(ip, 'summary', undefined, timeoutMs);
+  if (!env.success) return env;
+  const list = unwrap<AvalonSummary>(env.data, 'SUMMARY');
+  if (!list.success) return list;
+  return { success: true, data: list.data[0] };
+}
+
+export async function getPools(
+  ip: string,
+  timeoutMs?: number
+): Promise<ApiResult<AvalonPool[]>> {
+  const env = await sendCommand(ip, 'pools', undefined, timeoutMs);
+  if (!env.success) return env;
+  return unwrap<AvalonPool>(env.data, 'POOLS');
+}
+
+/**
+ * `stats` returns the MM bracket-string but no HBinfo. Use `getEStats`
+ * when you need per-ASIC PVT data — it's heavier but a strict superset.
+ */
+export async function getStats(
+  ip: string,
+  timeoutMs?: number
+): Promise<ApiResult<AvalonStats>> {
+  return fetchStats(ip, 'stats', timeoutMs);
+}
+
+export async function getEStats(
+  ip: string,
+  timeoutMs?: number
+): Promise<ApiResult<AvalonStats>> {
+  return fetchStats(ip, 'estats', timeoutMs);
+}
+
+async function fetchStats(
+  ip: string,
+  command: 'stats' | 'estats',
+  timeoutMs?: number
+): Promise<ApiResult<AvalonStats>> {
+  const env = await sendCommand(ip, command, undefined, timeoutMs);
+  if (!env.success) return env;
+  const list = unwrap<Record<string, unknown>>(env.data, 'STATS');
+  if (!list.success) return list;
+  const row = list.data[0];
+  if (!row) {
+    return {
+      success: false,
+      error: { message: 'No STATS rows', code: 'EMPTY_STATS' },
+    };
+  }
+  // The MM blob is keyed differently across firmware versions; older
+  // (A10) used `MM ID0`, current Q firmware uses `MM ID0:Summary`. Be
+  // permissive and grab the first key matching MM ID*.
+  const mmKey = Object.keys(row).find((k) => /^MM ID\d+/.test(k));
+  const mm: AvalonMmStats = mmKey
+    ? parseMmSummary(String(row[mmKey] ?? ''))
+    : {};
+  const hbRaw = row.HBinfo;
+  const hb = typeof hbRaw === 'string' ? parseHbInfo(hbRaw) : undefined;
+  return {
+    success: true,
+    data: {
+      mm,
+      hb,
+      Elapsed: Number(row.Elapsed ?? 0),
+      ID: String(row.ID ?? ''),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// MM / HB blob parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a single bracketed key-value blob.
+ *
+ *   Input:  "'STATS':{Ver[Q-25052801] STATE[1] PS[0 1216 2411 53 1298 2412 1391]}"
+ *   Output: {Ver: "Q-25052801", STATE: 1, PS: [0, 1216, 2411, 53, 1298, 2412, 1391]}
+ *
+ * Numeric strings convert to numbers. Space-separated numeric strings
+ * convert to number arrays. Everything else stays as a string.
+ */
+export function parseMmSummary(blob: string): AvalonMmStats {
+  const out: AvalonMmStats = {};
+  // Match key[value] where value can contain anything except an
+  // unbalanced ']'. The stats blob doesn't nest brackets.
+  const re = /(\w+)\[([^\]]*)\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(blob)) !== null) {
+    const [, key, raw] = match;
+    out[key] = coerceMmValue(raw);
+  }
+  return out;
+}
+
+/**
+ * HBinfo follows the same `key[value]` pattern but inside an outer
+ * `'HBn':{ ... }` wrapper. Reuse the MM parser on the inner content.
+ */
+export function parseHbInfo(blob: string): AvalonHbInfo {
+  // Strip the outer `'HBn':{ ... }` if present.
+  const inner = blob.replace(/^'HB\d+':\{/, '').replace(/\}$/, '');
+  return parseMmSummary(inner) as AvalonHbInfo;
+}
+
+function coerceMmValue(raw: string): unknown {
+  const trimmed = raw.trim();
+  if (trimmed === '') return '';
+  // Single number? (signed, decimal, scientific not used by firmware)
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+  // Whitespace-separated number list?
+  if (/^[-\d\s.]+$/.test(trimmed) && /\s/.test(trimmed)) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.every((p) => /^-?\d+(\.\d+)?$/.test(p))) {
+      return parts.map(Number);
+    }
+  }
+  return trimmed;
+}
+
+// ---------------------------------------------------------------------------
+// Write commands (ascset)
+// ---------------------------------------------------------------------------
+
+/**
+ * Send `ascset` and resolve to ok/error. Most write paths are not used
+ * directly by callers — prefer the higher-level helpers below.
+ */
+async function ascset(
+  ip: string,
+  args: string,
+  timeoutMs?: number
+): Promise<ApiResult<void>> {
+  const env = await sendCommand(ip, 'ascset', args, timeoutMs);
+  if (!env.success) return env;
+  const status = env.data.STATUS?.[0];
+  if (status?.STATUS === 'S') return { success: true, data: undefined };
+  return {
+    success: false,
+    error: {
+      message: status?.Msg || 'ascset failed',
+      code: `CGMINER_${status?.Code ?? 'UNKNOWN'}`,
+    },
+  };
+}
+
+/**
+ * Reboot the miner. Verified working on Avalon Q firmware MM319.
+ * The miner takes ~60–90s to come back online; callers should poll
+ * `getVersion` until success or a timeout (~3 min).
+ */
+export function reboot(ip: string): Promise<ApiResult<void>> {
+  return ascset(ip, '0,reboot,0');
+}
+
+/**
+ * Change pool config via cgminer. **Unsupported on the Avalon Q
+ * firmware** (returns `Unknown option: setpool`). Kept for older
+ * Avalon firmware that does support it; callers should fall back to
+ * `avalonWeb.setPool` on a CGMINER_120 error.
+ */
+export function setPool(
+  ip: string,
+  args: {
+    /** Privileged username (often "root" on older Avalons) */
+    adminUser: string;
+    /** Privileged password */
+    adminPassword: string;
+    /** Stratum URL e.g. "stratum+tcp://pool.example:3333" */
+    poolUrl: string;
+    /** Worker name */
+    worker: string;
+    /** Worker password (typically "x") */
+    workerPassword: string;
+  }
+): Promise<ApiResult<void>> {
+  const params = [
+    '0',
+    'setpool',
+    args.adminUser,
+    args.adminPassword,
+    args.poolUrl,
+    args.worker,
+    args.workerPassword,
+  ].join(',');
+  return ascset(ip, params);
+}
+
+// ---------------------------------------------------------------------------
+// Capability detection + LocalMiner adapter
+// ---------------------------------------------------------------------------
+
+/**
+ * Probe the device's `ascset` write surface non-destructively.
+ * Each option is poked with a deliberately invalid value so a
+ * supported option returns "unknown argument" while a missing one
+ * returns "Unknown option: <name>". We never apply a write here.
+ */
+export async function probeWriteCapabilities(
+  ip: string
+): Promise<AvalonWriteCapabilities> {
+  const tests = await Promise.all([
+    ascset(ip, '0,reboot,nope'),
+    ascset(ip, '0,setpool'),
+    ascset(ip, '0,workmode,nope'),
+  ]);
+  const isSupported = (r: ApiResult<void>) =>
+    !r.success && !/Unknown option/i.test(r.error.message);
+  return {
+    rebootViaCgminer: isSupported(tests[0]),
+    setPoolViaCgminer: isSupported(tests[1]),
+    workModeViaCgminer: isSupported(tests[2]),
+  };
+}
+
+/**
+ * Check whether the host at `ip` looks like an Avalon. Used by the
+ * subnet scanner; intentionally cheap and fast-failing.
+ */
+export async function isAvalon(ip: string): Promise<boolean> {
+  const result = await getVersion(ip, AVALON_DISCOVERY_TIMEOUT);
+  if (!result.success) return false;
+  return (
+    typeof result.data.PROD === 'string' &&
+    result.data.PROD.toLowerCase().includes('avalon')
+  );
+}
+
+/**
+ * Detect whether a string looks like an Avalon model identifier.
+ * The web UI's `hwtype` substring check covers the same cases.
+ */
+export function avalonModelFromHwType(hwtype: string): string {
+  if (/Nano3s/i.test(hwtype)) return 'Avalon Nano 3S';
+  if (/Mini3/i.test(hwtype)) return 'Avalon Mini 3';
+  if (/Q/.test(hwtype)) return 'Avalon Q';
+  return hwtype || 'Avalon';
+}
+
+/**
+ * Compose a `LocalMiner` from one round of cgminer reads. Caller
+ * decides whether to fetch `getEStats` (for PVT arrays) or just
+ * `getStats` — the adapter copes with `hb` being undefined.
+ */
+export interface AvalonAdapterInput {
+  ip: string;
+  alias?: string;
+  version: AvalonVersion;
+  summary: AvalonSummary;
+  pools: AvalonPool[];
+  stats: AvalonStats;
+}
+
+export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
+  const { ip, alias, version, summary, pools, stats } = input;
+  const mm = stats.mm;
+  const activePool = pools.find((p) => p['Stratum Active']) ?? pools[0];
+
+  // Avalon reports hashrate in MH/s; LocalMiner stores GH/s.
+  const hashRateGh = (summary['MHS av'] ?? 0) / 1000;
+
+  // Extract worker-name + stratum URL+port from the active pool.
+  // Pool URLs look like "stratum+tcp://host.example:4444".
+  let stratumUrl = '';
+  let stratumPort = 0;
+  if (activePool?.URL) {
+    const m = activePool.URL.match(/^(?:stratum\+tcp:\/\/)?([^:]+)(?::(\d+))?$/);
+    if (m) {
+      stratumUrl = m[1] ?? '';
+      stratumPort = m[2] ? Number(m[2]) : 0;
+    }
+  }
+
+  const fanRpms = [mm.Fan1, mm.Fan2, mm.Fan3, mm.Fan4].filter(
+    (v): v is number => typeof v === 'number' && v > 0
+  );
+  const avgFanRpm =
+    fanRpms.length > 0
+      ? Math.round(fanRpms.reduce((a, b) => a + b, 0) / fanRpms.length)
+      : 0;
+
+  return {
+    ip,
+    alias,
+    hostname: avalonModelFromHwType(version.HWTYPE),
+    ASICModel: typeof mm.Core === 'string' ? mm.Core : '',
+    deviceModel: avalonModelFromHwType(version.HWTYPE),
+    minerType: 'avalon' as MinerType,
+    expectedHashrate: typeof mm.MPO === 'number' ? hashRateGh : hashRateGh,
+    hashRate: hashRateGh,
+    power: typeof mm.MPO === 'number' ? mm.MPO : 0,
+    temp: typeof mm.TMax === 'number' ? mm.TMax : 0,
+    voltage: 0, // Avalon doesn't expose a single board voltage in MM stats
+    frequency: typeof mm.Freq === 'number' ? Math.round(mm.Freq) : 0,
+    fanSpeed: typeof mm.FanR === 'number' ? mm.FanR : 0,
+    autoFanSpeed: 1, // Avalon firmware always controls fans automatically
+    fanRpm: avgFanRpm,
+    bestDiff: summary['Best Share'] ?? 0,
+    bestSessionDiff: summary['Best Share'] ?? 0,
+    sharesAccepted: summary.Accepted ?? 0,
+    sharesRejected: summary.Rejected ?? 0,
+    stratumUser: activePool?.User ?? '',
+    stratumUrl,
+    stratumPort,
+    version: version.LVERSION ?? version.CGVERSION ?? '',
+    uptimeSeconds: summary.Elapsed ?? 0,
+    lastSeen: Date.now(),
+    isOnline: true,
+    workMode: typeof mm.WORKMODE === 'number' ? mm.WORKMODE : undefined,
+    workLevel: typeof mm.WORKLEVEL === 'number' ? mm.WORKLEVEL : undefined,
+    hashboardInletTemp: typeof mm.HBITemp === 'number' ? mm.HBITemp : undefined,
+    hashboardOutletTemp: typeof mm.HBOTemp === 'number' ? mm.HBOTemp : undefined,
+    fanRpms: fanRpms.length > 0 ? fanRpms : undefined,
+    asicTemps: stats.hb?.PVT_T0,
+    asicVoltages: stats.hb?.PVT_V0,
+    asicCount: typeof mm.TA === 'number' ? mm.TA : undefined,
+    macAddress: formatMac(version.MAC),
+    poolPing: typeof mm.PING === 'number' ? mm.PING : undefined,
+    bestShareDifficulty: summary['Best Share'] ?? undefined,
+  };
+}
+
+/**
+ * Format a 12-char hex MAC ("aabbccddeeff") as colon-separated
+ * ("aa:bb:cc:dd:ee:ff"). Returns the original on length mismatch.
+ */
+function formatMac(raw: string): string {
+  if (typeof raw !== 'string' || raw.length !== 12) return raw;
+  return (raw.match(/.{2}/g) ?? []).join(':');
+}

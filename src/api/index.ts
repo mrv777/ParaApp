@@ -14,5 +14,11 @@ export * as parasite from './parasite';
 // AxeOS Miner API
 export * as axeOS from './axeOS';
 
+// Canaan Avalon Miner API (CGMiner JSON RPC on port 4028)
+export * as avalon from './avalon';
+
+// Canaan Avalon web CGI fallback (port 80, admin password)
+export * as avalonWeb from './avalonWeb';
+
 // Mempool.space API
 export * as mempool from './mempool';

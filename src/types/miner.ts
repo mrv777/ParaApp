@@ -5,7 +5,16 @@
 /**
  * Miner firmware type
  */
-export type MinerType = 'axeos' | 'hammer' | 'unknown';
+export type MinerType = 'axeos' | 'hammer' | 'avalon' | 'unknown';
+
+/**
+ * Avalon working mode — exposed as preset performance profiles instead of
+ * frequency/voltage sliders like AxeOS.
+ *  - 0 = Eco (lowest power)
+ *  - 1 = Standard
+ *  - 2 = Super (highest hashrate, highest power)
+ */
+export type AvalonWorkMode = 0 | 1 | 2;
 
 /**
  * Miner warning types
@@ -131,6 +140,29 @@ export interface LocalMiner {
     ntpServer: string;
     ntpServerBackup: string;
   };
+  // Avalon-specific fields
+  /** Working mode (Avalon: 0=Eco, 1=Standard, 2=Super) */
+  workMode?: AvalonWorkMode;
+  /** Working level — sub-step within mode, semantics vary per model (Avalon) */
+  workLevel?: number;
+  /** Hashboard inlet temperature (Avalon HBITemp) */
+  hashboardInletTemp?: number;
+  /** Hashboard outlet temperature (Avalon HBOTemp) */
+  hashboardOutletTemp?: number;
+  /** Per-fan RPM readings (Avalon has 4 fans; AxeOS has 1) */
+  fanRpms?: number[];
+  /** Per-ASIC inlet temperatures (Avalon estats PVT_T0; ~160 entries on the Q) */
+  asicTemps?: number[];
+  /** Per-ASIC voltages in mV (Avalon estats PVT_V0) */
+  asicVoltages?: number[];
+  /** Total ASIC count reported by miner (Avalon TA — 160 on the Q) */
+  asicCount?: number;
+  /** Hardware MAC address (used to disambiguate same-IP miners across DHCP changes) */
+  macAddress?: string;
+  /** Pool latency in ms (Avalon PING) */
+  poolPing?: number;
+  /** Best share difficulty across all time (Avalon Best Share) */
+  bestShareDifficulty?: number;
 }
 
 /**
@@ -161,6 +193,24 @@ export interface MinerSettings {
   fallbackStratumPort?: number;
   /** Fallback stratum user (Hammer) */
   fallbackStratumUser?: string;
+  /** Working mode (Avalon: 0=Eco, 1=Standard, 2=Super) */
+  workMode?: AvalonWorkMode;
+}
+
+/**
+ * Avalon CGMiner write surface.
+ *
+ * On the Avalon Q firmware, `setpool` is *not* a recognized ascset option
+ * (the A10 manual is wrong) — pool config must go through the web CGI.
+ * `reboot,0` works without auth via cgminer.
+ */
+export interface AvalonWriteCapabilities {
+  /** Reboot via cgminer ascset (no auth) */
+  rebootViaCgminer: boolean;
+  /** Pool config via cgminer ascset — false on Avalon Q firmware */
+  setPoolViaCgminer: boolean;
+  /** Work-mode change via cgminer ascset — unverified on Q */
+  workModeViaCgminer: boolean;
 }
 
 /**
