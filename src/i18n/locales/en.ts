@@ -200,6 +200,7 @@ const en = {
     reconnecting: 'Reconnecting...',
     performance: 'Performance',
     expected: 'Expected: {{value}}',
+    airInOut: 'Air in {{in}} → out {{out}}',
     rejected: '{{rate}}% rejected',
     session: 'Session: {{value}}',
     deviceInfo: 'Device Info',

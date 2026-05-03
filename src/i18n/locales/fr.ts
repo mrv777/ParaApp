@@ -183,6 +183,7 @@ const fr = {
     reconnecting: 'Reconnexion...',
     performance: 'Performance',
     expected: 'Attendu : {{value}}',
+    airInOut: 'Air entrée {{in}} → sortie {{out}}',
     rejected: '{{rate}}% rejeté',
     session: 'Session : {{value}}',
     deviceInfo: 'Info appareil',

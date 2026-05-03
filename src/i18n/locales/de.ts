@@ -183,6 +183,7 @@ const de = {
     reconnecting: 'Verbinde neu...',
     performance: 'Leistung',
     expected: 'Erwartet: {{value}}',
+    airInOut: 'Luft ein {{in}} → aus {{out}}',
     rejected: '{{rate}}% abgelehnt',
     session: 'Sitzung: {{value}}',
     deviceInfo: 'Geräteinformationen',

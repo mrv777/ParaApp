@@ -107,7 +107,10 @@ export function MinerStatsSection({
             isAvalon &&
             miner.hashboardInletTemp !== undefined &&
             miner.hashboardOutletTemp !== undefined
-              ? `HB ${Math.round(miner.hashboardInletTemp)}→${Math.round(miner.hashboardOutletTemp)}°C`
+              ? t('miners.airInOut', {
+                  in: formatTemperature(miner.hashboardInletTemp, temperatureUnit),
+                  out: formatTemperature(miner.hashboardOutletTemp, temperatureUnit),
+                })
               : undefined
           }
         />

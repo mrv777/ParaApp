@@ -183,6 +183,7 @@ const es = {
     reconnecting: 'Reconectando...',
     performance: 'Rendimiento',
     expected: 'Esperado: {{value}}',
+    airInOut: 'Aire entrada {{in}} → salida {{out}}',
     rejected: '{{rate}}% rechazado',
     session: 'Sesión: {{value}}',
     deviceInfo: 'Info del Dispositivo',

@@ -685,6 +685,12 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
   // Avalon reports hashrate in MH/s; LocalMiner stores GH/s.
   const hashRateGh = (summary['MHS av'] ?? 0) / 1000;
 
+  // Expected hashrate: GHSmm is the MM-reported target for the current
+  // workmode (what the Avalon dashboard labels "Configured"). Falls back
+  // to the running average if the field is missing on older firmware.
+  const expectedHashrateGh =
+    typeof mm.GHSmm === 'number' && mm.GHSmm > 0 ? mm.GHSmm : hashRateGh;
+
   // Extract worker-name + stratum URL+port from the active pool.
   // Pool URLs look like "stratum+tcp://host.example:4444".
   let stratumUrl = '';
@@ -721,7 +727,7 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     ASICModel: typeof mm.Core === 'string' ? mm.Core : '',
     deviceModel: avalonModelFromHwType(version.HWTYPE),
     minerType: 'avalon' as MinerType,
-    expectedHashrate: typeof mm.MPO === 'number' ? hashRateGh : hashRateGh,
+    expectedHashrate: expectedHashrateGh,
     hashRate: hashRateGh,
     power,
     temp: typeof mm.TMax === 'number' ? mm.TMax : 0,
