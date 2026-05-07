@@ -2,11 +2,16 @@
  * DeviceInfoSection - Device information display
  */
 
-import { View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import Toast from 'react-native-toast-message';
+import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
 import { Badge } from '../Badge';
 import { useTranslation } from '@/i18n';
 import { truncateWorker } from '@/utils/formatting';
+import { haptics } from '@/utils/haptics';
+import { colors } from '@/constants/colors';
 import type { LocalMiner } from '@/types';
 
 export interface DeviceInfoSectionProps {
@@ -36,6 +41,53 @@ function InfoRow({ label, value, multiline = false, isLast = false }: InfoRowPro
         {value || '--'}
       </Text>
     </View>
+  );
+}
+
+function IpAddressRow({ ip }: { ip: string }) {
+  const { t } = useTranslation();
+
+  const handlePress = () => {
+    if (!ip) return;
+    haptics.light();
+    Linking.openURL(`http://${ip}`).catch(() => {
+      // Ignore — most likely the device is unreachable from outside the LAN
+    });
+  };
+
+  const handleLongPress = async () => {
+    if (!ip) return;
+    await Clipboard.setStringAsync(ip);
+    haptics.success();
+    Toast.show({
+      type: 'success',
+      text1: t('miners.ipCopied'),
+      visibilityTime: 1500,
+    });
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={350}
+      accessibilityRole="link"
+      accessibilityLabel={`${t('miners.ipAddress')}: ${ip}. ${t('miners.openInBrowser')}`}
+      android_ripple={{ color: colors.borderLight }}
+      className="flex-row justify-between items-center py-2.5 gap-4 border-b border-border active:opacity-60"
+    >
+      <Text variant="body" color="muted" className="flex-shrink-0">
+        {t('miners.ipAddress')}
+      </Text>
+      <View className="flex-row items-center gap-1.5 flex-shrink">
+        <Text variant="body" className="font-medium text-right" numberOfLines={1}>
+          {ip || '--'}
+        </Text>
+        {!!ip && (
+          <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+        )}
+      </View>
+    </Pressable>
   );
 }
 
@@ -89,7 +141,7 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
           />
         )}
         <InfoRow label={t('miners.firmware')} value={miner.version} />
-        <InfoRow label={t('miners.ipAddress')} value={miner.ip} />
+        <IpAddressRow ip={miner.ip} />
         {hasMac && (
           <InfoRow
             label={t('miners.macAddress')}

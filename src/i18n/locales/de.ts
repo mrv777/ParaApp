@@ -190,6 +190,8 @@ const de = {
     model: 'Modell',
     asic: 'ASIC',
     ipAddress: 'IP-Adresse',
+    ipCopied: 'IP-Adresse kopiert',
+    openInBrowser: 'Im Browser öffnen',
     hostname: 'Hostname',
     wifi: 'WLAN',
     controls: 'Steuerung',

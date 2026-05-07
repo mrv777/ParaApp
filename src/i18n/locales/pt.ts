@@ -190,6 +190,8 @@ const pt = {
     model: 'Modelo',
     asic: 'ASIC',
     ipAddress: 'Endereço IP',
+    ipCopied: 'Endereço IP copiado',
+    openInBrowser: 'Abrir no navegador',
     hostname: 'Nome do host',
     wifi: 'WiFi',
     controls: 'Controles',

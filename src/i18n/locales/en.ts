@@ -207,6 +207,8 @@ const en = {
     model: 'Model',
     asic: 'ASIC',
     ipAddress: 'IP Address',
+    ipCopied: 'IP address copied',
+    openInBrowser: 'Open in browser',
     hostname: 'Hostname',
     wifi: 'WiFi',
     controls: 'Controls',
