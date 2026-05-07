@@ -150,44 +150,21 @@ export function MinerControlsSection({
     showError,
   ]);
 
-  // Handle Avalon work-mode change. Per Canaan's KB the new mode does
-  // not take effect until reboot, so chain a restart automatically.
   const handleSetWorkMode = useCallback(
     async (mode: AvalonWorkMode) => {
       if (pendingMode !== null) return;
       setPendingMode(mode);
       dismissError();
       const ok = await setAvalonWorkMode(miner.ip, mode);
+      setPendingMode(null);
       if (!ok) {
-        setPendingMode(null);
         haptics.error();
         showError(t('errors.failedToSetWorkMode'));
         return;
       }
       haptics.success();
-      // Auto-reboot to apply the new mode.
-      const restartOk = await restartMiner(miner.ip);
-      setPendingMode(null);
-      if (restartOk) {
-        setIsReconnecting(true);
-        onReconnecting?.(true);
-        reconnectTimeoutRef.current = setTimeout(() => {
-          setIsReconnecting(false);
-          onReconnecting?.(false);
-          showError(t('errors.failedToReconnect'));
-        }, RECONNECT_TIMEOUT_MS);
-      }
     },
-    [
-      pendingMode,
-      miner.ip,
-      setAvalonWorkMode,
-      restartMiner,
-      onReconnecting,
-      dismissError,
-      showError,
-      t,
-    ]
+    [pendingMode, miner.ip, setAvalonWorkMode, dismissError, showError, t]
   );
 
   // Handle restart
@@ -227,7 +204,7 @@ export function MinerControlsSection({
         {t('miners.controls')}
       </Text>
       <View className="bg-secondary rounded-lg p-4 gap-3">
-        {/* Avalon work mode picker — chains an auto-reboot after set */}
+        {/* Avalon work mode picker */}
         {miner.minerType === 'avalon' && miner.workMode !== undefined && (
           <View className="gap-2">
             <Text variant="caption" color="muted">
