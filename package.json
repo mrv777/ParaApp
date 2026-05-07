@@ -1,6 +1,6 @@
 {
   "name": "parasite-app",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "license": "GPL-3.0-or-later",
   "main": "index.ts",
   "pnpm": {
