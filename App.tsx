@@ -58,7 +58,9 @@ export default function App() {
               tabBar={(props) => <TabBar {...props} />}
               screenOptions={{
                 headerShown: false,
-                animation: 'fade',
+                // Expo SDK 54 / React Navigation 7 can intermittently blank tab scenes
+                // during animated tab transitions. Keep the default non-animated switch.
+                animation: 'none',
               }}
             >
               <Tab.Screen name="Home" component={HomeStack} />
