@@ -169,6 +169,13 @@ export interface AvalonMmStats {
   MPO?: number;
   /** Power supply telemetry — 7 ints, mapping not fully decoded */
   PS?: number[];
+  /**
+   * Per-board ASIC telemetry string: `"<power>-<temp>-<voltage>-<freq>-..."`
+   * (dash-separated, so it stays as a string after generic parsing).
+   * Index 0 is input power in W, index 2 is chip voltage in mV. Used as
+   * a fallback for hardware where `PS[]` reports zeros (e.g. Nano 3S).
+   */
+  ATA1?: string;
   // Raw fallthrough for fields we haven't typed yet.
   [key: string]: unknown;
 }
@@ -711,14 +718,31 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
       ? Math.round(fanRpms.reduce((a, b) => a + b, 0) / fanRpms.length)
       : 0;
 
+  // ATA1 is a dash-separated string ("power-temp-voltage-freq-...");
+  // index 0 is input watts, index 2 is chip voltage in mV.
+  let ataPower = 0;
+  let ataVoltage = 0;
+  if (typeof mm.ATA1 === 'string') {
+    const parts = mm.ATA1.split('-').map((s) => Number(s.trim()));
+    if (Number.isFinite(parts[0])) ataPower = parts[0];
+    if (Number.isFinite(parts[2])) ataVoltage = parts[2];
+  }
+
   // Live power draw is PS[6] (the 7th element of the power-supply
   // telemetry array). MPO is the mode's max-power *setting* — e.g.
   // Eco shows MPO=800 while the supply actually draws ~865W.
   // Match the web dashboard by preferring PS[6] when available.
+  // Nano 3S reports zeros in PS[]; fall back to ATA1[0] there.
   const livePower =
     Array.isArray(mm.PS) && typeof mm.PS[6] === 'number' ? mm.PS[6] : 0;
   const power =
-    livePower > 0 ? livePower : typeof mm.MPO === 'number' ? mm.MPO : 0;
+    livePower > 0
+      ? livePower
+      : ataPower > 0
+        ? ataPower
+        : typeof mm.MPO === 'number'
+          ? mm.MPO
+          : 0;
 
   return {
     ip,
@@ -731,7 +755,7 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     hashRate: hashRateGh,
     power,
     temp: typeof mm.TMax === 'number' ? mm.TMax : 0,
-    voltage: 0, // Avalon doesn't expose a single board voltage in MM stats
+    voltage: ataVoltage,
     frequency: typeof mm.Freq === 'number' ? Math.round(mm.Freq) : 0,
     fanSpeed: typeof mm.FanR === 'number' ? mm.FanR : 0,
     autoFanSpeed: 1, // Avalon firmware always controls fans automatically
