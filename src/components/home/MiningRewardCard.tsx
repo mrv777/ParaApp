@@ -11,7 +11,7 @@
  * a native claim flow.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Image, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -20,11 +20,19 @@ import { Text } from '../Text';
 import { getDispenserEligibility } from '@/api/dispenser';
 import { buildSlots, type DispenserSlot, type Eligibility } from '@/types';
 import { useSettingsStore } from '@/store/settingsStore';
+import { usePolling } from '@/hooks/usePolling';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 
 const REFRESH_INTERVAL_MS = 60_000;
 const PARASITE_BASE = 'https://parasite.space';
+
+// Tag the fetched data with the address that produced it so a late-returning
+// response for a stale address can never overwrite the active one.
+interface TaggedEligibility {
+  address: string;
+  data: Eligibility | null;
+}
 
 export interface MiningRewardCardProps {
   className?: string;
@@ -33,32 +41,29 @@ export interface MiningRewardCardProps {
 export function MiningRewardCard({ className = '' }: MiningRewardCardProps) {
   const { t } = useTranslation();
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
-  const [eligibility, setEligibility] = useState<Eligibility | null>(null);
+  const [tagged, setTagged] = useState<TaggedEligibility | null>(null);
 
-  useEffect(() => {
-    if (!bitcoinAddress) {
-      setEligibility(null);
-      return;
+  const onPoll = useCallback(async () => {
+    if (!bitcoinAddress) return;
+    const addr = bitcoinAddress;
+    const result = await getDispenserEligibility(addr);
+    if (result.success) {
+      setTagged({ address: addr, data: result.data });
     }
-
-    let cancelled = false;
-
-    const fetchOnce = async () => {
-      const result = await getDispenserEligibility(bitcoinAddress);
-      if (cancelled) return;
-      if (result.success) {
-        setEligibility(result.data);
-      }
-    };
-
-    fetchOnce();
-    const id = setInterval(fetchOnce, REFRESH_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
   }, [bitcoinAddress]);
+
+  // usePolling handles background pause, overlap guarding, and re-polls on
+  // foreground resume — important so the card refreshes after the user returns
+  // from claiming on the website.
+  usePolling({
+    onPoll,
+    enabled: !!bitcoinAddress,
+    interval: REFRESH_INTERVAL_MS,
+  });
+
+  // Only trust the data when it matches the currently-configured address.
+  const eligibility =
+    tagged && tagged.address === bitcoinAddress ? tagged.data : null;
 
   const { miningSlots, whitelistSlots } = useMemo(() => {
     if (!eligibility) return { miningSlots: [], whitelistSlots: [] };
@@ -126,15 +131,27 @@ function SlotTile({ slot, address }: { slot: DispenserSlot; address: string }) {
     }
   };
 
+  // The whole tile is a single Pressable: the footer carries the status label
+  // and an action icon (link / open-in-browser). The text button was dropped
+  // because translated labels overflow the ~90pt tile inner width on phones.
+  const accessibilityLabel = slot.claimed
+    ? `${t('home.miningRewardClaimed')}. ${t('home.miningRewardLink')}`
+    : `${t('home.miningRewardEligible')}. ${t('home.miningRewardClaimOnWeb')}`;
+
   return (
-    <View className="bg-background border border-border rounded-md p-2">
-      <Pressable onPress={handlePress} hitSlop={4}>
-        <Image
-          source={{ uri: `https://ordinals.com/content/${slot.inscriptionId}` }}
-          style={{ width: '100%', aspectRatio: 1, backgroundColor: 'transparent' }}
-          resizeMode="contain"
-        />
-      </Pressable>
+    <Pressable
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={4}
+      className="bg-background border border-border rounded-md p-2"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+    >
+      <Image
+        source={{ uri: `https://ordinals.com/content/${slot.inscriptionId}` }}
+        style={{ width: '100%', aspectRatio: 1, backgroundColor: 'transparent' }}
+        resizeMode="contain"
+      />
 
       <View className="mt-2 flex-row items-center justify-between">
         <Text
@@ -146,24 +163,12 @@ function SlotTile({ slot, address }: { slot: DispenserSlot; address: string }) {
             ? t('home.miningRewardClaimed')
             : t('home.miningRewardEligible')}
         </Text>
-        <Pressable
-          onPress={handlePress}
-          hitSlop={6}
-          className="flex-row items-center gap-1 border border-border rounded px-1.5 py-0.5"
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-        >
-          <Ionicons
-            name={slot.claimed ? 'link-outline' : 'open-outline'}
-            size={11}
-            color={colors.textMuted}
-          />
-          <Text variant="caption" color="muted" className="text-[10px]">
-            {slot.claimed
-              ? t('home.miningRewardLink')
-              : t('home.miningRewardClaimOnWeb')}
-          </Text>
-        </Pressable>
+        <Ionicons
+          name={slot.claimed ? 'link-outline' : 'open-outline'}
+          size={14}
+          color={colors.textMuted}
+        />
       </View>
-    </View>
+    </Pressable>
   );
 }
