@@ -74,6 +74,12 @@ const en = {
     editWorkerNote: 'Edit Note',
     noteHint: 'e.g., Kitchen miner',
     achievements: 'Achievements',
+    miningReward: 'Mining Reward',
+    miningRewardClaimed: 'Claimed',
+    miningRewardEligible: 'Eligible',
+    miningRewardLink: 'Link',
+    miningRewardClaimOnWeb: 'Claim on Web',
+    miningRewardWhitelist: 'Whitelist',
   },
 
   pool: {

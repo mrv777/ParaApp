@@ -75,6 +75,12 @@ const es = {
     editWorkerNote: 'Editar Nota',
     noteHint: 'ej., Minero de la cocina',
     achievements: 'Logros',
+    miningReward: 'Recompensa de Minería',
+    miningRewardClaimed: 'Reclamado',
+    miningRewardEligible: 'Elegible',
+    miningRewardLink: 'Enlace',
+    miningRewardClaimOnWeb: 'Reclamar en la web',
+    miningRewardWhitelist: 'Lista blanca',
   },
 
   pool: {

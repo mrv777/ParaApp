@@ -15,6 +15,7 @@ import { Text } from '@/components/Text';
 import { TipBanner } from '@/components/TipBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
 import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
+import { MiningRewardCard } from '@/components/home/MiningRewardCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { AchievementsCard } from '@/components/home/AchievementsCard';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
@@ -269,6 +270,9 @@ export function HomeMainScreen({ navigation }: Props) {
               onViewAll={handleViewAllWorkers}
               isLoading={isUserLoading}
             />
+
+            {/* Mining Reward (dispenser) — self-hides when address has no eligibility */}
+            <MiningRewardCard />
 
             {/* Fleet Overview Card */}
             {fleetStats && (

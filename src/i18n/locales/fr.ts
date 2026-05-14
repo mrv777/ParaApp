@@ -75,6 +75,12 @@ const fr = {
     editWorkerNote: 'Modifier la note',
     noteHint: 'ex., Mineur cuisine',
     achievements: 'Succès',
+    miningReward: 'Récompense de minage',
+    miningRewardClaimed: 'Réclamé',
+    miningRewardEligible: 'Éligible',
+    miningRewardLink: 'Lien',
+    miningRewardClaimOnWeb: 'Réclamer sur le Web',
+    miningRewardWhitelist: 'Liste blanche',
   },
 
   pool: {

@@ -75,6 +75,12 @@ const pt = {
     editWorkerNote: 'Editar Nota',
     noteHint: 'ex., Minerador da cozinha',
     achievements: 'Conquistas',
+    miningReward: 'Recompensa de Mineração',
+    miningRewardClaimed: 'Reivindicado',
+    miningRewardEligible: 'Elegível',
+    miningRewardLink: 'Link',
+    miningRewardClaimOnWeb: 'Reivindicar na Web',
+    miningRewardWhitelist: 'Lista branca',
   },
 
   pool: {

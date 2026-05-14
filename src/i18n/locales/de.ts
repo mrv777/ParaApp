@@ -75,6 +75,12 @@ const de = {
     editWorkerNote: 'Notiz bearbeiten',
     noteHint: 'z.B., Küchen-Miner',
     achievements: 'Erfolge',
+    miningReward: 'Mining-Belohnung',
+    miningRewardClaimed: 'Beansprucht',
+    miningRewardEligible: 'Berechtigt',
+    miningRewardLink: 'Link',
+    miningRewardClaimOnWeb: 'Im Web beanspruchen',
+    miningRewardWhitelist: 'Whitelist',
   },
 
   pool: {
