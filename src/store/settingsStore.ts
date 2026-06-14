@@ -36,6 +36,9 @@ interface SettingsState {
   notificationPrefs: NotificationPrefs;
   pushToken: string | null;
 
+  // iOS widget background/silent refresh opt-in
+  widgetUpdatesEnabled: boolean;
+
   // Leaderboard / rank display mode
   roundMode: RoundMode;
 
@@ -65,6 +68,7 @@ interface SettingsActions {
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
   setPushToken: (token: string | null) => void;
+  setWidgetUpdatesEnabled: (enabled: boolean) => void;
   dismissTip: (tipId: string) => void;
   setWorkerNote: (workerName: string, note: string | null) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
@@ -83,6 +87,7 @@ const initialState: SettingsState = {
   notificationsEnabled: false,
   notificationPrefs: { blocks: true, workers: true, bestDiff: true },
   pushToken: null,
+  widgetUpdatesEnabled: false,
   dismissedTips: [],
   workerNotes: {},
   lastPoolFetch: null,
@@ -119,6 +124,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         })),
 
       setPushToken: (token) => set({ pushToken: token }),
+
+      setWidgetUpdatesEnabled: (enabled) =>
+        set({ widgetUpdatesEnabled: enabled }),
 
       dismissTip: (tipId) =>
         set((state) => ({
@@ -165,6 +173,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         notificationsEnabled: state.notificationsEnabled,
         notificationPrefs: state.notificationPrefs,
         pushToken: state.pushToken,
+        widgetUpdatesEnabled: state.widgetUpdatesEnabled,
         dismissedTips: state.dismissedTips,
         workerNotes: state.workerNotes,
       }),
@@ -193,5 +202,7 @@ export const selectNotificationsEnabled = (state: SettingsState) =>
 export const selectNotificationPrefs = (state: SettingsState) =>
   state.notificationPrefs;
 export const selectPushToken = (state: SettingsState) => state.pushToken;
+export const selectWidgetUpdatesEnabled = (state: SettingsState) =>
+  state.widgetUpdatesEnabled;
 export const selectRoundMode = (state: SettingsState) => state.roundMode;
 export const selectWorkerNotes = (state: SettingsState) => state.workerNotes;

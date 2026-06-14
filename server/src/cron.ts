@@ -22,14 +22,27 @@ import {
   getAllActiveSubscriptions,
   getPreferences,
   markTokenInactive,
+  getSubscriptionsDueForWidgetPush,
+  markWidgetPushSent,
+  upsertWidgetPoolSnapshot,
+  upsertWidgetUserSnapshot,
 } from './db';
 import { getUser, getPoolStats } from './parasite-api';
-import { sendPushNotifications, createPushMessage } from './push';
+import {
+  sendPushNotifications,
+  createPushMessage,
+  createSilentWidgetRefreshMessage,
+} from './push';
+import {
+  buildPoolWidgetSnapshot,
+  buildUserWidgetSnapshot,
+} from './widget-snapshots';
 
 // 5 minutes = 5 cron cycles (1 min each)
 const OFFLINE_CHECK_THRESHOLD = 5;
 // Worker considered stale if lastSubmission is older than 5 minutes
 const STALE_THRESHOLD_SECONDS = 300;
+const WIDGET_PUSH_INTERVAL_SECONDS = 30 * 60;
 
 /**
  * Parse difficulty string like "1.12T" or "88.2G" to raw number
@@ -95,6 +108,9 @@ export async function runCronJob(env: Env): Promise<void> {
     }
 
     // 3. Send all notifications
+    const widgetMessages = await buildWidgetRefreshMessages(env);
+    allMessages.push(...widgetMessages);
+
     if (allMessages.length > 0) {
       console.log(`Sending ${allMessages.length} notifications`);
       const result = await sendPushNotifications(allMessages);
@@ -105,6 +121,11 @@ export async function runCronJob(env: Env): Promise<void> {
         for (const token of result.invalidTokens) {
           await markTokenInactive(env.DB, token);
         }
+      }
+
+      const widgetTokens = widgetMessages.map((message) => message.to);
+      if (widgetTokens.length > 0) {
+        await markWidgetPushSent(env.DB, widgetTokens);
       }
     }
 
@@ -127,6 +148,12 @@ async function checkPoolBlock(env: Env): Promise<ExpoPushMessage[]> {
   }
 
   const currentBlockTime = poolStatsResult.data.lastBlockTime;
+  const fetchedAt = Date.now();
+  await upsertWidgetPoolSnapshot(
+    env.DB,
+    JSON.stringify(buildPoolWidgetSnapshot(poolStatsResult.data, fetchedAt)),
+    fetchedAt
+  );
 
   // Get stored pool state
   const poolState = await getPoolState(env.DB);
@@ -192,6 +219,13 @@ async function processUser(
   }
 
   const userData = userResult.data;
+  const fetchedAt = Date.now();
+  await upsertWidgetUserSnapshot(
+    env.DB,
+    address,
+    JSON.stringify(buildUserWidgetSnapshot(address, userData, fetchedAt)),
+    fetchedAt
+  );
 
   // Get stored state and preferences
   const [userState, prefs, tokens] = await Promise.all([
@@ -341,4 +375,14 @@ async function processUser(
   );
 
   return messages;
+}
+
+async function buildWidgetRefreshMessages(env: Env): Promise<ExpoPushMessage[]> {
+  const subscriptions = await getSubscriptionsDueForWidgetPush(
+    env.DB,
+    WIDGET_PUSH_INTERVAL_SECONDS
+  );
+  return subscriptions.map((subscription) =>
+    createSilentWidgetRefreshMessage(subscription.push_token)
+  );
 }

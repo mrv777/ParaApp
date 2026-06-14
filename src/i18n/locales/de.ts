@@ -271,6 +271,12 @@ const de = {
     workerNotifications: 'Worker-Status',
     bestDiffNotifications: 'Neue beste Schwierigkeit',
     notificationsDenied: 'Benachrichtigungsberechtigungen wurden verweigert. Aktiviere sie in den Systemeinstellungen, um Benachrichtigungen zu erhalten.',
+    widgets: 'Widgets',
+    widgetUpdates: 'Widget-Updates',
+    widgetUpdatesDesc:
+      'Nutzt Hintergrundaktualisierung und stille Pushs, wenn verfügbar, um iOS-Widgets aktuell zu halten.',
+    widgetUpdatesPermissionHint:
+      'Stille Widget-Pushs sind nicht verfügbar, solange Benachrichtigungen verweigert werden. Hintergrundaktualisierung kann Widgets weiterhin aktualisieren.',
     openSettings: 'Einstellungen öffnen',
   },
 

@@ -15,6 +15,7 @@ import {
   selectNotificationsEnabled,
   selectNotificationPrefs,
   selectPushToken,
+  selectWidgetUpdatesEnabled,
 } from '@/store/settingsStore';
 import {
   requestPermissions,
@@ -40,6 +41,7 @@ export function useNotifications() {
   const notificationsEnabled = useSettingsStore(selectNotificationsEnabled);
   const notificationPrefs = useSettingsStore(selectNotificationPrefs);
   const pushToken = useSettingsStore(selectPushToken);
+  const widgetUpdatesEnabled = useSettingsStore(selectWidgetUpdatesEnabled);
 
   const setPushToken = useSettingsStore((s) => s.setPushToken);
   const setNotificationsEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
@@ -47,6 +49,7 @@ export function useNotifications() {
 
   // Track previous address for re-registration
   const prevAddressRef = useRef<string | null>(null);
+  const prevWidgetUpdatesEnabledRef = useRef(widgetUpdatesEnabled);
   const isRegistering = useRef(false);
   const prefsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenRefreshAttempted = useRef(false);
@@ -63,10 +66,13 @@ export function useNotifications() {
     isRegistering.current = true;
 
     try {
-      // Request permissions if not already granted
+      // Request permissions if not already granted. Widget updates can still
+      // use background refresh if permission is denied, but silent pushes need a token.
       const status = await requestPermissions();
       if (status !== 'granted') {
-        setNotificationsEnabled(false);
+        if (notificationsEnabled) {
+          setNotificationsEnabled(false);
+        }
         isRegistering.current = false;
         return;
       }
@@ -86,7 +92,12 @@ export function useNotifications() {
       // Register with backend - returns existing preferences for cross-device sync
       // Read prefs from store directly to avoid dependency cycle
       const currentPrefs = useSettingsStore.getState().notificationPrefs;
-      const result = await registerDevice(token, bitcoinAddress, currentPrefs);
+      const result = await registerDevice(
+        token,
+        bitcoinAddress,
+        currentPrefs,
+        widgetUpdatesEnabled
+      );
 
       // Sync preferences from backend if they exist (cross-device sync)
       if (result.success && result.data?.preferences) {
@@ -118,7 +129,12 @@ export function useNotifications() {
 
             // Retry registration with fresh token - use store prefs to avoid stale closure
             const retryPrefs = useSettingsStore.getState().notificationPrefs;
-            const retryResult = await registerDevice(freshToken, bitcoinAddress, retryPrefs);
+            const retryResult = await registerDevice(
+              freshToken,
+              bitcoinAddress,
+              retryPrefs,
+              widgetUpdatesEnabled
+            );
             if (retryResult.success) {
               console.log('[Notifications] Registration succeeded with fresh token');
               tokenRefreshAttempted.current = false; // Reset for next time
@@ -145,7 +161,15 @@ export function useNotifications() {
     } finally {
       isRegistering.current = false;
     }
-  }, [bitcoinAddress, pushToken, setPushToken, setNotificationsEnabled, setNotificationPrefs]);
+  }, [
+    bitcoinAddress,
+    pushToken,
+    notificationsEnabled,
+    widgetUpdatesEnabled,
+    setPushToken,
+    setNotificationsEnabled,
+    setNotificationPrefs,
+  ]);
 
   /**
    * Unregister device from backend
@@ -162,7 +186,7 @@ export function useNotifications() {
 
   // Initialize on mount (after hydration + address set)
   useEffect(() => {
-    if (!isHydrated || !bitcoinAddress || !notificationsEnabled) {
+    if (!isHydrated || !bitcoinAddress || (!notificationsEnabled && !widgetUpdatesEnabled)) {
       return;
     }
 
@@ -171,11 +195,11 @@ export function useNotifications() {
     }
 
     register();
-  }, [isHydrated, bitcoinAddress, notificationsEnabled, register]);
+  }, [isHydrated, bitcoinAddress, notificationsEnabled, widgetUpdatesEnabled, register]);
 
   // Re-register when address changes
   useEffect(() => {
-    if (!isHydrated || !notificationsEnabled) return;
+    if (!isHydrated || (!notificationsEnabled && !widgetUpdatesEnabled)) return;
 
     const prevAddress = prevAddressRef.current;
     prevAddressRef.current = bitcoinAddress;
@@ -192,11 +216,23 @@ export function useNotifications() {
       // New address set - re-register
       register();
     }
-  }, [isHydrated, bitcoinAddress, notificationsEnabled, register, unregister]);
+  }, [
+    isHydrated,
+    bitcoinAddress,
+    notificationsEnabled,
+    widgetUpdatesEnabled,
+    register,
+    unregister,
+  ]);
 
   // Sync preferences to backend when they change (debounced)
   useEffect(() => {
-    if (!isHydrated || !notificationsEnabled || !bitcoinAddress || !pushToken) return;
+    if (
+      !isHydrated ||
+      (!notificationsEnabled && !widgetUpdatesEnabled) ||
+      !bitcoinAddress ||
+      !pushToken
+    ) return;
 
     // Skip sync if preferences were just fetched from backend
     if (justFetchedPrefs.current) {
@@ -211,7 +247,12 @@ export function useNotifications() {
 
     // Debounce preference syncs to avoid rapid API calls
     prefsSyncTimeoutRef.current = setTimeout(() => {
-      updatePreferences(pushToken, bitcoinAddress, notificationPrefs).catch((error) => {
+      updatePreferences(
+        pushToken,
+        bitcoinAddress,
+        notificationPrefs,
+        widgetUpdatesEnabled
+      ).catch((error) => {
         console.warn('Failed to sync notification preferences:', error);
       });
     }, 500);
@@ -221,19 +262,36 @@ export function useNotifications() {
         clearTimeout(prefsSyncTimeoutRef.current);
       }
     };
-  }, [isHydrated, notificationsEnabled, bitcoinAddress, pushToken, notificationPrefs]);
+  }, [
+    isHydrated,
+    notificationsEnabled,
+    widgetUpdatesEnabled,
+    bitcoinAddress,
+    pushToken,
+    notificationPrefs,
+  ]);
 
   // Sync preferences immediately when app goes to background
   // Ensures preferences are saved even if debounce timeout hasn't fired yet
   useEffect(() => {
-    if (!isHydrated || !notificationsEnabled || !bitcoinAddress || !pushToken) return;
+    if (
+      !isHydrated ||
+      (!notificationsEnabled && !widgetUpdatesEnabled) ||
+      !bitcoinAddress ||
+      !pushToken
+    ) return;
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'background' && prefsSyncTimeoutRef.current) {
         // Clear pending debounced sync and sync immediately
         clearTimeout(prefsSyncTimeoutRef.current);
         prefsSyncTimeoutRef.current = null;
-        updatePreferences(pushToken, bitcoinAddress, notificationPrefs).catch((error) => {
+        updatePreferences(
+          pushToken,
+          bitcoinAddress,
+          notificationPrefs,
+          widgetUpdatesEnabled
+        ).catch((error) => {
           console.warn('Failed to sync preferences on background:', error);
         });
       }
@@ -241,12 +299,55 @@ export function useNotifications() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [isHydrated, notificationsEnabled, bitcoinAddress, pushToken, notificationPrefs]);
+  }, [
+    isHydrated,
+    notificationsEnabled,
+    widgetUpdatesEnabled,
+    bitcoinAddress,
+    pushToken,
+    notificationPrefs,
+  ]);
+
+  // If widget updates are disabled while visible notifications are also off,
+  // the normal preference sync is skipped. Still tell the backend to stop
+  // silent widget refresh nudges when a token is available.
+  useEffect(() => {
+    const wasWidgetUpdatesEnabled = prevWidgetUpdatesEnabledRef.current;
+    prevWidgetUpdatesEnabledRef.current = widgetUpdatesEnabled;
+
+    if (
+      !isHydrated ||
+      notificationsEnabled ||
+      widgetUpdatesEnabled ||
+      !wasWidgetUpdatesEnabled ||
+      !bitcoinAddress ||
+      !pushToken
+    ) {
+      return;
+    }
+
+    updatePreferences(
+      pushToken,
+      bitcoinAddress,
+      notificationPrefs,
+      false
+    ).catch((error) => {
+      console.warn('Failed to disable widget update preference:', error);
+    });
+  }, [
+    isHydrated,
+    notificationsEnabled,
+    widgetUpdatesEnabled,
+    bitcoinAddress,
+    pushToken,
+    notificationPrefs,
+  ]);
 
   // Handle foreground notifications
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
       const { title, body } = notification.request.content;
+      if (!title && !body) return;
 
       Toast.show({
         type: 'info',

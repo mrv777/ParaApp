@@ -4,6 +4,7 @@ import '@/i18n'; // Initialize i18n
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import type { LinkingOptions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -17,6 +18,7 @@ import { colors } from '@/constants/colors';
 import { changeLanguage } from '@/i18n';
 import { useSettingsStore, selectIsHydrated, selectLanguage } from '@/store/settingsStore';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useWidgetUpdates } from '@/hooks/useWidgetUpdates';
 import type { MainTabParamList } from '@/types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -35,12 +37,37 @@ const navigationTheme = {
   },
 };
 
+const linking: LinkingOptions<MainTabParamList> = {
+  prefixes: ['paraapp://'],
+  config: {
+    screens: {
+      Home: {
+        path: 'home',
+        screens: {
+          HomeMain: '',
+          WorkersList: 'workers',
+        },
+      },
+      Pool: 'pool',
+      Miners: 'miners',
+      Settings: {
+        path: 'settings',
+        screens: {
+          SettingsMain: '',
+          QRScanner: 'qr',
+        },
+      },
+    },
+  },
+};
+
 export default function App() {
   const isHydrated = useSettingsStore(selectIsHydrated);
   const language = useSettingsStore(selectLanguage);
 
   // Initialize push notifications
   useNotifications();
+  useWidgetUpdates();
 
   // Sync language preference on app startup
   useEffect(() => {
@@ -52,7 +79,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <NavigationContainer theme={navigationTheme}>
+        <NavigationContainer theme={navigationTheme} linking={linking}>
           <BottomSheetModalProvider>
             <Tab.Navigator
               tabBar={(props) => <TabBar {...props} />}

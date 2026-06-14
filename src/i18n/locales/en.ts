@@ -309,6 +309,12 @@ const en = {
     workerNotifications: 'Worker Status',
     bestDiffNotifications: 'New Best Difficulty',
     notificationsDenied: 'Notification permissions were denied. Enable them in system settings to receive alerts.',
+    widgets: 'Widgets',
+    widgetUpdates: 'Widget Updates',
+    widgetUpdatesDesc:
+      'Use background refresh and silent pushes when available to keep iOS widgets current.',
+    widgetUpdatesPermissionHint:
+      'Silent widget pushes are unavailable while notifications are denied, but background refresh may still update widgets.',
     openSettings: 'Open Settings',
   },
 

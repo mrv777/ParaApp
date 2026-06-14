@@ -2,17 +2,11 @@
   "expo": {
     "name": "ParaApp",
     "slug": "paraapp",
-    "version": "0.2.13",
+    "version": "0.3.0",
     "scheme": "paraapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.parasite.paraapp",
@@ -26,7 +20,6 @@
         "backgroundColor": "#FFFFFF"
       },
       "backgroundColor": "#FFFFFF",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "app.paraapp",
       "googleServicesFile": "./google-services.json",
@@ -70,7 +63,46 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#ededed"
+          "color": "#ededed",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "groupIdentifier": "group.app.parasite.paraapp",
+          "widgets": [
+            {
+              "name": "PersonalMiningWidget",
+              "displayName": "Personal Mining",
+              "description": "Shows your Parasite Pool mining status.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "accessoryRectangular"
+              ]
+            },
+            {
+              "name": "PoolOverviewWidget",
+              "displayName": "Pool Overview",
+              "description": "Shows Parasite Pool hashrate and worker status.",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "accessoryRectangular"
+              ]
+            }
+          ]
+        }
+      ],
+      "expo-background-task",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
         }
       ]
     ],

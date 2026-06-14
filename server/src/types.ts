@@ -8,6 +8,8 @@ export interface PushSubscription {
   push_token: string;
   btc_address: string;
   active: number; // 1 or 0
+  widget_updates_enabled: number;
+  last_widget_push_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -79,12 +81,13 @@ export interface ParasitePoolStatsResponse {
 
 export interface ExpoPushMessage {
   to: string;
-  title: string;
-  body: string;
+  title?: string;
+  body?: string;
   data?: Record<string, unknown>;
   sound?: 'default' | null;
   badge?: number;
   priority?: 'default' | 'normal' | 'high';
+  _contentAvailable?: boolean;
 }
 
 export interface ExpoPushTicket {

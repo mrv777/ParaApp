@@ -156,7 +156,7 @@ export function QRScannerScreen({ navigation }: Props) {
   return (
     <View className="flex-1 bg-black">
       <CameraView
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         facing="back"
         barcodeScannerSettings={{
           barcodeTypes: ['qr'],
@@ -165,7 +165,7 @@ export function QRScannerScreen({ navigation }: Props) {
       />
 
       {/* Overlay */}
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={StyleSheet.absoluteFill}>
         <SafeAreaView className="flex-1">
           {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-3">

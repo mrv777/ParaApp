@@ -93,6 +93,15 @@ export function createPushMessage(
   };
 }
 
+export function createSilentWidgetRefreshMessage(token: string): ExpoPushMessage {
+  return {
+    to: token,
+    priority: 'normal',
+    data: { type: 'widget_refresh' },
+    _contentAvailable: true,
+  };
+}
+
 /**
  * Create push messages for multiple tokens with the same content
  */

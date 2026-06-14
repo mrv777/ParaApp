@@ -6,6 +6,11 @@ import Constants from 'expo-constants';
 import { postJson, fetchWithTimeout } from './client';
 import type { ApiResult } from '@/types';
 import type { NotificationPrefs } from '@/store/settingsStore';
+import type {
+  PersonalMiningWidgetSnapshot,
+  PoolOverviewWidgetSnapshot,
+  WidgetSnapshotResponse,
+} from '@/widgets/types';
 
 const BASE_URL =
   Constants.expoConfig?.extra?.pushApiUrl ??
@@ -15,6 +20,7 @@ interface RegisterRequest {
   pushToken: string;
   btcAddress: string;
   preferences?: NotificationPrefs;
+  widgetUpdatesEnabled?: boolean;
 }
 
 interface RegisterResponse {
@@ -32,11 +38,15 @@ interface RegisterResponse {
 export async function registerDevice(
   pushToken: string,
   btcAddress: string,
-  preferences?: NotificationPrefs
+  preferences?: NotificationPrefs,
+  widgetUpdatesEnabled?: boolean
 ): Promise<ApiResult<RegisterResponse>> {
   const body: RegisterRequest = { pushToken, btcAddress };
   if (preferences) {
     body.preferences = preferences;
+  }
+  if (widgetUpdatesEnabled !== undefined) {
+    body.widgetUpdatesEnabled = widgetUpdatesEnabled;
   }
   return postJson<RegisterResponse>(`${BASE_URL}/register`, body);
 }
@@ -60,12 +70,30 @@ export async function unregisterDevice(
 export async function updatePreferences(
   pushToken: string,
   btcAddress: string,
-  preferences: NotificationPrefs
+  preferences: NotificationPrefs,
+  widgetUpdatesEnabled?: boolean
 ): Promise<ApiResult<{ success: boolean }>> {
   return fetchWithTimeout<{ success: boolean }>(`${BASE_URL}/preferences`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pushToken, btcAddress, ...preferences }),
+    body: JSON.stringify({ pushToken, btcAddress, ...preferences, widgetUpdatesEnabled }),
   });
 }
 
+export async function getPoolWidgetSnapshot(): Promise<
+  ApiResult<WidgetSnapshotResponse<PoolOverviewWidgetSnapshot>>
+> {
+  return fetchWithTimeout<WidgetSnapshotResponse<PoolOverviewWidgetSnapshot>>(
+    `${BASE_URL}/widget/pool`,
+    { retries: 1 }
+  );
+}
+
+export async function getUserWidgetSnapshot(
+  btcAddress: string
+): Promise<ApiResult<WidgetSnapshotResponse<PersonalMiningWidgetSnapshot>>> {
+  return fetchWithTimeout<WidgetSnapshotResponse<PersonalMiningWidgetSnapshot>>(
+    `${BASE_URL}/widget/user/${encodeURIComponent(btcAddress)}`,
+    { retries: 1 }
+  );
+}

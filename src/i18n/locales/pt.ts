@@ -271,6 +271,12 @@ const pt = {
     workerNotifications: 'Status do Worker',
     bestDiffNotifications: 'Nova Melhor Dificuldade',
     notificationsDenied: 'As permissões de notificação foram negadas. Ative-as nas configurações do sistema para receber alertas.',
+    widgets: 'Widgets',
+    widgetUpdates: 'Atualizações de widgets',
+    widgetUpdatesDesc:
+      'Usa atualização em segundo plano e pushes silenciosos quando disponíveis para manter os widgets iOS atualizados.',
+    widgetUpdatesPermissionHint:
+      'Pushes silenciosos de widget ficam indisponíveis enquanto notificações estão negadas, mas a atualização em segundo plano ainda pode atualizar widgets.',
     openSettings: 'Abrir Configurações',
   },
 

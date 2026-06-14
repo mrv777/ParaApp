@@ -10,6 +10,7 @@ export const registerSchema = z.object({
       bestDiff: z.boolean().default(true),
     })
     .optional(),
+  widgetUpdatesEnabled: z.boolean().optional(),
 });
 
 export const unregisterSchema = z.object({
@@ -22,6 +23,7 @@ export const preferencesSchema = z.object({
   blocks: z.boolean().optional(),
   workers: z.boolean().optional(),
   bestDiff: z.boolean().optional(),
+  widgetUpdatesEnabled: z.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

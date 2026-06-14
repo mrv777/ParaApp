@@ -12,7 +12,8 @@ export class MaxDevicesExceededError extends Error {
 export async function upsertSubscription(
   db: D1Database,
   pushToken: string,
-  btcAddress: string
+  btcAddress: string,
+  options?: { widgetUpdatesEnabled?: boolean }
 ): Promise<void> {
   // Check if this token already exists (update case - no limit needed)
   const existing = await db
@@ -37,15 +38,16 @@ export async function upsertSubscription(
   await db
     .prepare(
       `
-      INSERT INTO push_subscriptions (push_token, btc_address, active, updated_at)
-      VALUES (?, ?, 1, unixepoch())
+      INSERT INTO push_subscriptions (push_token, btc_address, active, widget_updates_enabled, updated_at)
+      VALUES (?, ?, 1, ?, unixepoch())
       ON CONFLICT(push_token) DO UPDATE SET
         btc_address = excluded.btc_address,
         active = 1,
+        widget_updates_enabled = excluded.widget_updates_enabled,
         updated_at = unixepoch()
     `
     )
-    .bind(pushToken, btcAddress)
+    .bind(pushToken, btcAddress, options?.widgetUpdatesEnabled ? 1 : 0)
     .run();
 }
 
@@ -124,6 +126,22 @@ export async function upsertPreferences(
   }
 }
 
+export async function updateSubscriptionWidgetUpdates(
+  db: D1Database,
+  pushToken: string,
+  btcAddress: string,
+  enabled: boolean
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE push_subscriptions
+       SET widget_updates_enabled = ?, updated_at = unixepoch()
+       WHERE push_token = ? AND btc_address = ? AND active = 1`
+    )
+    .bind(enabled ? 1 : 0, pushToken, btcAddress)
+    .run();
+}
+
 export async function getPreferences(
   db: D1Database,
   btcAddress: string
@@ -187,6 +205,40 @@ export async function getAllActiveSubscriptions(
   return result.results;
 }
 
+export async function getSubscriptionsDueForWidgetPush(
+  db: D1Database,
+  minIntervalSeconds: number
+): Promise<PushSubscription[]> {
+  const result = await db
+    .prepare(
+      `SELECT * FROM push_subscriptions
+       WHERE active = 1
+         AND widget_updates_enabled = 1
+         AND (last_widget_push_at IS NULL OR last_widget_push_at <= unixepoch() - ?)`
+    )
+    .bind(minIntervalSeconds)
+    .all<PushSubscription>();
+  return result.results;
+}
+
+export async function markWidgetPushSent(
+  db: D1Database,
+  pushTokens: string[]
+): Promise<void> {
+  if (pushTokens.length === 0) return;
+
+  for (const token of pushTokens) {
+    await db
+      .prepare(
+        `UPDATE push_subscriptions
+         SET last_widget_push_at = unixepoch(), updated_at = unixepoch()
+         WHERE push_token = ?`
+      )
+      .bind(token)
+      .run();
+  }
+}
+
 /**
  * Get user state for change detection
  */
@@ -243,5 +295,62 @@ export async function updatePoolState(
       'UPDATE pool_state SET last_block_time = ?, updated_at = unixepoch() WHERE id = 1'
     )
     .bind(lastBlockTime)
+    .run();
+}
+
+export async function getWidgetPoolSnapshot(
+  db: D1Database
+): Promise<{ snapshot_json: string; fetched_at: number } | null> {
+  return db
+    .prepare('SELECT snapshot_json, fetched_at FROM widget_pool_snapshot WHERE id = 1')
+    .first<{ snapshot_json: string; fetched_at: number }>();
+}
+
+export async function upsertWidgetPoolSnapshot(
+  db: D1Database,
+  snapshotJson: string,
+  fetchedAt: number
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO widget_pool_snapshot (id, snapshot_json, fetched_at, updated_at)
+       VALUES (1, ?, ?, unixepoch())
+       ON CONFLICT(id) DO UPDATE SET
+         snapshot_json = excluded.snapshot_json,
+         fetched_at = excluded.fetched_at,
+         updated_at = unixepoch()`
+    )
+    .bind(snapshotJson, fetchedAt)
+    .run();
+}
+
+export async function getWidgetUserSnapshot(
+  db: D1Database,
+  btcAddress: string
+): Promise<{ snapshot_json: string; fetched_at: number } | null> {
+  return db
+    .prepare(
+      'SELECT snapshot_json, fetched_at FROM widget_user_snapshots WHERE btc_address = ?'
+    )
+    .bind(btcAddress)
+    .first<{ snapshot_json: string; fetched_at: number }>();
+}
+
+export async function upsertWidgetUserSnapshot(
+  db: D1Database,
+  btcAddress: string,
+  snapshotJson: string,
+  fetchedAt: number
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO widget_user_snapshots (btc_address, snapshot_json, fetched_at, updated_at)
+       VALUES (?, ?, ?, unixepoch())
+       ON CONFLICT(btc_address) DO UPDATE SET
+         snapshot_json = excluded.snapshot_json,
+         fetched_at = excluded.fetched_at,
+         updated_at = unixepoch()`
+    )
+    .bind(btcAddress, snapshotJson, fetchedAt)
     .run();
 }

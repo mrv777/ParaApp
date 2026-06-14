@@ -13,11 +13,21 @@ import {
   getPreferences,
   verifyTokenOwnership,
   MaxDevicesExceededError,
+  updateSubscriptionWidgetUpdates,
+  getWidgetPoolSnapshot,
+  upsertWidgetPoolSnapshot,
+  getWidgetUserSnapshot,
+  upsertWidgetUserSnapshot,
 } from './db';
 import { runCronJob } from './cron';
-import { getUser } from './parasite-api';
+import { getPoolStats, getUser } from './parasite-api';
+import {
+  buildPoolWidgetSnapshot,
+  buildUserWidgetSnapshot,
+} from './widget-snapshots';
 
 const app = new Hono<{ Bindings: Env }>();
+const WIDGET_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 
 // Enable CORS for mobile app
 app.use('*', cors());
@@ -37,7 +47,7 @@ app.post('/register', async (c) => {
       return c.json({ success: false, error: result.error.flatten() }, 400);
     }
 
-    const { pushToken, btcAddress, preferences } = result.data;
+    const { pushToken, btcAddress, preferences, widgetUpdatesEnabled } = result.data;
 
     // Rate limit: Atomically check if recently registered and touch timestamp to prevent race conditions
     // This UPDATE only succeeds if: token exists, same address, AND was updated > 60s ago
@@ -59,6 +69,14 @@ app.post('/register', async (c) => {
 
       // If token exists with same address and was recently updated, return cached prefs (rate limited)
       if (existing && existing.btc_address === btcAddress) {
+        if (widgetUpdatesEnabled !== undefined) {
+          await updateSubscriptionWidgetUpdates(
+            c.env.DB,
+            pushToken,
+            btcAddress,
+            widgetUpdatesEnabled
+          );
+        }
         const prefs = await getPreferences(c.env.DB, btcAddress);
         return c.json({
           success: true,
@@ -81,7 +99,9 @@ app.post('/register', async (c) => {
       return c.json({ success: false, error: 'Address not found on Parasite Pool' }, 404);
     }
 
-    await upsertSubscription(c.env.DB, pushToken, btcAddress);
+    await upsertSubscription(c.env.DB, pushToken, btcAddress, {
+      widgetUpdatesEnabled,
+    });
 
     if (preferences) {
       await upsertPreferences(c.env.DB, btcAddress, preferences);
@@ -137,7 +157,7 @@ app.patch('/preferences', async (c) => {
       return c.json({ success: false, error: result.error.flatten() }, 400);
     }
 
-    const { pushToken, btcAddress, ...prefs } = result.data;
+    const { pushToken, btcAddress, widgetUpdatesEnabled, ...prefs } = result.data;
 
     // Verify ownership: pushToken must be registered to this address
     const isOwner = await verifyTokenOwnership(c.env.DB, pushToken, btcAddress);
@@ -146,10 +166,75 @@ app.patch('/preferences', async (c) => {
     }
 
     await upsertPreferences(c.env.DB, btcAddress, prefs);
+    if (widgetUpdatesEnabled !== undefined) {
+      await updateSubscriptionWidgetUpdates(
+        c.env.DB,
+        pushToken,
+        btcAddress,
+        widgetUpdatesEnabled
+      );
+    }
 
     return c.json({ success: true });
   } catch (error) {
     console.error('Preferences error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+app.get('/widget/pool', async (c) => {
+  try {
+    const cached = await getWidgetPoolSnapshot(c.env.DB);
+    const now = Date.now();
+
+    if (cached && now - cached.fetched_at <= WIDGET_CACHE_MAX_AGE_MS) {
+      return c.json({ success: true, data: JSON.parse(cached.snapshot_json) });
+    }
+
+    const poolResult = await getPoolStats(c.env.PARASITE_API_URL);
+    if (!poolResult.success || !poolResult.data) {
+      if (cached) {
+        return c.json({ success: true, data: JSON.parse(cached.snapshot_json) });
+      }
+      return c.json({ success: false, error: 'Pool snapshot unavailable' }, 503);
+    }
+
+    const snapshot = buildPoolWidgetSnapshot(poolResult.data, now);
+    await upsertWidgetPoolSnapshot(c.env.DB, JSON.stringify(snapshot), now);
+    return c.json({ success: true, data: snapshot });
+  } catch (error) {
+    console.error('Pool widget snapshot error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+app.get('/widget/user/:address', async (c) => {
+  try {
+    const address = c.req.param('address');
+    if (!address || address.length < 26 || address.length > 62) {
+      return c.json({ success: false, error: 'Invalid address' }, 400);
+    }
+
+    const cached = await getWidgetUserSnapshot(c.env.DB, address);
+    const now = Date.now();
+
+    if (cached && now - cached.fetched_at <= WIDGET_CACHE_MAX_AGE_MS) {
+      return c.json({ success: true, data: JSON.parse(cached.snapshot_json) });
+    }
+
+    const userResult = await getUser(c.env.PARASITE_API_URL, address);
+    if (!userResult.success || !userResult.data) {
+      if (cached) {
+        return c.json({ success: true, data: JSON.parse(cached.snapshot_json) });
+      }
+      return c.json({ success: false, error: 'User snapshot unavailable' }, 503);
+    }
+
+    const snapshot = buildUserWidgetSnapshot(address, userResult.data, now);
+    await upsertWidgetUserSnapshot(c.env.DB, address, JSON.stringify(snapshot), now);
+    return c.json({ success: true, data: snapshot });
+  } catch (error) {
+    console.error('User widget snapshot error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
 });

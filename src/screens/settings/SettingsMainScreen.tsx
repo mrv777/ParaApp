@@ -10,6 +10,7 @@ import {
   TextInput,
   Linking,
   AppState,
+  Platform,
 } from 'react-native';
 import { LanguageSelectorSheet, OptionToggleGroup } from '@/components/settings';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +27,7 @@ import {
   selectLanguage,
   selectNotificationsEnabled,
   selectNotificationPrefs,
+  selectWidgetUpdatesEnabled,
   type PollingInterval,
   type WorkerSortOrder,
   type NotificationPrefs,
@@ -83,6 +85,7 @@ export function SettingsMainScreen({ navigation }: Props) {
   const language = useSettingsStore(selectLanguage);
   const notificationsEnabled = useSettingsStore(selectNotificationsEnabled);
   const notificationPrefs = useSettingsStore(selectNotificationPrefs);
+  const widgetUpdatesEnabled = useSettingsStore(selectWidgetUpdatesEnabled);
 
   // Actions
   const setBitcoinAddress = useSettingsStore((s) => s.setBitcoinAddress);
@@ -91,6 +94,7 @@ export function SettingsMainScreen({ navigation }: Props) {
   const setWorkerSortOrder = useSettingsStore((s) => s.setWorkerSortOrder);
   const setNotificationsEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
   const setNotificationPrefs = useSettingsStore((s) => s.setNotificationPrefs);
+  const setWidgetUpdatesEnabled = useSettingsStore((s) => s.setWidgetUpdatesEnabled);
 
   // Local state
   const [addressInput, setAddressInput] = useState(bitcoinAddress || '');
@@ -209,6 +213,19 @@ export function SettingsMainScreen({ navigation }: Props) {
     },
     [notificationPrefs, setNotificationPrefs]
   );
+
+  const handleToggleWidgetUpdates = useCallback(async () => {
+    haptics.selection();
+
+    if (!widgetUpdatesEnabled && canReceivePushNotifications()) {
+      const status = await requestPermissions();
+      setPermissionStatus(status);
+      // Keep the setting enabled even when permission is denied; background
+      // refresh can still update widgets, but silent pushes will be unavailable.
+    }
+
+    setWidgetUpdatesEnabled(!widgetUpdatesEnabled);
+  }, [setWidgetUpdatesEnabled, widgetUpdatesEnabled]);
 
   const handleOpenNotificationSettings = useCallback(() => {
     haptics.light();
@@ -463,6 +480,38 @@ export function SettingsMainScreen({ navigation }: Props) {
                     />
                   </Pressable>
                 </Animated.View>
+              )}
+            </View>
+          )}
+
+          {/* Widget Updates Section */}
+          {Platform.OS === 'ios' && (
+            <View className="px-4 py-4 border-t border-border">
+              <Text variant="caption" color="muted" className="mb-4 uppercase tracking-wide">
+                {t('settings.widgets')}
+              </Text>
+
+              <Pressable
+                onPress={handleToggleWidgetUpdates}
+                className="flex-row items-center justify-between py-2 active:opacity-70"
+              >
+                <View className="flex-1 pr-4">
+                  <Text variant="body">{t('settings.widgetUpdates')}</Text>
+                  <Text variant="caption" color="muted" className="mt-1">
+                    {t('settings.widgetUpdatesDesc')}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={widgetUpdatesEnabled ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={widgetUpdatesEnabled ? colors.success : colors.textMuted}
+                />
+              </Pressable>
+
+              {permissionStatus === 'denied' && widgetUpdatesEnabled && (
+                <Text variant="caption" color="muted" className="mt-2">
+                  {t('settings.widgetUpdatesPermissionHint')}
+                </Text>
               )}
             </View>
           )}
