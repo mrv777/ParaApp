@@ -112,11 +112,18 @@ export function getWidgetFreshnessColor(
   return '#22c55e';
 }
 
+// Re-render checkpoints (minutes from now) for a single pushed snapshot. The
+// widget renders from these without a data push, so the ladder's job is to flip
+// the "Stale" badge promptly: entries bracket the 2.5h threshold (150m), with
+// 151m crossing it and 180m as the final `.atEnd` reload point (same data,
+// already "Stale") to avoid pointless earlier reloads.
+const WIDGET_TIMELINE_CHECKPOINTS_MIN = [0, 60, 120, 150, 151, 180];
+
 export function buildWidgetTimeline<T extends { fetchedAt: number }>(
   snapshot: T,
   now: number = Date.now()
 ): { date: Date; props: T }[] {
-  return [0, 30, 60, 90].map((minutes) => ({
+  return WIDGET_TIMELINE_CHECKPOINTS_MIN.map((minutes) => ({
     date: new Date(now + minutes * 60 * 1000),
     props: snapshot,
   }));

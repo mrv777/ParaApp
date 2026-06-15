@@ -62,7 +62,7 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
     const SUCCESS = '#22c55e';
     const WARNING = '#facc15';
     const DANGER = '#ef4444';
-    const STALE_AFTER_MS = 60 * 60 * 1000;
+    const STALE_AFTER_MS = 150 * 60 * 1000; // 2.5h — keep in sync with WIDGET_STALE_AFTER_MS
 
     const props = {
       kind: 'personal',
@@ -401,7 +401,7 @@ export const poolOverviewWidget = createWidget<PartialPoolSnapshot>(
     const TEXT = '#ededed';
     const MUTED = '#8a8a8a';
     const WARNING = '#facc15';
-    const STALE_AFTER_MS = 60 * 60 * 1000;
+    const STALE_AFTER_MS = 150 * 60 * 1000; // 2.5h — keep in sync with WIDGET_STALE_AFTER_MS
 
     const props = {
       kind: 'pool',

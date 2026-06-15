@@ -42,7 +42,28 @@ import {
 const OFFLINE_CHECK_THRESHOLD = 5;
 // Worker considered stale if lastSubmission is older than 5 minutes
 const STALE_THRESHOLD_SECONDS = 300;
-const WIDGET_PUSH_INTERVAL_SECONDS = 30 * 60;
+// Blanket fallback: how often a quiet device gets a silent widget refresh even
+// when nothing changed. Kept well within Apple's content-available budget
+// (only a handful/day deliver reliably); real freshness comes from the
+// event-driven refreshes below.
+const WIDGET_PUSH_INTERVAL_SECONDS = 2 * 60 * 60;
+// Per-device floor between event-driven widget refreshes, so frequent events
+// (e.g. blocks on a busy pool) can't blow the silent-push budget.
+const WIDGET_EVENT_MIN_INTERVAL_SECONDS = 15 * 60;
+
+/**
+ * Whether a subscription should receive an event-driven silent widget refresh
+ * right now: widgets enabled, and not already pushed within
+ * WIDGET_EVENT_MIN_INTERVAL_SECONDS.
+ */
+function isWidgetEventEligible(
+  sub: PushSubscription,
+  nowSeconds: number
+): boolean {
+  if (sub.widget_updates_enabled !== 1) return false;
+  if (sub.last_widget_push_at == null) return true;
+  return sub.last_widget_push_at <= nowSeconds - WIDGET_EVENT_MIN_INTERVAL_SECONDS;
+}
 
 /**
  * Parse difficulty string like "1.12T" or "88.2G" to raw number
@@ -87,11 +108,14 @@ export async function runCronJob(env: Env): Promise<void> {
   console.log('Cron job started');
 
   const allMessages: ExpoPushMessage[] = [];
+  // Tokens to refresh because their underlying data actually changed this cycle.
+  const eventWidgetTokens = new Set<string>();
 
   try {
     // 1. Check for pool-wide block detection
-    const blockMessages = await checkPoolBlock(env);
-    allMessages.push(...blockMessages);
+    const blockResult = await checkPoolBlock(env);
+    allMessages.push(...blockResult.messages);
+    for (const token of blockResult.widgetTokens) eventWidgetTokens.add(token);
 
     // 2. Process each user for worker/difficulty changes
     const addresses = await getUniqueAddresses(env.DB);
@@ -99,16 +123,27 @@ export async function runCronJob(env: Env): Promise<void> {
 
     for (const address of addresses) {
       try {
-        const userMessages = await processUser(env, address);
-        allMessages.push(...userMessages);
+        const userResult = await processUser(env, address);
+        allMessages.push(...userResult.messages);
+        for (const token of userResult.widgetTokens) eventWidgetTokens.add(token);
       } catch (error) {
         console.error(`Error processing user ${address}:`, error);
         // Continue with other users
       }
     }
 
-    // 3. Send all notifications
-    const widgetMessages = await buildWidgetRefreshMessages(env);
+    // 3. Widget refreshes: event-driven (data changed) + blanket fallback.
+    //    De-dupe so a token that's both due for the fallback and changed this
+    //    cycle still receives exactly one silent push.
+    const blanketMessages = await buildWidgetRefreshMessages(env);
+    const blanketTokens = new Set(blanketMessages.map((message) => message.to));
+    const eventOnlyTokens = [...eventWidgetTokens].filter(
+      (token) => !blanketTokens.has(token)
+    );
+    const widgetMessages = [
+      ...blanketMessages,
+      ...eventOnlyTokens.map((token) => createSilentWidgetRefreshMessage(token)),
+    ];
     allMessages.push(...widgetMessages);
 
     if (allMessages.length > 0) {
@@ -123,7 +158,7 @@ export async function runCronJob(env: Env): Promise<void> {
         }
       }
 
-      const widgetTokens = widgetMessages.map((message) => message.to);
+      const widgetTokens = [...blanketTokens, ...eventOnlyTokens];
       if (widgetTokens.length > 0) {
         await markWidgetPushSent(env.DB, widgetTokens);
       }
@@ -138,13 +173,16 @@ export async function runCronJob(env: Env): Promise<void> {
 /**
  * Check for pool-wide block and notify all users
  */
-async function checkPoolBlock(env: Env): Promise<ExpoPushMessage[]> {
+async function checkPoolBlock(
+  env: Env
+): Promise<{ messages: ExpoPushMessage[]; widgetTokens: string[] }> {
   const messages: ExpoPushMessage[] = [];
+  const widgetTokens: string[] = [];
 
   const poolStatsResult = await getPoolStats(env.PARASITE_API_URL);
   if (!poolStatsResult.success || !poolStatsResult.data) {
     console.log('Failed to fetch pool stats, skipping block check');
-    return messages;
+    return { messages, widgetTokens };
   }
 
   const currentBlockTime = poolStatsResult.data.lastBlockTime;
@@ -195,11 +233,20 @@ async function checkPoolBlock(env: Env): Promise<ExpoPushMessage[]> {
       }
     }
 
+    // Nudge widget-enabled devices to refresh (independent of the block-alert
+    // preference — a fresh block changes the pool widget regardless).
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    for (const sub of allSubscriptions) {
+      if (isWidgetEventEligible(sub, nowSeconds)) {
+        widgetTokens.push(sub.push_token);
+      }
+    }
+
     // Update stored block time
     await updatePoolState(env.DB, currentBlockTime);
   }
 
-  return messages;
+  return { messages, widgetTokens };
 }
 
 /**
@@ -208,14 +255,15 @@ async function checkPoolBlock(env: Env): Promise<ExpoPushMessage[]> {
 async function processUser(
   env: Env,
   address: string
-): Promise<ExpoPushMessage[]> {
+): Promise<{ messages: ExpoPushMessage[]; widgetTokens: string[] }> {
   const messages: ExpoPushMessage[] = [];
+  const widgetTokens: string[] = [];
 
   // Fetch user data from Parasite Pool
   const userResult = await getUser(env.PARASITE_API_URL, address);
   if (!userResult.success || !userResult.data) {
     console.log(`Failed to fetch user ${address}, skipping`);
-    return messages;
+    return { messages, widgetTokens };
   }
 
   const userData = userResult.data;
@@ -235,7 +283,7 @@ async function processUser(
   ]);
 
   if (tokens.length === 0) {
-    return messages; // No active tokens for this user
+    return { messages, widgetTokens }; // No active tokens for this user
   }
 
   const workersEnabled = prefs ? prefs.notify_workers === 1 : true;
@@ -338,30 +386,43 @@ async function processUser(
     }
   }
 
-  // Check for new best difficulty
-  if (bestDiffEnabled) {
-    const currentBestDiff = userData.bestDifficulty;
-    const storedBestDiff = userState?.best_difficulty;
+  // Detect a new personal best independent of the alert preference, so the
+  // widget can still refresh even when best-diff alerts are turned off.
+  let newBestDiff = false;
+  const currentBestDiff = userData.bestDifficulty;
+  if (currentBestDiff && currentBestDiff !== 'N/A') {
+    const currentValue = parseDifficulty(currentBestDiff);
+    const storedValue = userState?.best_difficulty
+      ? parseDifficulty(userState.best_difficulty)
+      : 0;
+    // Only count it as new if they had a previous best.
+    newBestDiff = currentValue > storedValue && storedValue > 0;
+  }
 
-    if (currentBestDiff && currentBestDiff !== 'N/A') {
-      const currentValue = parseDifficulty(currentBestDiff);
-      const storedValue = storedBestDiff ? parseDifficulty(storedBestDiff) : 0;
+  if (bestDiffEnabled && newBestDiff) {
+    for (const sub of tokens) {
+      messages.push(
+        createPushMessage(
+          sub.push_token,
+          'New Best!',
+          `New personal best: ${currentBestDiff}`,
+          {
+            type: 'best_difficulty',
+            difficulty: currentBestDiff,
+          }
+        )
+      );
+    }
+  }
 
-      if (currentValue > storedValue && storedValue > 0) {
-        // New personal best (only notify if they had a previous best)
-        for (const sub of tokens) {
-          messages.push(
-            createPushMessage(
-              sub.push_token,
-              'New Best!',
-              `New personal best: ${currentBestDiff}`,
-              {
-                type: 'best_difficulty',
-                difficulty: currentBestDiff,
-              }
-            )
-          );
-        }
+  // Refresh this user's widget when their data actually changed.
+  const dataChanged =
+    offlineWorkers.length > 0 || onlineWorkers.length > 0 || newBestDiff;
+  if (dataChanged) {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    for (const sub of tokens) {
+      if (isWidgetEventEligible(sub, nowSeconds)) {
+        widgetTokens.push(sub.push_token);
       }
     }
   }
@@ -374,7 +435,7 @@ async function processUser(
     userData.bestDifficulty || ''
   );
 
-  return messages;
+  return { messages, widgetTokens };
 }
 
 async function buildWidgetRefreshMessages(env: Env): Promise<ExpoPushMessage[]> {
