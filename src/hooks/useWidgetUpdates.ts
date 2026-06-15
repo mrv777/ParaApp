@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import {
   registerWidgetRefreshTasks,
   unregisterWidgetRefreshTasks,
 } from '@/widgets/backgroundTask';
 import { updateWidgetsFromStores } from '@/widgets/updater';
+import { useMinerStore } from '@/store/minerStore';
 import { usePoolStore } from '@/store/poolStore';
 import {
   selectBitcoinAddress,
@@ -40,4 +41,23 @@ export function useWidgetUpdates() {
       });
     }
   }, [isHydrated, widgetUpdatesEnabled]);
+
+  // When the app leaves the foreground: push the latest in-memory stats into the
+  // widget so it reflects last-seen data even if iOS never runs a background refresh,
+  // and abort any in-flight discovery scan. The scan's many TCP connects to Avalon
+  // miners would otherwise fire their native `connect` callback on resume — the source
+  // of the nil-host crash patched in react-native-tcp-socket.
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') return;
+      useMinerStore.getState().stopDiscovery();
+      if (isHydrated) {
+        updateWidgetsFromStores();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isHydrated]);
 }

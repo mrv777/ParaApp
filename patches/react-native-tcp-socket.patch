@@ -1,0 +1,46 @@
+diff --git a/ios/TcpSockets.m b/ios/TcpSockets.m
+index 0fe15d2b9dde11293351aac0401ecab1012918da..cf7417d4c92deb899a8b137bce8047acc1bbcc1e 100644
+--- a/ios/TcpSockets.m
++++ b/ios/TcpSockets.m
+@@ -219,14 +219,17 @@ - (void)onWrittenData:(TcpSocketClient *)client msgId:(NSNumber *)msgId {
+ 
+ - (void)onConnect:(TcpSocketClient *)client {
+     GCDAsyncSocket *socket = [client getSocket];
++    // localHost/connectedHost can be nil if the connect callback fires after the
++    // socket state was torn down (e.g. background->foreground). Coalesce to ""
++    // so the NSDictionary literal does not abort. See patches/README.md (#127).
+     [self sendEventWithName:@"connect"
+                        body:@{
+                            @"id" : client.id,
+                            @"connection" : @{
+-                               @"localAddress" : [socket localHost],
++                               @"localAddress" : [socket localHost] ?: @"",
+                                @"localPort" :
+                                    [NSNumber numberWithInt:[socket localPort]],
+-                               @"remoteAddress" : [socket connectedHost],
++                               @"remoteAddress" : [socket connectedHost] ?: @"",
+                                @"remotePort" : [NSNumber
+                                    numberWithInt:[socket connectedPort]],
+                                @"remoteFamily" : [socket isIPv4] ? @"IPv4"
+@@ -241,7 +244,7 @@ - (void)onListen:(TcpSocketClient *)server {
+                        body:@{
+                            @"id" : server.id,
+                            @"connection" : @{
+-                               @"localAddress" : [socket localHost],
++                               @"localAddress" : [socket localHost] ?: @"",
+                                @"localPort" :
+                                    [NSNumber numberWithInt:[socket localPort]],
+                                @"localFamily" : [socket isIPv4] ? @"IPv4"
+@@ -278,10 +281,10 @@ - (void)onSocketConnection:(TcpSocketClient *)client
+                            @"info" : @{
+                                @"id" : client.id,
+                                @"connection" : @{
+-                                   @"localAddress" : [socket localHost],
++                                   @"localAddress" : [socket localHost] ?: @"",
+                                    @"localPort" : [NSNumber
+                                        numberWithInt:[socket localPort]],
+-                                   @"remoteAddress" : [socket connectedHost],
++                                   @"remoteAddress" : [socket connectedHost] ?: @"",
+                                    @"remotePort" : [NSNumber
+                                        numberWithInt:[socket connectedPort]],
+                                    @"remoteFamily" : [socket isIPv4] ? @"IPv4"

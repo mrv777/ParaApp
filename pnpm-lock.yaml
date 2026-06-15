@@ -7,6 +7,11 @@ settings:
 overrides:
   tslib: ^2.6.0
 
+patchedDependencies:
+  react-native-tcp-socket:
+    hash: c702899d9a3e023a3ec3b2993f0e2e9adb33476ac091f993f4a5f24ec21f4ae4
+    path: patches/react-native-tcp-socket.patch
+
 importers:
 
   .:
@@ -145,7 +150,7 @@ importers:
         version: 15.15.4(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       react-native-tcp-socket:
         specifier: ^6.3.0
-        version: 6.4.1(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3))
+        version: 6.4.1(patch_hash=c702899d9a3e023a3ec3b2993f0e2e9adb33476ac091f993f4a5f24ec21f4ae4)(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3))
       react-native-toast-message:
         specifier: ^2.3.3
         version: 2.3.3(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
@@ -9339,7 +9344,7 @@ snapshots:
       react-native: 0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3)
       warn-once: 0.1.1
 
-  react-native-tcp-socket@6.4.1(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3)):
+  react-native-tcp-socket@6.4.1(patch_hash=c702899d9a3e023a3ec3b2993f0e2e9adb33476ac091f993f4a5f24ec21f4ae4)(react-native@0.85.3(@babel/core@7.28.5)(@react-native/metro-config@0.85.3(@babel/core@7.28.5))(@types/react@19.2.17)(react@19.2.3)):
     dependencies:
       buffer: 5.7.1
       eventemitter3: 4.0.7

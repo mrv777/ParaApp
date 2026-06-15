@@ -87,7 +87,7 @@ const initialState: SettingsState = {
   notificationsEnabled: false,
   notificationPrefs: { blocks: true, workers: true, bestDiff: true },
   pushToken: null,
-  widgetUpdatesEnabled: false,
+  widgetUpdatesEnabled: true,
   dismissedTips: [],
   workerNotes: {},
   lastPoolFetch: null,
@@ -179,6 +179,16 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
+      },
+      // v1: widget background refresh became opt-out (default on). Flip existing
+      // installs that persisted the old `false` default so the new default applies.
+      version: 1,
+      migrate: (persistedState, version) => {
+        const state = (persistedState ?? {}) as Partial<SettingsState>;
+        if (version < 1) {
+          return { ...state, widgetUpdatesEnabled: true };
+        }
+        return state;
       },
     }
   )

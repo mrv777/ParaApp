@@ -147,6 +147,15 @@ If styles aren't applying:
 - Ensure component accepts `className` prop
 - Check `tailwind.config.js` content paths include your file
 
+### react-native-tcp-socket nil-host crash (patched)
+Native iOS `SIGABRT` (`attempt to insert nil object from objects[0]` in
+`TcpSockets.m onConnect:`) when `localHost`/`connectedHost` are nil — fires during
+background→foreground while Avalon connections (`src/api/avalon.ts`, port 4028) are in
+flight. Fixed by `patches/react-native-tcp-socket.patch` (coalesces host fields to `""`).
+- Upstream: Rapsssito/react-native-tcp-socket#127 (open).
+- **On upgrade:** re-check `ios/TcpSockets.m`; drop the patch if upstream nil-guards the
+  connect/listen/connection dictionaries, else re-create it. See `patches/README.md`.
+
 ## API Reference
 
 **Parasite Pool:** `https://parasite.space/api/`

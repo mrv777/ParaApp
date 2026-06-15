@@ -1,10 +1,12 @@
 import { HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
+  allowsTightening,
   containerBackground,
   font,
   foregroundStyle,
   frame,
   lineLimit,
+  minimumScaleFactor,
   monospacedDigit,
   padding,
   widgetURL,
@@ -113,27 +115,11 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
             monospacedDigit(),
             foregroundStyle(TEXT),
             lineLimit(1),
+            minimumScaleFactor(0.6),
+            allowsTightening(true),
           ]}
         >
           {text}
-        </Text>
-      );
-    }
-
-    function Freshness() {
-      if (!showFreshness) {
-        return null;
-      }
-
-      return (
-        <Text
-          modifiers={[
-            font({ textStyle: 'caption2', weight: 'medium' }),
-            foregroundStyle(freshnessColor),
-            lineLimit(1),
-          ]}
-        >
-          {freshness}
         </Text>
       );
     }
@@ -224,6 +210,7 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
                 font({ textStyle: 'caption', weight: 'bold', design: 'monospaced' }),
                 foregroundStyle(TEXT),
                 lineLimit(1),
+                minimumScaleFactor(0.6),
               ]}
             >
               {props.hasAddress ? props.hashrate : 'Add address'}
@@ -339,6 +326,7 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
                   font({ size: 15, weight: 'semibold', design: 'monospaced' }),
                   foregroundStyle(TEXT),
                   lineLimit(1),
+                  minimumScaleFactor(0.6),
                 ]}
               >
                 {props.hashrate1h}
@@ -351,6 +339,7 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
                   font({ size: 15, weight: 'semibold', design: 'monospaced' }),
                   foregroundStyle(TEXT),
                   lineLimit(1),
+                  minimumScaleFactor(0.6),
                 ]}
               >
                 {props.hashrate24h}
@@ -379,7 +368,11 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
           widgetURL('paraapp://home'),
         ]}
       >
-        <Label text={props.addressLabel} />
+        <HStack spacing={6}>
+          <Label text={props.addressLabel} />
+          <Spacer />
+          <FreshnessBadge />
+        </HStack>
         <Value text={props.hashrate} size={20} />
         <VStack alignment="leading" spacing={1}>
           <Label text="BEST DIFF" />
@@ -394,8 +387,6 @@ export const personalMiningWidget = createWidget<PartialPersonalSnapshot>(
             <StatusText label="off" value={props.offlineWorkers} color={DANGER} />
           ) : null}
         </HStack>
-        <Spacer />
-        <Freshness />
       </VStack>
     );
   }
@@ -458,6 +449,8 @@ export const poolOverviewWidget = createWidget<PartialPoolSnapshot>(
             monospacedDigit(),
             foregroundStyle(TEXT),
             lineLimit(1),
+            minimumScaleFactor(0.6),
+            allowsTightening(true),
           ]}
         >
           {text}
@@ -563,6 +556,7 @@ export const poolOverviewWidget = createWidget<PartialPoolSnapshot>(
                 font({ textStyle: 'caption', weight: 'bold', design: 'monospaced' }),
                 foregroundStyle(TEXT),
                 lineLimit(1),
+                minimumScaleFactor(0.6),
               ]}
             >
               {props.poolHashrate}
@@ -642,14 +636,16 @@ export const poolOverviewWidget = createWidget<PartialPoolSnapshot>(
           widgetURL('paraapp://pool'),
         ]}
       >
-        <Label text="PARASITE POOL" />
+        <HStack spacing={6}>
+          <Label text="PARASITE POOL" />
+          <Spacer />
+          <FreshnessBadge />
+        </HStack>
         <Value text={props.poolHashrate} size={20} />
         <VStack alignment="leading" spacing={1}>
           <Label text="BEST DIFF" />
           <Value text={props.highestDiff} size={18} />
         </VStack>
-        <Spacer />
-        <Freshness />
       </VStack>
     );
   }
