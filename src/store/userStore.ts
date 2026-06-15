@@ -20,6 +20,9 @@ import { useSettingsStore } from './settingsStore';
 interface UserState {
   // Cached data
   stats: CachedData<UserStats> | null;
+  // Address the cached `stats` belong to (guards against pairing a new address
+  // with a previous address's stats, e.g. in the widget update path).
+  statsAddress: string | null;
   account: CachedData<Account | null> | null;
   historical: CachedData<UserHistoricalPoint[]> | null;
   rounds: CachedData<UserRoundsResponse> | null;
@@ -51,6 +54,7 @@ interface UserActions {
 
 const initialState: UserState = {
   stats: null,
+  statsAddress: null,
   account: null,
   historical: null,
   rounds: null,
@@ -135,6 +139,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
 
       set({
         stats: { data: statsWithAverages, timestamp: Date.now() },
+        statsAddress: address,
         isLoading: false,
       });
     } else {
@@ -210,6 +215,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
   clearUserData: () =>
     set({
       stats: null,
+      statsAddress: null,
       account: null,
       historical: null,
       rounds: null,

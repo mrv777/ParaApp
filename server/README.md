@@ -41,6 +41,16 @@ Cloudflare Worker that handles push notifications for the ParaApp mobile app.
    ```bash
    npx wrangler d1 execute paraapp-notifications-db --remote --file=schema.sql
    ```
+   `schema.sql` is the full schema for a **fresh** database and is idempotent
+   (safe to re-run). For **incremental** changes to an already-deployed database,
+   add and apply a delta file under `migrations/` — `CREATE TABLE IF NOT EXISTS`
+   in `schema.sql` will not add new columns to an existing table.
+
+   **Apply pending migrations before deploying a worker that uses them:**
+   ```bash
+   npx wrangler d1 execute paraapp-notifications-db --remote \
+     --file=migrations/0001_add_widget_schema.sql
+   ```
 
 ## Development
 

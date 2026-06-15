@@ -184,6 +184,28 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
   )
 );
 
+/**
+ * Resolves once the persisted settings have rehydrated from AsyncStorage.
+ * Used by background/headless paths (e.g. widget refresh) that read settings
+ * outside the React tree and would otherwise see the initial (null) state.
+ */
+export function awaitSettingsHydration(timeoutMs = 5000): Promise<void> {
+  if (useSettingsStore.persist.hasHydrated()) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      unsub();
+      clearTimeout(timer);
+      resolve();
+    };
+    // Safety net: never let a headless task hang on a stuck storage read.
+    const timer = setTimeout(finish, timeoutMs);
+    const unsub = useSettingsStore.persist.onFinishHydration(finish);
+  });
+}
+
 // Selectors
 export const selectTemperatureUnit = (state: SettingsState) =>
   state.temperatureUnit;
