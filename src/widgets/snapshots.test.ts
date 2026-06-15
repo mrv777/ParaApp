@@ -6,13 +6,17 @@ import {
   getWidgetFreshnessLabel,
   isWidgetSnapshotStale,
 } from './snapshots';
+import { WIDGET_STALE_AFTER_MS } from './types';
 
 describe('widget snapshots', () => {
-  it('marks snapshots stale after one hour', () => {
+  it('marks snapshots stale only past the 2.5h stale threshold', () => {
     const fetchedAt = 1_000_000;
 
-    expect(isWidgetSnapshotStale(fetchedAt, fetchedAt + 60 * 60 * 1000)).toBe(false);
-    expect(isWidgetSnapshotStale(fetchedAt, fetchedAt + 60 * 60 * 1000 + 1)).toBe(true);
+    // Lock the threshold value so an accidental change is caught here.
+    expect(WIDGET_STALE_AFTER_MS).toBe(150 * 60 * 1000);
+
+    expect(isWidgetSnapshotStale(fetchedAt, fetchedAt + WIDGET_STALE_AFTER_MS)).toBe(false);
+    expect(isWidgetSnapshotStale(fetchedAt, fetchedAt + WIDGET_STALE_AFTER_MS + 1)).toBe(true);
   });
 
   it('formats freshness labels for current, recent, and stale snapshots', () => {
@@ -22,7 +26,13 @@ describe('widget snapshots', () => {
     expect(getWidgetFreshnessLabel(fetchedAt, fetchedAt + 12 * 60 * 1000)).toBe(
       'Updated 12m ago'
     );
-    expect(getWidgetFreshnessLabel(fetchedAt, fetchedAt + 61 * 60 * 1000)).toBe('Stale');
+    // Past 1h but within the 2.5h threshold is now "Updated 1h ago", not "Stale".
+    expect(getWidgetFreshnessLabel(fetchedAt, fetchedAt + 61 * 60 * 1000)).toBe(
+      'Updated 1h ago'
+    );
+    expect(getWidgetFreshnessLabel(fetchedAt, fetchedAt + WIDGET_STALE_AFTER_MS + 1)).toBe(
+      'Stale'
+    );
   });
 
   it('builds personal mining worker health counts', () => {
