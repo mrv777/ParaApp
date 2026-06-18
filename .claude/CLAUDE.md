@@ -7,14 +7,14 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 ## Quick Reference
 
 **Tech Stack:**
-- React Native 0.81 + Expo SDK 54 (TypeScript)
+- React Native 0.85 + Expo SDK 56 (TypeScript, New Architecture)
 - NativeWind v4 + Tailwind CSS v3 (styling)
 - Zustand v5 (state management with AsyncStorage persistence)
 - React Navigation v7 (bottom tabs + nested stacks)
-- react-native-reanimated v4 (animations)
+- react-native-reanimated v4 + react-native-worklets (animations)
 - @wuba/react-native-echarts + echarts v6 (charts, lazy-loaded)
 - i18next + react-i18next (internationalization)
-- @gorhom/bottom-sheet (modals)
+- Custom `Sheet` (`src/components/Sheet.tsx`) for bottom sheets — RN Modal + Reanimated
 - expo-camera (QR scanning)
 
 **Key Directories:**
@@ -125,6 +125,17 @@ See `IMPLEMENTATION.md` for full phase details.
 - Handle network errors gracefully, update store error state
 
 ## Known Issues & Fixes
+
+### Bottom sheets — do NOT use @gorhom/bottom-sheet
+`@gorhom/bottom-sheet` does not render on this RN 0.85 / New-Architecture /
+react-native-screens stack — its portal-based `BottomSheetModal` mounts *beneath*
+the native screen and never appears (no sheet, no backdrop), while `onChange`
+still fires (gorhom issues #1644 / #2322; the `FullWindowOverlay` `containerComponent`
+workaround also fails on these versions; hosting it in a native Modal fails too).
+A plain RN `Modal` renders correctly. All sheets use the custom
+`src/components/Sheet.tsx` (RN `Modal` + Reanimated slide + drag-to-dismiss +
+static dimmed backdrop). Use `<Sheet visible onClose avoidKeyboard?>...</Sheet>`;
+pass `avoidKeyboard` for sheets containing a `TextInput`.
 
 ### ECharts Runtime Error
 If you see `Cannot read property '__extends' of undefined`:

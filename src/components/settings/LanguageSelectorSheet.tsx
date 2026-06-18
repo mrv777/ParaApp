@@ -2,16 +2,10 @@
  * LanguageSelectorSheet - Bottom sheet for language selection
  */
 
-import { useCallback, useRef, useMemo, useEffect } from 'react';
+import { useCallback } from 'react';
 import { View, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  BottomSheetModal,
-  BottomSheetView,
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
+import { Sheet } from '../Sheet';
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -69,24 +63,8 @@ export function LanguageSelectorSheet({
   onClose,
 }: LanguageSelectorSheetProps) {
   const { t } = useTranslation();
-  const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const insets = useSafeAreaInsets();
-  const snapPoints = useMemo(() => ['45%'], []);
-
   const language = useSettingsStore(selectLanguage);
   const setLanguage = useSettingsStore((s) => s.setLanguage);
-
-  useEffect(() => {
-    if (visible) {
-      bottomSheetRef.current?.present();
-    } else {
-      bottomSheetRef.current?.dismiss();
-    }
-  }, [visible]);
-
-  const handleDismiss = useCallback(() => {
-    onClose();
-  }, [onClose]);
 
   const handleLanguageSelect = useCallback(
     (lang: Language) => {
@@ -97,59 +75,31 @@ export function LanguageSelectorSheet({
     [setLanguage, onClose]
   );
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        pressBehavior="close"
-      />
-    ),
-    []
-  );
-
   return (
-    <BottomSheetModal
-      ref={bottomSheetRef}
-      snapPoints={snapPoints}
-      onDismiss={handleDismiss}
-      backdropComponent={renderBackdrop}
-      handleIndicatorStyle={{ backgroundColor: colors.textMuted }}
-      backgroundStyle={{ backgroundColor: colors.surface }}
-    >
-      <BottomSheetView style={{ flex: 1 }}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 pb-2">
-          <Text variant="subtitle" className="font-semibold">
-            {t('settings.language')}
-          </Text>
-          <Pressable
-            onPress={handleDismiss}
-            className="p-2 -mr-2"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={24} color={colors.text} />
-          </Pressable>
-        </View>
+    <Sheet visible={visible} onClose={onClose}>
+      {/* Header */}
+      <View className="flex-row items-center justify-between pb-2">
+        <Text variant="subtitle" className="font-semibold">
+          {t('settings.language')}
+        </Text>
+        <Pressable onPress={onClose} className="p-2 -mr-2" hitSlop={8}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </Pressable>
+      </View>
 
-        {/* Language Options */}
-        <View
-          className="bg-background mx-4 rounded-lg overflow-hidden"
-          style={{ marginBottom: Math.max(insets.bottom, 16) }}
-        >
-          {LANGUAGE_OPTIONS.map((option, index) => (
-            <View key={option.value}>
-              {index > 0 && <View className="h-px bg-border mx-4" />}
-              <LanguageOption
-                label={t(option.labelKey)}
-                selected={language === option.value}
-                onPress={() => handleLanguageSelect(option.value)}
-              />
-            </View>
-          ))}
-        </View>
-      </BottomSheetView>
-    </BottomSheetModal>
+      {/* Language Options */}
+      <View className="bg-background rounded-lg overflow-hidden mt-1">
+        {LANGUAGE_OPTIONS.map((option, index) => (
+          <View key={option.value}>
+            {index > 0 && <View className="h-px bg-border mx-4" />}
+            <LanguageOption
+              label={t(option.labelKey)}
+              selected={language === option.value}
+              onPress={() => handleLanguageSelect(option.value)}
+            />
+          </View>
+        ))}
+      </View>
+    </Sheet>
   );
 }

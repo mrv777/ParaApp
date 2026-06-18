@@ -244,3 +244,22 @@ export async function getUserRounds(
     `${BASE_URL}/api/user/${address}/rounds?${params}`
   );
 }
+
+/**
+ * Whether the user has earned the Refinery Operator badge.
+ * Awarded when the user has at least one fulfilled order in Parasite's
+ * router/refinery system. The endpoint returns `false` gracefully for
+ * unknown/private/invalid addresses, so a non-success result maps to false.
+ * @param address - Bitcoin address
+ */
+export async function getRefineryOperatorBadge(
+  address: string
+): Promise<ApiResult<boolean>> {
+  const result = await fetchWithTimeout<{ hasRefineryOperatorBadge?: boolean }>(
+    `${BASE_URL}/api/router/refinery-operator?address=${encodeURIComponent(address)}`
+  );
+  if (result.success) {
+    return { success: true, data: result.data.hasRefineryOperatorBadge === true };
+  }
+  return result;
+}

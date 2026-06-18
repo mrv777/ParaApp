@@ -2,17 +2,10 @@
  * SortFilterModal - Bottom sheet for miner sort and filter options
  */
 
-import { useCallback, useRef, useMemo, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  BottomSheetModal,
-  BottomSheetView,
-  BottomSheetScrollView,
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
-} from '@gorhom/bottom-sheet';
+import { Sheet } from '../Sheet';
 import { Text } from '../Text';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
@@ -65,138 +58,87 @@ export function SortFilterModal({
   onFilterChange,
 }: SortFilterModalProps) {
   const { t } = useTranslation();
-  const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const insets = useSafeAreaInsets();
-  const snapPoints = useMemo(() => ['60%'], []);
 
-  const SORT_OPTIONS: { value: MinerSortOption; label: string }[] = useMemo(() => [
-    { value: 'status', label: t('common.status') },
-    { value: 'name', label: t('miners.hostname') },
-    { value: 'hashrate', label: t('miners.hashrate') },
-    { value: 'bestDiff', label: t('miners.bestDiff') },
-    { value: 'temp', label: t('miners.temperature') },
-  ], [t]);
+  const SORT_OPTIONS: { value: MinerSortOption; label: string }[] = useMemo(
+    () => [
+      { value: 'status', label: t('common.status') },
+      { value: 'name', label: t('miners.hostname') },
+      { value: 'hashrate', label: t('miners.hashrate') },
+      { value: 'bestDiff', label: t('miners.bestDiff') },
+      { value: 'temp', label: t('miners.temperature') },
+    ],
+    [t]
+  );
 
-  const FILTER_OPTIONS: { value: MinerFilterOption; label: string }[] = useMemo(() => [
-    { value: 'all', label: t('miners.allMiners') },
-    { value: 'online', label: t('common.online') },
-    { value: 'offline', label: t('common.offline') },
-    { value: 'warning', label: t('miners.minersWithWarnings') },
-  ], [t]);
-
-  useEffect(() => {
-    if (visible) {
-      bottomSheetRef.current?.present();
-    } else {
-      bottomSheetRef.current?.dismiss();
-    }
-  }, [visible]);
-
-  const handleDismiss = useCallback(() => {
-    onClose();
-  }, [onClose]);
+  const FILTER_OPTIONS: { value: MinerFilterOption; label: string }[] = useMemo(
+    () => [
+      { value: 'all', label: t('miners.allMiners') },
+      { value: 'online', label: t('common.online') },
+      { value: 'offline', label: t('common.offline') },
+      { value: 'warning', label: t('miners.minersWithWarnings') },
+    ],
+    [t]
+  );
 
   const handleSortSelect = useCallback(
-    (value: MinerSortOption) => {
-      onSortChange(value);
-    },
+    (value: MinerSortOption) => onSortChange(value),
     [onSortChange]
   );
 
   const handleFilterSelect = useCallback(
-    (value: MinerFilterOption) => {
-      onFilterChange(value);
-    },
+    (value: MinerFilterOption) => onFilterChange(value),
     [onFilterChange]
   );
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        pressBehavior="close"
-      />
-    ),
-    []
-  );
-
   return (
-    <BottomSheetModal
-      ref={bottomSheetRef}
-      snapPoints={snapPoints}
-      onDismiss={handleDismiss}
-      backdropComponent={renderBackdrop}
-      handleIndicatorStyle={{ backgroundColor: colors.textMuted }}
-      backgroundStyle={{ backgroundColor: colors.surface }}
-    >
-      <BottomSheetView style={{ flex: 1 }}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-4 pb-2">
-          <Text variant="subtitle" className="font-semibold">
-            {t('miners.sortAndFilter')}
-          </Text>
-          <Pressable
-            onPress={handleDismiss}
-            className="p-2 -mr-2"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={24} color={colors.text} />
-          </Pressable>
+    <Sheet visible={visible} onClose={onClose} scrollable>
+      {/* Header */}
+      <View className="flex-row items-center justify-between pb-2">
+        <Text variant="subtitle" className="font-semibold">
+          {t('miners.sortAndFilter')}
+        </Text>
+        <Pressable onPress={onClose} className="p-2 -mr-2" hitSlop={8}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </Pressable>
+      </View>
+
+      {/* Sort section */}
+      <View className="mt-2">
+        <Text variant="caption" color="muted" className="px-1 pb-2 uppercase">
+          {t('miners.sortBy')}
+        </Text>
+        <View className="bg-background rounded-lg overflow-hidden">
+          {SORT_OPTIONS.map((option, index) => (
+            <View key={option.value}>
+              {index > 0 && <View className="h-px bg-border mx-4" />}
+              <OptionRow
+                label={option.label}
+                selected={sortBy === option.value}
+                onPress={() => handleSortSelect(option.value)}
+              />
+            </View>
+          ))}
         </View>
+      </View>
 
-        <BottomSheetScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
-        >
-          {/* Sort section */}
-          <View className="mt-2">
-            <Text
-              variant="caption"
-              color="muted"
-              className="px-4 pb-2 uppercase"
-            >
-              {t('miners.sortBy')}
-            </Text>
-            <View className="bg-background mx-4 rounded-lg overflow-hidden">
-              {SORT_OPTIONS.map((option, index) => (
-                <View key={option.value}>
-                  {index > 0 && <View className="h-px bg-border mx-4" />}
-                  <OptionRow
-                    label={option.label}
-                    selected={sortBy === option.value}
-                    onPress={() => handleSortSelect(option.value)}
-                  />
-                </View>
-              ))}
+      {/* Filter section */}
+      <View className="mt-6">
+        <Text variant="caption" color="muted" className="px-1 pb-2 uppercase">
+          {t('miners.filter')}
+        </Text>
+        <View className="bg-background rounded-lg overflow-hidden">
+          {FILTER_OPTIONS.map((option, index) => (
+            <View key={option.value}>
+              {index > 0 && <View className="h-px bg-border mx-4" />}
+              <OptionRow
+                label={option.label}
+                selected={filterBy === option.value}
+                onPress={() => handleFilterSelect(option.value)}
+              />
             </View>
-          </View>
-
-          {/* Filter section */}
-          <View className="mt-6">
-            <Text
-              variant="caption"
-              color="muted"
-              className="px-4 pb-2 uppercase"
-            >
-              {t('miners.filter')}
-            </Text>
-            <View className="bg-background mx-4 rounded-lg overflow-hidden">
-              {FILTER_OPTIONS.map((option, index) => (
-                <View key={option.value}>
-                  {index > 0 && <View className="h-px bg-border mx-4" />}
-                  <OptionRow
-                    label={option.label}
-                    selected={filterBy === option.value}
-                    onPress={() => handleFilterSelect(option.value)}
-                  />
-                </View>
-              ))}
-            </View>
-          </View>
-        </BottomSheetScrollView>
-      </BottomSheetView>
-    </BottomSheetModal>
+          ))}
+        </View>
+      </View>
+    </Sheet>
   );
 }

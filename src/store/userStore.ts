@@ -26,6 +26,7 @@ interface UserState {
   account: CachedData<Account | null> | null;
   historical: CachedData<UserHistoricalPoint[]> | null;
   rounds: CachedData<UserRoundsResponse> | null;
+  refineryBadge: CachedData<boolean> | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -42,6 +43,7 @@ interface UserActions {
   fetchUserStats: (options?: { silent?: boolean }) => Promise<void>;
   fetchAccount: () => Promise<void>;
   fetchRounds: () => Promise<void>;
+  fetchRefineryBadge: () => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
     interval?: HistoricalInterval
@@ -58,6 +60,7 @@ const initialState: UserState = {
   account: null,
   historical: null,
   rounds: null,
+  refineryBadge: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
@@ -179,6 +182,26 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     }
   },
 
+  fetchRefineryBadge: async () => {
+    const address = useSettingsStore.getState().bitcoinAddress;
+    if (!address) return;
+
+    const result = await parasite.getRefineryOperatorBadge(address);
+
+    // Skip if address changed during fetch
+    if (useSettingsStore.getState().bitcoinAddress !== address) return;
+
+    // Only update on success, preserving the last known value through transient
+    // failures. The endpoint returns success+false for users without the badge,
+    // so this still clears it for non-holders; address changes are handled by
+    // clearUserData().
+    if (isSuccess(result)) {
+      set({
+        refineryBadge: { data: result.data, timestamp: Date.now() },
+      });
+    }
+  },
+
   fetchHistorical: async (period, interval) => {
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
@@ -219,6 +242,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       account: null,
       historical: null,
       rounds: null,
+      refineryBadge: null,
       isLoading: false,
       isLoadingHistorical: false,
       error: null,
@@ -228,8 +252,14 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const { fetchUserStats, fetchAccount, fetchRounds } = get();
-    await Promise.all([fetchUserStats(), fetchAccount(), fetchRounds()]);
+    const { fetchUserStats, fetchAccount, fetchRounds, fetchRefineryBadge } =
+      get();
+    await Promise.all([
+      fetchUserStats(),
+      fetchAccount(),
+      fetchRounds(),
+      fetchRefineryBadge(),
+    ]);
   },
 }));
 
@@ -244,5 +274,7 @@ export const selectUserWorkers = (state: UserState) =>
 export const selectUserHistorical = (state: UserState) =>
   state.historical?.data;
 export const selectUserRounds = (state: UserState) => state.rounds?.data;
+export const selectRefineryBadge = (state: UserState) =>
+  state.refineryBadge?.data ?? false;
 export const selectIsUserLoading = (state: UserState) => state.isLoading;
 export const selectUserError = (state: UserState) => state.error;

@@ -8,7 +8,6 @@ import type { LinkingOptions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 import { PoolScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
@@ -80,24 +79,21 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <NavigationContainer theme={navigationTheme} linking={linking}>
-          <BottomSheetModalProvider>
-            <Tab.Navigator
-              tabBar={(props) => <TabBar {...props} />}
-              screenOptions={{
-                headerShown: false,
-                // Expo SDK 54 / React Navigation 7 can intermittently blank tab scenes
-                // during animated tab transitions. Keep the default non-animated switch.
-                animation: 'none',
-              }}
-            >
-              <Tab.Screen name="Home" component={HomeStack} />
-              <Tab.Screen name="Pool" component={PoolScreen} />
-              <Tab.Screen name="Miners" component={MinersStack} />
-              <Tab.Screen name="Settings" component={SettingsStack} />
-            </Tab.Navigator>
-            {/* Toast inside BottomSheetModalProvider to render above bottom sheets */}
-            <Toast />
-          </BottomSheetModalProvider>
+          <Tab.Navigator
+            tabBar={(props) => <TabBar {...props} />}
+            screenOptions={{
+              headerShown: false,
+              // Expo SDK 54 / React Navigation 7 can intermittently blank tab scenes
+              // during animated tab transitions. Keep the default non-animated switch.
+              animation: 'none',
+            }}
+          >
+            <Tab.Screen name="Home" component={HomeStack} />
+            <Tab.Screen name="Pool" component={PoolScreen} />
+            <Tab.Screen name="Miners" component={MinersStack} />
+            <Tab.Screen name="Settings" component={SettingsStack} />
+          </Tab.Navigator>
+          <Toast />
         </NavigationContainer>
         <StatusBar style="light" />
       </SafeAreaProvider>

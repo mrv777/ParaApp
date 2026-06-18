@@ -18,6 +18,7 @@ import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
 import { MiningRewardCard } from '@/components/home/MiningRewardCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { AchievementsCard } from '@/components/home/AchievementsCard';
+import { BadgeDetailSheet, type BadgeDetail } from '@/components/home/BadgeDetailSheet';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
 import {
@@ -36,6 +37,7 @@ import {
   selectUserWorkers,
   selectUserHistorical,
   selectUserRounds,
+  selectRefineryBadge,
   selectIsUserLoading,
   selectUserError,
 } from '@/store/userStore';
@@ -55,6 +57,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<BadgeDetail | null>(null);
 
   // Share stats functionality
   const shareCardRef = useRef<View>(null);
@@ -81,6 +84,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const workers = useUserStore(selectUserWorkers);
   const historical = useUserStore(selectUserHistorical);
   const userRounds = useUserStore(selectUserRounds);
+  const hasRefineryBadge = useUserStore(selectRefineryBadge);
   const historicalPeriod = useUserStore((s) => s.historicalPeriod);
   const isUserLoading = useUserStore(selectIsUserLoading);
   const isLoadingHistorical = useUserStore((s) => s.isLoadingHistorical);
@@ -103,6 +107,7 @@ export function HomeMainScreen({ navigation }: Props) {
   // Fetch leaderboards on mount; handle address changes for user data
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const fetchRounds = useUserStore((s) => s.fetchRounds);
+  const fetchRefineryBadge = useUserStore((s) => s.fetchRefineryBadge);
   const clearUserData = useUserStore((s) => s.clearUserData);
   const prevAddressRef = useRef(bitcoinAddress);
   useEffect(() => {
@@ -113,15 +118,24 @@ export function HomeMainScreen({ navigation }: Props) {
         clearUserData();
         refreshUser();
       } else {
-        // Mount or first address set — just fetch rounds (stats come from polling)
+        // Mount or first address set — fetch rounds and the (static) refinery
+        // badge once; stats come from polling.
         fetchRounds();
+        fetchRefineryBadge();
       }
     } else if (prevAddressRef.current) {
       // Address was removed
       clearUserData();
     }
     prevAddressRef.current = bitcoinAddress;
-  }, [fetchLeaderboards, refreshUser, fetchRounds, clearUserData, bitcoinAddress]);
+  }, [
+    fetchLeaderboards,
+    refreshUser,
+    fetchRounds,
+    fetchRefineryBadge,
+    clearUserData,
+    bitcoinAddress,
+  ]);
 
   // Refresh miners on mount if any are saved (they start offline after rehydration)
   useEffect(() => {
@@ -235,7 +249,9 @@ export function HomeMainScreen({ navigation }: Props) {
             {/* Achievements */}
             <AchievementsCard
               rounds={userRounds ?? null}
+              hasRefineryBadge={hasRefineryBadge}
               isLoading={isUserLoading}
+              onBadgePress={setSelectedBadge}
             />
 
             {/* User Hashrate Chart */}
@@ -298,6 +314,14 @@ export function HomeMainScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      {/* Badge detail sheet (rendered at screen root, like other sheets) */}
+      <BadgeDetailSheet
+        visible={selectedBadge !== null}
+        badge={selectedBadge}
+        onClose={() => setSelectedBadge(null)}
+      />
+
 
       {/* Full Screen Chart Modal */}
       <UserFullScreenChart

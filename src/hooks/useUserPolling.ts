@@ -17,6 +17,9 @@ export function useUserPolling(): UsePollingReturn {
   const fetchUserStats = useUserStore((s) => s.fetchUserStats);
   const fetchRounds = useUserStore((s) => s.fetchRounds);
 
+  // Note: the Refinery Operator badge is effectively static, so it is fetched
+  // on initial load / address change / pull-to-refresh (see HomeMainScreen and
+  // refreshAll) rather than on every poll interval.
   const onPoll = useCallback(async () => {
     await Promise.all([
       fetchUserStats({ silent: true }),
