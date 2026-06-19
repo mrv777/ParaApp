@@ -655,10 +655,10 @@ void personalMiningWidget.getTimeline().then((entries) => {
   if (entries.length === 0) {
     personalMiningWidget.updateSnapshot(INITIAL_PERSONAL_SNAPSHOT);
   }
-});
+}).catch(() => {});
 
 void poolOverviewWidget.getTimeline().then((entries) => {
   if (entries.length === 0) {
     poolOverviewWidget.updateSnapshot(INITIAL_POOL_SNAPSHOT);
   }
-});
+}).catch(() => {});

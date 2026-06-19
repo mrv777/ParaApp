@@ -28,16 +28,24 @@ export function updatePersonalMiningWidget(
   snapshot: PersonalMiningWidgetSnapshot
 ): boolean {
   if (!canUpdateWidgets()) return false;
-  personalMiningWidget.updateTimeline(buildWidgetTimeline(snapshot));
-  return true;
+  try {
+    personalMiningWidget.updateTimeline(buildWidgetTimeline(snapshot));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function updatePoolOverviewWidget(
   snapshot: PoolOverviewWidgetSnapshot
 ): boolean {
   if (!canUpdateWidgets()) return false;
-  poolOverviewWidget.updateTimeline(buildWidgetTimeline(snapshot));
-  return true;
+  try {
+    poolOverviewWidget.updateTimeline(buildWidgetTimeline(snapshot));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function updateWidgetsFromStores(): boolean {
@@ -49,28 +57,30 @@ export function updateWidgetsFromStores(): boolean {
   const userCached = userState.stats;
   const statsMatchAddress = userState.statsAddress === settings.bitcoinAddress;
 
+  let updated = false;
+
   if (poolCached?.data) {
-    updatePoolOverviewWidget(
+    updated = updatePoolOverviewWidget(
       buildPoolOverviewSnapshot(poolCached.data, poolCached.timestamp)
-    );
+    ) || updated;
   }
 
   if (!settings.bitcoinAddress) {
-    updatePersonalMiningWidget(buildNoAddressPersonalSnapshot());
+    updated = updatePersonalMiningWidget(buildNoAddressPersonalSnapshot()) || updated;
   } else if (userCached?.data && statsMatchAddress) {
-    updatePersonalMiningWidget(
+    updated = updatePersonalMiningWidget(
       buildPersonalMiningSnapshot(
         settings.bitcoinAddress,
         userCached.data,
         userCached.timestamp
       )
-    );
+    ) || updated;
   }
   // Address set but stats missing or belonging to a previous address: leave the
   // widget unchanged. It self-corrects when the new address's stats arrive (the
   // useWidgetUpdates effect re-runs on userTimestamp) or via backend refresh.
 
-  return true;
+  return updated;
 }
 
 export async function refreshWidgetsFromBackend(): Promise<boolean> {
@@ -85,25 +95,22 @@ export async function refreshWidgetsFromBackend(): Promise<boolean> {
 
   const poolResult = await getPoolWidgetSnapshot();
   if (isSuccess(poolResult) && poolResult.data.success) {
-    updatePoolOverviewWidget({
+    updated = updatePoolOverviewWidget({
       ...poolResult.data.data,
       source: 'server',
-    });
-    updated = true;
+    }) || updated;
   }
 
   if (settings.bitcoinAddress) {
     const userResult = await getUserWidgetSnapshot(settings.bitcoinAddress);
     if (isSuccess(userResult) && userResult.data.success) {
-      updatePersonalMiningWidget({
+      updated = updatePersonalMiningWidget({
         ...userResult.data.data,
         source: 'server',
-      });
-      updated = true;
+      }) || updated;
     }
   } else {
-    updatePersonalMiningWidget(buildNoAddressPersonalSnapshot());
-    updated = true;
+    updated = updatePersonalMiningWidget(buildNoAddressPersonalSnapshot()) || updated;
   }
 
   return updated;
