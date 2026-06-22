@@ -242,10 +242,10 @@ app.get('/widget/user/:address', async (c) => {
 export default {
   fetch: app.fetch,
   scheduled: async (
-    _event: ScheduledEvent,
+    event: ScheduledEvent,
     env: Env,
     ctx: ExecutionContext
   ) => {
-    ctx.waitUntil(runCronJob(env));
+    ctx.waitUntil(runCronJob(env, event.scheduledTime));
   },
 };

@@ -12,3 +12,7 @@ database_id = "8ae5c792-c025-4c35-a0b5-5872a8f63094"
 
 [triggers]
 crons = ["* * * * *"]  # Every minute
+
+[observability]
+enabled = true
+head_sampling_rate = 1  # log every invocation; volume is low (~43k cron runs/mo)

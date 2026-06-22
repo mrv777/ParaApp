@@ -26,6 +26,8 @@ import {
   markWidgetPushSent,
   upsertWidgetPoolSnapshot,
   upsertWidgetUserSnapshot,
+  claimCronTick,
+  pruneCronRuns,
 } from './db';
 import { getUser, getPoolStats } from './parasite-api';
 import {
@@ -102,10 +104,48 @@ function isWorkerStale(lastSubmissionSeconds: number): boolean {
 }
 
 /**
+ * True only when `current` is a strictly newer block than `stored`.
+ *
+ * Block heights are numeric strings, so we compare numerically: a height that
+ * stays the same or moves backwards (reorg, API cache flap, transient blip) is
+ * never "a new block" and must not fire a "Block Found!" alert. Falls back to a
+ * plain inequality when either value isn't a clean integer, so an unexpected
+ * format change surfaces as an alert rather than silently going dark.
+ */
+function isNewerBlock(
+  current: string,
+  stored: string | null | undefined
+): boolean {
+  if (stored == null) return true;
+  const c = Number(current);
+  const s = Number(stored);
+  if (Number.isInteger(c) && Number.isInteger(s)) return c > s;
+  return current !== stored;
+}
+
+/**
  * Main cron job entry point
  */
-export async function runCronJob(env: Env): Promise<void> {
+export async function runCronJob(env: Env, scheduledTime: number): Promise<void> {
   console.log('Cron job started');
+
+  // Single-flight: a duplicate dispatch of this same scheduled tick shares
+  // `scheduledTime`, so only the first caller wins the claim. The loser bails to
+  // avoid duplicate notifications. Fails OPEN — a lock-table hiccup must never
+  // drop a real cron cycle (the per-block claim still de-dups block alerts).
+  try {
+    const claimed = await claimCronTick(env.DB, scheduledTime);
+    if (!claimed) {
+      console.log(
+        `Cron tick ${scheduledTime} already claimed, skipping duplicate dispatch`
+      );
+      return;
+    }
+    // Keep the lock table bounded; one row per minute otherwise grows forever.
+    await pruneCronRuns(env.DB, scheduledTime - 60 * 60 * 1000);
+  } catch (error) {
+    console.error('Cron tick claim error, proceeding anyway:', error);
+  }
 
   const allMessages: ExpoPushMessage[] = [];
   // Tokens to refresh because their underlying data actually changed this cycle.
@@ -197,11 +237,24 @@ async function checkPoolBlock(
   const poolState = await getPoolState(env.DB);
   const storedBlockTime = poolState?.last_block_time;
 
-  // Detect block change (lastBlockTime is now a block height string or null)
+  // Detect a genuinely newer block (height strictly increased). lastBlockTime is
+  // a block height string or null; reorgs / flapping must not trigger alerts.
   if (
     currentBlockTime != null &&
-    currentBlockTime !== storedBlockTime
+    isNewerBlock(currentBlockTime, storedBlockTime)
   ) {
+    // Atomically claim the block before doing any work. If another (concurrent
+    // or double-dispatched) cron run already advanced the stored block time,
+    // we lose the claim and bail out — that other run sends the alerts, so
+    // every device is notified exactly once instead of twice.
+    const claimed = await updatePoolState(env.DB, currentBlockTime);
+    if (!claimed) {
+      console.log(
+        `New block ${currentBlockTime} already claimed by another run, skipping`
+      );
+      return { messages, widgetTokens };
+    }
+
     console.log(`New block detected: ${currentBlockTime}`);
 
     // Get all active subscriptions with block notifications enabled
@@ -241,9 +294,6 @@ async function checkPoolBlock(
         widgetTokens.push(sub.push_token);
       }
     }
-
-    // Update stored block time
-    await updatePoolState(env.DB, currentBlockTime);
   }
 
   return { messages, widgetTokens };

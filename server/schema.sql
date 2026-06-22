@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS pool_state (
 );
 INSERT OR IGNORE INTO pool_state (id, last_block_time) VALUES (1, NULL);
 
+-- Single-flight guard: one row per processed cron tick (scheduledTime in ms).
+-- A duplicate dispatch of the same tick collides on the primary key and is
+-- skipped, preventing duplicate notifications. Pruned to ~1h of history.
+CREATE TABLE IF NOT EXISTS cron_runs (
+  scheduled_time INTEGER PRIMARY KEY,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
 -- Latest widget snapshots, refreshed by cron and on-demand endpoints
 CREATE TABLE IF NOT EXISTS widget_pool_snapshot (
   id INTEGER PRIMARY KEY CHECK (id = 1),

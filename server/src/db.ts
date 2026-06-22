@@ -284,17 +284,62 @@ export async function getPoolState(db: D1Database): Promise<PoolState | null> {
 }
 
 /**
- * Update pool state
+ * Atomically claim a new block height.
+ *
+ * The conditional UPDATE only mutates the row when the stored block time is
+ * still behind `lastBlockTime`, so concurrent or double-dispatched cron runs
+ * race on a single SQL statement instead of a read-then-write. Returns true
+ * only for the run that actually advanced the row — that run owns sending the
+ * notifications, guaranteeing each device is alerted exactly once.
  */
 export async function updatePoolState(
   db: D1Database,
   lastBlockTime: string | null
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      'UPDATE pool_state SET last_block_time = ?, updated_at = unixepoch() WHERE id = 1 AND (last_block_time IS NULL OR last_block_time != ?)'
+    )
+    .bind(lastBlockTime, lastBlockTime)
+    .run();
+  return (result.meta?.changes ?? 0) === 1;
+}
+
+/**
+ * Single-flight guard for the cron. Atomically records this scheduled tick and
+ * returns true only for the first caller.
+ *
+ * Cloudflare can occasionally dispatch the same scheduled event more than once;
+ * duplicate dispatches share the same `scheduledTime`, so the loser sees
+ * changes=0 and skips the entire run — preventing duplicate worker/best-diff
+ * (and block) notifications that the per-resource read-then-write would emit.
+ *
+ * Callers must FAIL OPEN on error: this is a best-effort de-dup, never a single
+ * point of failure for delivery. The per-block atomic claim still prevents
+ * duplicate block alerts on its own.
+ */
+export async function claimCronTick(
+  db: D1Database,
+  scheduledTime: number
+): Promise<boolean> {
+  const result = await db
+    .prepare('INSERT OR IGNORE INTO cron_runs (scheduled_time) VALUES (?)')
+    .bind(scheduledTime)
+    .run();
+  return (result.meta?.changes ?? 0) === 1;
+}
+
+/**
+ * Trim old cron-run rows so the single-flight table stays small (one row per
+ * minute would otherwise grow unbounded).
+ */
+export async function pruneCronRuns(
+  db: D1Database,
+  olderThanMs: number
 ): Promise<void> {
   await db
-    .prepare(
-      'UPDATE pool_state SET last_block_time = ?, updated_at = unixepoch() WHERE id = 1'
-    )
-    .bind(lastBlockTime)
+    .prepare('DELETE FROM cron_runs WHERE scheduled_time < ?')
+    .bind(olderThanMs)
     .run();
 }
 
