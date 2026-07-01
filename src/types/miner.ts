@@ -354,7 +354,7 @@ export interface DiscoveryOptions {
   startIp?: number;
   /** End of IP range (1-254), default: 254 */
   endIp?: number;
-  /** Concurrent connections, default: 50 */
+  /** Concurrent connections, default: 30 */
   concurrency?: number;
 }
 

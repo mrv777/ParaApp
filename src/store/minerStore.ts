@@ -58,7 +58,7 @@ interface MinerState {
 
 interface MinerActions {
   // Core actions
-  addMiner: (ip: string) => Promise<boolean>;
+  addMiner: (ip: string, minerType?: MinerType) => Promise<boolean>;
   removeMiner: (ip: string) => void;
   updateMinerAlias: (ip: string, alias: string) => void;
   refreshMiner: (ip: string) => Promise<void>;
@@ -236,7 +236,14 @@ function getExpectedHashrate(asicModel: string): number {
  * here; the per-ASIC heatmap lives behind a "show details" toggle on
  * the detail screen and pulls estats on demand.
  */
-async function fetchMiner(ip: string): Promise<ApiResult<LocalMiner>> {
+async function fetchMiner(
+  ip: string,
+  preferredType?: MinerType
+): Promise<ApiResult<LocalMiner>> {
+  if (preferredType === 'avalon') {
+    return fetchAvalon(ip);
+  }
+
   const axeOsResult = await axeOS.getSystemInfo(ip);
   if (isSuccess(axeOsResult)) {
     return { success: true, data: parseSystemInfo(ip, axeOsResult.data) };
@@ -320,7 +327,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
     (set, get) => ({
       ...initialState,
 
-      addMiner: async (ip) => {
+      addMiner: async (ip, minerType) => {
         // Initial duplicate check
         if (get().miners.some((m) => m.ip === ip)) {
           return true;
@@ -328,7 +335,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
         set({ isLoading: true, error: null });
 
-        const result = await fetchMiner(ip);
+        const result = await fetchMiner(ip, minerType);
 
         if (isSuccess(result)) {
           const miner = result.data;
@@ -607,13 +614,13 @@ export const useMinerStore = create<MinerState & MinerActions>()(
             onProgress: (progress) => {
               set({ discoveryProgress: progress });
             },
-            onFound: async (ip) => {
+            onFound: async (ip, minerType) => {
               // Add to discovered list immediately for UI
               set((state) => ({
                 discoveredIps: [...state.discoveredIps, ip],
               }));
               // Auto-save the miner
-              await addMiner(ip);
+              await addMiner(ip, minerType);
             },
             onComplete: () => {
               set({ isDiscovering: false });
