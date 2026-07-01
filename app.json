@@ -95,6 +95,39 @@
           ]
         }
       ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "PersonalMiningWidget",
+              "label": "Personal Mining",
+              "description": "Shows your Parasite Pool mining status.",
+              "minWidth": "140dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "200dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "PoolOverviewWidget",
+              "label": "Pool Overview",
+              "description": "Shows Parasite Pool hashrate and worker status.",
+              "minWidth": "140dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "200dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
       "expo-background-task",
       "expo-secure-store",
       [

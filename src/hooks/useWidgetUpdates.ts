@@ -16,6 +16,10 @@ import {
 } from '@/store/settingsStore';
 import { useUserStore } from '@/store/userStore';
 
+function isWidgetPlatform(): boolean {
+  return Platform.OS === 'ios' || Platform.OS === 'android';
+}
+
 export function useWidgetUpdates() {
   const isHydrated = useSettingsStore(selectIsHydrated);
   const bitcoinAddress = useSettingsStore(selectBitcoinAddress);
@@ -24,12 +28,12 @@ export function useWidgetUpdates() {
   const userTimestamp = useUserStore((state) => state.stats?.timestamp);
 
   useEffect(() => {
-    if (!isHydrated || Platform.OS !== 'ios') return;
+    if (!isHydrated || !isWidgetPlatform()) return;
     updateWidgetsFromStores();
   }, [isHydrated, bitcoinAddress, poolTimestamp, userTimestamp]);
 
   useEffect(() => {
-    if (!isHydrated || Platform.OS !== 'ios') return;
+    if (!isHydrated || !isWidgetPlatform()) return;
 
     if (widgetUpdatesEnabled) {
       registerWidgetRefreshTasks().catch((error) => {
@@ -48,7 +52,7 @@ export function useWidgetUpdates() {
   // miners would otherwise fire their native `connect` callback on resume — the source
   // of the nil-host crash patched in react-native-tcp-socket.
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
+    if (!isWidgetPlatform()) return;
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') return;

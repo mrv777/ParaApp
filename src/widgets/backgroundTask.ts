@@ -28,8 +28,12 @@ TaskManager.defineTask(WIDGET_NOTIFICATION_TASK, async () => {
   }
 });
 
+function isWidgetPlatform(): boolean {
+  return Platform.OS === 'ios' || Platform.OS === 'android';
+}
+
 export async function registerWidgetRefreshTasks(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+  if (!isWidgetPlatform()) return;
 
   await BackgroundTask.registerTaskAsync(WIDGET_BACKGROUND_TASK, {
     minimumInterval: 30,
@@ -44,7 +48,7 @@ export async function registerWidgetRefreshTasks(): Promise<void> {
 }
 
 export async function unregisterWidgetRefreshTasks(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+  if (!isWidgetPlatform()) return;
 
   const isBackgroundTaskRegistered = await TaskManager.isTaskRegisteredAsync(
     WIDGET_BACKGROUND_TASK

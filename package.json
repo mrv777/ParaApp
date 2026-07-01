@@ -71,6 +71,7 @@
     "react": "19.2.3",
     "react-i18next": "^16.5.1",
     "react-native": "0.85.3",
+    "react-native-android-widget": "^0.20.3",
     "react-native-css-interop": "^0.2.1",
     "react-native-gesture-handler": "^2.31.2",
     "react-native-reanimated": "^4.3.1",
