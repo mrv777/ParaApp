@@ -1,13 +1,13 @@
 /**
  * PoolHashrateCard - Pool-wide hashrate hero + time range + chart. Mirrors the
- * Home screen's terminal/brutalist system: a POOL HASHRATE label over a large
- * value, a square 1h/24h/7d/30d segmented control, and a square hairline chart
- * card with faint dashed gridlines, a 4-label y-axis, and a ⤢ expand button in
- * the top-right that opens the full-screen chart.
+ * Home screen's UserStatsCard: a single hairline Card holding a POOL HASHRATE
+ * label with the 1h/24h/7d/30d segmented control on the same row, a large value
+ * beneath, and an embedded hashrate chart (faint dashed gridlines, 4-label
+ * y-axis) that opens the full-screen chart when tapped.
  */
 
 import { View, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Card } from '../Card';
 import { Text } from '../Text';
 import { TimePresetButtons, HashrateChart } from '../charts';
 import { formatHashrate } from '@/utils/formatting';
@@ -51,10 +51,10 @@ export function PoolHashrateCard({
     : ['--', ''];
 
   return (
-    <View className={className}>
-      {/* Label + value on the left; segmented control on the right */}
-      <View className="flex-row items-end justify-between">
-        <View>
+    <Card padding="none" className={className}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+        {/* Label + segmented control on one row (matches Home) */}
+        <View className="flex-row items-center justify-between">
           <Text
             variant="mono"
             className="uppercase"
@@ -62,71 +62,47 @@ export function PoolHashrateCard({
           >
             {t('pool.hashrate')}
           </Text>
-          <View className="flex-row items-baseline" style={{ marginTop: 5 }}>
-            <Text
-              variant="mono"
-              className="font-bold text-foreground"
-              style={{ fontSize: 30, lineHeight: 36 }}
-            >
-              {heroValue}
-            </Text>
-            {heroUnit ? (
-              <Text
-                variant="mono"
-                style={{ fontSize: 16, color: colors.textMuted, marginLeft: 6 }}
-              >
-                {heroUnit}
-              </Text>
-            ) : null}
-          </View>
+          <TimePresetButtons
+            selected={period}
+            onSelect={onPeriodChange}
+            disabled={isLoadingHistorical}
+          />
         </View>
 
-        <TimePresetButtons
-          selected={period}
-          onSelect={onPeriodChange}
-          disabled={isLoadingHistorical}
-        />
-      </View>
-
-      {/* Chart card */}
-      <View
-        className="border border-border relative"
-        style={{
-          backgroundColor: colors.card,
-          paddingHorizontal: 12,
-          paddingTop: 12,
-          paddingBottom: 8,
-          marginTop: 10,
-        }}
-      >
-        <HashrateChart
-          data={historical}
-          period={period}
-          isLoading={isLoadingHistorical}
-          height={CHART_HEIGHT}
-          variant="card"
-        />
-
-        {/* Rendered after the chart so it stacks on top (top-right corner). */}
-        {onExpand && (
-          <Pressable
-            onPress={onExpand}
-            hitSlop={8}
-            className="absolute active:opacity-60"
-            style={{
-              top: 10,
-              right: 10,
-              zIndex: 10,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.14)',
-              backgroundColor: colors.background,
-              padding: 4,
-            }}
+        {/* Hero value */}
+        <View className="flex-row items-baseline" style={{ marginTop: 6 }}>
+          <Text
+            variant="mono"
+            className="font-bold text-foreground"
+            style={{ fontSize: 30, lineHeight: 36 }}
           >
-            <Ionicons name="expand-outline" size={13} color={colors.textMuted} />
-          </Pressable>
-        )}
+            {heroValue}
+          </Text>
+          {heroUnit ? (
+            <Text
+              variant="mono"
+              style={{ fontSize: 16, color: colors.textMuted, marginLeft: 6 }}
+            >
+              {heroUnit}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Embedded chart — tap anywhere opens the full-screen interactive chart.
+            pointerEvents="none" lets the tap fall through to the Pressable and
+            keeps the chart from showing its own clipped tooltip. */}
+        <Pressable onPress={onExpand} style={{ marginTop: 12 }}>
+          <View pointerEvents="none">
+            <HashrateChart
+              data={historical}
+              period={period}
+              isLoading={isLoadingHistorical}
+              height={CHART_HEIGHT}
+              variant="card"
+            />
+          </View>
+        </Pressable>
       </View>
-    </View>
+    </Card>
   );
 }

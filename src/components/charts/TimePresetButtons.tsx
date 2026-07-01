@@ -14,6 +14,12 @@ export interface TimePresetButtonsProps {
   onSelect: (preset: HistoricalPeriod) => void;
   disabled?: boolean;
   className?: string;
+  /**
+   * When true the control stretches to fill its container and each segment
+   * shares the width evenly with centered labels (used in the full-screen
+   * chart footer). Default is content-width (compact, for in-card use).
+   */
+  fill?: boolean;
 }
 
 const presets: HistoricalPeriod[] = ['1h', '24h', '7d', '30d'];
@@ -23,6 +29,7 @@ export function TimePresetButtons({
   onSelect,
   disabled = false,
   className = '',
+  fill = false,
 }: TimePresetButtonsProps) {
   return (
     <View
@@ -37,7 +44,9 @@ export function TimePresetButtons({
             onPress={() => !disabled && onSelect(preset)}
             disabled={disabled}
             style={{
-              paddingVertical: 3,
+              flex: fill ? 1 : undefined,
+              alignItems: fill ? 'center' : undefined,
+              paddingVertical: fill ? 8 : 3,
               paddingHorizontal: 7,
               backgroundColor: active ? colors.primary : 'transparent',
             }}
@@ -45,7 +54,7 @@ export function TimePresetButtons({
             <Text
               variant="mono"
               style={{
-                fontSize: 10,
+                fontSize: fill ? 12 : 10,
                 color: active ? '#000000' : colors.textDim,
               }}
             >

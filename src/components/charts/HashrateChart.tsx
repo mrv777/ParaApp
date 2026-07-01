@@ -119,7 +119,7 @@ export function HashrateChart({
       backgroundColor: 'transparent',
       grid: card
         ? { left: 34, right: 6, top: 8, bottom: 22, containLabel: false }
-        : { left: 55, right: 15, top: 15, bottom: 25, containLabel: false },
+        : { left: 55, right: 15, top: 40, bottom: 44, containLabel: false },
       xAxis: {
         type: 'time' as const,
         axisLine: {
