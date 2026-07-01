@@ -5,9 +5,9 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   useFonts,
-  SpaceMono_400Regular,
-  SpaceMono_700Bold,
-} from '@expo-google-fonts/space-mono';
+  JetBrainsMono_400Regular,
+  JetBrainsMono_700Bold,
+} from '@expo-google-fonts/jetbrains-mono';
 import {
   SpaceGrotesk_400Regular,
   SpaceGrotesk_500Medium,
@@ -75,10 +75,10 @@ export default function App() {
   const isHydrated = useSettingsStore(selectIsHydrated);
   const language = useSettingsStore(selectLanguage);
 
-  // Load brand fonts: Space Mono (data) + Space Grotesk (titles/prose)
+  // Load brand fonts: JetBrains Mono (data) + Space Grotesk (titles/prose)
   const [fontsLoaded, fontError] = useFonts({
-    SpaceMono_400Regular,
-    SpaceMono_700Bold,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_700Bold,
     SpaceGrotesk_400Regular,
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,

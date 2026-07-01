@@ -170,7 +170,7 @@ export function UserStatsCard({
               <Text
                 variant="mono"
                 className="font-bold text-foreground"
-                style={{ fontSize: 44, lineHeight: 52, includeFontPadding: false }}
+                style={{ fontSize: 44, lineHeight: 53 }}
               >
                 {heroValue}
               </Text>

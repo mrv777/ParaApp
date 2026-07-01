@@ -66,7 +66,7 @@ export function PoolHashrateCard({
             <Text
               variant="mono"
               className="font-bold text-foreground"
-              style={{ fontSize: 30, lineHeight: 34, includeFontPadding: false }}
+              style={{ fontSize: 30, lineHeight: 36 }}
             >
               {heroValue}
             </Text>

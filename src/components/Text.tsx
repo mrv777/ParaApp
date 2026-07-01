@@ -60,9 +60,9 @@ const variantWeight: Record<TextVariant, number> = {
 
 /**
  * Resolve the concrete font family. RN does not synthesize weights for custom
- * fonts, so we must pick the exact weighted family. Space Mono ships 400/700
+ * fonts, so we must pick the exact weighted family. JetBrains Mono ships 400/700
  * only; Space Grotesk ships 400/500/600/700. Data/labels (mono, caption) use
- * Space Mono; titles/prose use Space Grotesk.
+ * JetBrains Mono; titles/prose use Space Grotesk.
  */
 function resolveFontFamily(variant: TextVariant, className: string): string {
   let weight = variantWeight[variant];
@@ -72,7 +72,7 @@ function resolveFontFamily(variant: TextVariant, className: string): string {
 
   const isMono = variant === 'mono' || variant === 'caption';
   if (isMono) {
-    return weight >= 600 ? 'SpaceMono_700Bold' : 'SpaceMono_400Regular';
+    return weight >= 600 ? 'JetBrainsMono_700Bold' : 'JetBrainsMono_400Regular';
   }
   if (weight >= 700) return 'SpaceGrotesk_700Bold';
   if (weight >= 600) return 'SpaceGrotesk_600SemiBold';

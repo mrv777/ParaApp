@@ -43,6 +43,11 @@ export type MinerSortOption = 'name' | 'hashrate' | 'temp' | 'status' | 'bestDif
 export type MinerFilterOption = 'all' | 'online' | 'offline' | 'warning';
 
 /**
+ * View layout for the miners list — compact rows or fuller stat cards
+ */
+export type MinerViewMode = 'list' | 'card';
+
+/**
  * Miner warning state
  */
 export interface MinerWarning {

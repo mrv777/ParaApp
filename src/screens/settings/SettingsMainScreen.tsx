@@ -288,7 +288,7 @@ export function SettingsMainScreen({ navigation }: Props) {
                   onSubmitEditing={handleAddressSubmit}
                   style={{
                     flex: 1,
-                    fontFamily: 'SpaceMono_400Regular',
+                    fontFamily: 'JetBrainsMono_400Regular',
                     fontSize: 14,
                     color: colors.textValue,
                     padding: 0,

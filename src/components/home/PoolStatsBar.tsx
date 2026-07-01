@@ -86,7 +86,7 @@ export function PoolStatsBar({ className = '' }: PoolStatsBarProps) {
           <Text
             variant="mono"
             className="font-bold text-foreground"
-            style={{ fontSize: 22, lineHeight: 28, includeFontPadding: false }}
+            style={{ fontSize: 22, lineHeight: 28 }}
           >
             {poolValue}
           </Text>
