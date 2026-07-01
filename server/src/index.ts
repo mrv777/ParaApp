@@ -64,13 +64,17 @@ app.post('/register', async (c) => {
     // If no rows updated, check if it's because the token was recently registered (rate limited)
     if (touchResult.meta.changes === 0) {
       const existing = await c.env.DB.prepare(
-        'SELECT btc_address, updated_at FROM push_subscriptions WHERE push_token = ?'
+        'SELECT btc_address, updated_at, active FROM push_subscriptions WHERE push_token = ?'
       )
         .bind(pushToken)
-        .first<{ btc_address: string; updated_at: number }>();
+        .first<{ btc_address: string; updated_at: number; active: number }>();
 
-      // If token exists with same address and was recently updated, return cached prefs (rate limited)
-      if (existing && existing.btc_address === btcAddress) {
+      // If token exists with same address, is active, and was recently
+      // updated, return cached prefs (rate limited). An inactive row falls
+      // through to full registration below, which reactivates it via
+      // upsertSubscription — otherwise a re-register within 60s of
+      // markTokenInactive would report success but stay dark to cron.
+      if (existing && existing.btc_address === btcAddress && existing.active === 1) {
         if (widgetUpdatesEnabled !== undefined) {
           await updateSubscriptionWidgetUpdates(
             c.env.DB,

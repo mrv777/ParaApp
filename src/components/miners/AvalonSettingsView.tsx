@@ -22,7 +22,7 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { AvalonAuthSheet } from './AvalonAuthSheet';
 import { useMinerStore } from '@/store/minerStore';
-import { isValidStratumUrl } from '@/utils/validation';
+import { isValidAvalonPoolUrl } from '@/utils/validation';
 import {
   clearAvalonPassword,
   getAvalonPassword,
@@ -83,20 +83,31 @@ export function AvalonSettingsView({ miner, onSaved }: AvalonSettingsViewProps) 
     })();
   }, [miner.macAddress, miner.ip]);
 
-  const slot1Errors = useMemo(() => {
+  // Validate every populated slot. Slot 1 is required; slots 2 and 3 are
+  // only validated when their URL is non-empty (mirrors the send condition
+  // in performSave). Errors are prefixed with the slot label so the user
+  // knows which slot to fix.
+  const slotErrors = useMemo(() => {
     const errs: string[] = [];
-    const s = slots[0];
-    if (!s.url.trim()) errs.push(t('miners.urlRequired'));
-    else if (!isValidStratumUrl(s.url.trim())) {
-      errs.push(t('miners.invalidStratumUrl'));
-    }
-    if (s.worker.length > WORKER_NAME_MAX) {
-      errs.push(t('miners.workerTooLong', { max: WORKER_NAME_MAX }));
-    }
+    slots.forEach((s, i) => {
+      const urlSet = s.url.trim().length > 0;
+      const label = t('miners.avalonPoolSlot', { n: i + 1 });
+      if (i === 0 && !urlSet) {
+        errs.push(t('miners.urlRequired'));
+        return;
+      }
+      if (!urlSet) return; // optional slot left blank
+      if (!isValidAvalonPoolUrl(s.url.trim())) {
+        errs.push(`${label}: ${t('miners.invalidStratumUrl')}`);
+      }
+      if (s.worker.length > WORKER_NAME_MAX) {
+        errs.push(`${label}: ${t('miners.workerTooLong', { max: WORKER_NAME_MAX })}`);
+      }
+    });
     return errs;
   }, [slots, t]);
 
-  const canSave = slot1Errors.length === 0 && !saving;
+  const canSave = slotErrors.length === 0 && !saving;
 
   const updateSlot = useCallback(
     (index: 0 | 1 | 2, patch: Partial<SlotState>) => {
@@ -281,9 +292,9 @@ export function AvalonSettingsView({ miner, onSaved }: AvalonSettingsViewProps) 
         {renderSlot(1)}
         {renderSlot(2)}
 
-        {slot1Errors.length > 0 && (
+        {slotErrors.length > 0 && (
           <View className="mb-3">
-            {slot1Errors.map((err) => (
+            {slotErrors.map((err) => (
               <Text key={err} variant="caption" color="danger">
                 • {err}
               </Text>

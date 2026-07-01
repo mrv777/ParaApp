@@ -219,6 +219,9 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
 
     // Skip if address changed during fetch
     if (useSettingsStore.getState().bitcoinAddress !== address) return;
+    // Skip if the selected period changed during the fetch — a slower
+    // response for a deselected period must not overwrite the chart.
+    if (get().historicalPeriod !== period) return;
 
     if (isSuccess(result)) {
       set({
