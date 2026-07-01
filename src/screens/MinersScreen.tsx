@@ -36,9 +36,9 @@ import type { LocalMiner, DiscoveryOptions, MinerWarning } from '@/types';
 
 type Props = MinersStackScreenProps<'MinersMain'>;
 
-// Card grid geometry (matches the design handoff): 14px screen gutters, 10px
+// Card grid geometry (matches the design handoff): 16px screen gutters, 10px
 // inter-card gap. Two equal columns fill the remaining width.
-const GRID_H_PADDING = 14;
+const GRID_H_PADDING = 16;
 const GRID_GAP = 10;
 
 export function MinersScreen({ navigation }: Props) {

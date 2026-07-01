@@ -144,7 +144,7 @@ export function PoolScreen(_props: Props) {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 100, gap: 16 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 16 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

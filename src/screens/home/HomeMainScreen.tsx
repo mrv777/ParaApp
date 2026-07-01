@@ -246,7 +246,7 @@ export function HomeMainScreen({ navigation }: Props) {
 
         {hasAddress ? (
           /* With Address: Mining Stats → Rounds → Workers, then extras */
-          <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 14 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 14 }}>
             <UserStatsCard
               stats={userStats ?? null}
               walletAddress={bitcoinAddress ?? ''}
@@ -290,7 +290,7 @@ export function HomeMainScreen({ navigation }: Props) {
           </View>
         ) : (
           /* Without Address: Show add address CTA */
-          <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 14 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 14 }}>
             <AddAddressPrompt onPress={handleAddAddress} />
 
             {/* Fleet Overview Card (shown even without address) */}
