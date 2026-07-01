@@ -153,9 +153,13 @@ export interface UserRoundHistoryEntry {
   block_height: number;
   rank: number;
   blocks_rank: number;
+  /** Rank by total work (shares) submitted this round */
+  work_rank: number;
   total_participants: number;
   top_diff: number;
   blocks_participated: number;
+  /** Total work (shares) submitted this round */
+  total_work: number;
   is_winner: boolean;
 }
 
@@ -166,9 +170,13 @@ export interface UserRoundsResponse {
   current_round: {
     rank: number;
     blocks_rank: number;
+    /** Rank by total work (shares) submitted this round */
+    work_rank: number;
     total_participants: number;
     top_diff: number;
     blocks_participated: number;
+    /** Total work (shares) submitted this round */
+    total_work: number;
   } | null;
   rounds_won: number;
   total_rounds_participated: number;

@@ -15,6 +15,8 @@ import { addressMatches } from '@/utils/address';
 export interface UserRanks {
   difficultyRank: number | null; // null if not on leaderboard
   loyaltyRank: number | null;
+  /** Rank by total work (shares) this round; only available in round mode */
+  workRank: number | null;
   isLoading: boolean;
 }
 
@@ -29,16 +31,17 @@ export function useUserRanks(): UserRanks {
 
   const ranks = useMemo(() => {
     if (!bitcoinAddress) {
-      return { difficultyRank: null, loyaltyRank: null };
+      return { difficultyRank: null, loyaltyRank: null, workRank: null };
     }
 
     if (roundMode === 'round') {
       if (!userRounds?.current_round) {
-        return { difficultyRank: null, loyaltyRank: null };
+        return { difficultyRank: null, loyaltyRank: null, workRank: null };
       }
       return {
         difficultyRank: userRounds.current_round.rank,
         loyaltyRank: userRounds.current_round.blocks_rank,
+        workRank: userRounds.current_round.work_rank,
       };
     }
 
@@ -56,6 +59,8 @@ export function useUserRanks(): UserRanks {
     return {
       difficultyRank: difficultyIndex !== -1 ? difficultyIndex + 1 : null,
       loyaltyRank: loyaltyIndex !== -1 ? loyaltyIndex + 1 : null,
+      // No pool-wide work leaderboard; work rank is round-only.
+      workRank: null,
     };
   }, [bitcoinAddress, roundMode, userRounds, difficultyLeaderboard, loyaltyLeaderboard]);
 

@@ -41,6 +41,8 @@ export interface LeaderboardEntry {
   top_diff_address: string | null;
   difficulty: number | null;
   block_timestamp: number;
+  /** Whether the top-diff address has claimed/registered (shows a check on the site) */
+  claimed?: boolean;
 }
 
 /**

@@ -29,8 +29,10 @@ function entryToBadge(entry: UserRoundHistoryEntry): BadgeDetail {
     type: 'block',
     blockHeight: entry.block_height,
     rank: entry.rank,
+    workRank: entry.work_rank,
     totalParticipants: entry.total_participants,
     topDiff: entry.top_diff,
+    totalWork: entry.total_work,
     isWinner: entry.is_winner,
   };
 }

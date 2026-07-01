@@ -17,6 +17,7 @@ export interface UserStatsCardProps {
   stats: UserStats | null;
   difficultyRank?: number | null;
   loyaltyRank?: number | null;
+  workRank?: number | null;
   isLoading?: boolean;
   className?: string;
   onShare?: () => void;
@@ -32,6 +33,7 @@ export function UserStatsCard({
   stats,
   difficultyRank,
   loyaltyRank,
+  workRank,
   isLoading = false,
   className = '',
   onShare,
@@ -43,9 +45,12 @@ export function UserStatsCard({
   return (
     <Card padding="sm" className={className}>
       <View className="mb-2 flex-row items-center justify-between">
-        <Text variant="subtitle" className="text-base">
-          {t('home.miningStats')}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Ionicons name="speedometer-outline" size={18} color={colors.textMuted} />
+          <Text variant="subtitle" className="text-base">
+            {t('home.miningStats')}
+          </Text>
+        </View>
         {onShare && (
           <Pressable
             onPress={onShare}
@@ -87,17 +92,27 @@ export function UserStatsCard({
             <View className="flex-1">
               <SkeletonStatItem />
             </View>
+            <View className="flex-1">
+              <SkeletonStatItem />
+            </View>
           </View>
         </View>
       ) : (
         <View className="gap-3">
-          {/* Primary hashrate */}
-          <StatItem
-            icon="speedometer-outline"
-            label={t('home.currentHashrate')}
-            value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
-            size="lg"
-          />
+          {/* Primary hashrate — hero size (inline fontSize so it reliably wins
+              over the mono Text variant's base size) */}
+          <View className="gap-1">
+            <Text variant="caption" className="text-base">
+              {t('home.currentHashrate')}
+            </Text>
+            <Text
+              variant="mono"
+              className="font-bold text-foreground"
+              style={{ fontSize: 26, lineHeight: 32 }}
+            >
+              {stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
+            </Text>
+          </View>
 
           {/* Secondary stats row */}
           <View className="flex-row gap-3">
@@ -124,11 +139,10 @@ export function UserStatsCard({
             </View>
           </View>
 
-          {/* Leaderboard ranks row */}
+          {/* Leaderboard ranks row (no icons — keeps long labels on one line) */}
           <View className="flex-row gap-3">
             <View className="flex-1">
               <StatItem
-                icon="trophy-outline"
                 label={t('home.difficultyRank')}
                 value={formatRank(difficultyRank)}
                 size="sm"
@@ -136,7 +150,13 @@ export function UserStatsCard({
             </View>
             <View className="flex-1">
               <StatItem
-                icon="medal-outline"
+                label={t('home.workRank')}
+                value={formatRank(workRank)}
+                size="sm"
+              />
+            </View>
+            <View className="flex-1">
+              <StatItem
                 label={t('home.loyaltyRank')}
                 value={formatRank(loyaltyRank)}
                 size="sm"

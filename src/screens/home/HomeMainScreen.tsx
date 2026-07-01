@@ -18,6 +18,7 @@ import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
 import { MiningRewardCard } from '@/components/home/MiningRewardCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { AchievementsCard } from '@/components/home/AchievementsCard';
+import { RoundsTable } from '@/components/home/RoundsTable';
 import { BadgeDetailSheet, type BadgeDetail } from '@/components/home/BadgeDetailSheet';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
@@ -152,7 +153,7 @@ export function HomeMainScreen({ navigation }: Props) {
   }, [hasAddress, historical, fetchHistorical, historicalPeriod]);
 
   // Get user leaderboard ranks
-  const { difficultyRank, loyaltyRank } = useUserRanks();
+  const { difficultyRank, loyaltyRank, workRank } = useUserRanks();
 
   // Determine which error to show
   const error = hasAddress ? userError : poolError;
@@ -241,6 +242,7 @@ export function HomeMainScreen({ navigation }: Props) {
               stats={userStats ?? null}
               difficultyRank={difficultyRank}
               loyaltyRank={loyaltyRank}
+              workRank={workRank}
               isLoading={isUserLoading}
               onShare={captureAndShare}
               isSharing={isSharing}
@@ -253,6 +255,9 @@ export function HomeMainScreen({ navigation }: Props) {
               isLoading={isUserLoading}
               onBadgePress={setSelectedBadge}
             />
+
+            {/* Rounds table (diff/work/blocks ranks per round) */}
+            <RoundsTable rounds={userRounds ?? null} isLoading={isUserLoading} />
 
             {/* User Hashrate Chart */}
             <View>

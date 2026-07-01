@@ -8,7 +8,7 @@ import { haptics } from '@/utils/haptics';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { SkeletonLoader, SkeletonText } from '../SkeletonLoader';
-import { formatTimestamp, truncateAddress } from '@/utils/formatting';
+import { formatTimestamp, truncateAddress, formatDifficulty } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import type { LeaderboardEntry } from '@/types';
@@ -33,7 +33,7 @@ export function BlocksList({
     return (
       <Card className={className}>
         <Text variant="subtitle" className="mb-3">
-          {t('pool.blocksFound')}
+          {t('pool.topShares')}
         </Text>
         {Array.from({ length: 3 }).map((_, i) => (
           <View key={i} className="flex-row items-center py-2.5 gap-3">
@@ -52,10 +52,10 @@ export function BlocksList({
     return (
       <Card className={className}>
         <Text variant="subtitle" className="mb-3">
-          {t('pool.blocksFound')}
+          {t('pool.topShares')}
         </Text>
         <Text variant="caption" color="muted" className="text-center py-4">
-          {t('pool.noBlocks')}
+          {t('pool.noShares')}
         </Text>
       </Card>
     );
@@ -65,15 +65,16 @@ export function BlocksList({
 
   return (
     <Card className={className}>
-      <Text variant="subtitle" className="mb-3">
-        {t('pool.blocksFound')}
+      <Text variant="subtitle">{t('pool.topShares')}</Text>
+      <Text variant="caption" color="muted" className="mb-3">
+        {t('pool.topSharesSubtitle')}
       </Text>
       {displayBlocks.map((block, index) => (
         <Pressable
           key={`${block.block_height}-${index}`}
           onPress={() => {
             haptics.light();
-            Linking.openURL(`https://mempool.space/block/${block.block_height}`);
+            Linking.openURL(`https://parasite.space/block/${block.block_height}`);
           }}
           className={`flex-row items-center py-2.5 ${
             index < displayBlocks.length - 1 ? 'border-b border-border/50' : ''
@@ -83,16 +84,34 @@ export function BlocksList({
           <Text variant="mono" className="ml-2 text-sm">
             #{block.block_height}
           </Text>
-          <Text variant="caption" color="muted" className="ml-auto">
-            {block.top_diff_address
-              ? truncateAddress(block.top_diff_address, 4)
-              : '—'}
-          </Text>
-          <Text variant="caption" color="muted" className="ml-3 min-w-[70px] text-right">
-            {block.block_timestamp
-              ? formatTimestamp(block.block_timestamp * 1000)
-              : '--'}
-          </Text>
+
+          {/* Top diff (value) + submitter address, right-aligned */}
+          <View className="ml-auto items-end">
+            <View className="flex-row items-center gap-1">
+              {block.claimed && (
+                <Ionicons name="checkmark-circle" size={13} color={colors.primary} />
+              )}
+              <Text variant="mono" className="text-sm">
+                {block.difficulty != null
+                  ? formatDifficulty(block.difficulty)
+                  : '--'}
+              </Text>
+            </View>
+            <View className="flex-row items-center">
+              <Text variant="caption" color="muted" className="text-xs">
+                {block.top_diff_address
+                  ? truncateAddress(block.top_diff_address, 4)
+                  : '—'}
+              </Text>
+              {block.block_timestamp ? (
+                <Text variant="caption" color="muted" className="text-xs">
+                  {' · '}
+                  {formatTimestamp(block.block_timestamp * 1000)}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
           <Ionicons name="open-outline" size={14} color={colors.textMuted} style={{ marginLeft: 8 }} />
         </Pressable>
       ))}

@@ -16,6 +16,7 @@ import {
   FullScreenChart,
   PoolStatsGrid,
   LeaderboardCard,
+  BlocksList,
   SkeletonStatItem,
   Text,
 } from '@/components';
@@ -27,6 +28,7 @@ import {
   selectLoyaltyLeaderboard,
   selectRoundDifficultyLeaderboard,
   selectRoundLoyaltyLeaderboard,
+  selectBlocks,
   selectHistorical,
   selectBitcoinPrice,
   selectPoolError,
@@ -53,6 +55,7 @@ export function PoolScreen(_props: Props) {
   const loyaltyLeaderboard = usePoolStore(selectLoyaltyLeaderboard);
   const roundDifficultyLeaderboard = usePoolStore(selectRoundDifficultyLeaderboard);
   const roundLoyaltyLeaderboard = usePoolStore(selectRoundLoyaltyLeaderboard);
+  const blocks = usePoolStore(selectBlocks);
   const historical = usePoolStore(selectHistorical);
   const bitcoinPrice = usePoolStore(selectBitcoinPrice);
   const error = usePoolStore(selectPoolError);
@@ -71,6 +74,8 @@ export function PoolScreen(_props: Props) {
   const fetchHistorical = usePoolStore((s) => s.fetchHistorical);
   const fetchLeaderboards = usePoolStore((s) => s.fetchLeaderboards);
   const fetchRoundLeaderboards = usePoolStore((s) => s.fetchRoundLeaderboards);
+  const fetchBlocks = usePoolStore((s) => s.fetchBlocks);
+  const isLoadingBlocks = usePoolStore((s) => s.isLoadingBlocks);
   const setHistoricalPeriod = usePoolStore((s) => s.setHistoricalPeriod);
   const clearError = usePoolStore((s) => s.clearError);
 
@@ -84,8 +89,8 @@ export function PoolScreen(_props: Props) {
   // immediate: true so data refreshes instantly on tab refocus; 60s interval (round data changes infrequently)
   const isFocused = useIsFocused();
   const onPollRoundLeaderboards = useCallback(async () => {
-    await fetchRoundLeaderboards();
-  }, [fetchRoundLeaderboards]);
+    await Promise.all([fetchRoundLeaderboards(), fetchBlocks()]);
+  }, [fetchRoundLeaderboards, fetchBlocks]);
   usePolling({ onPoll: onPollRoundLeaderboards, immediate: true, enabled: isFocused, interval: 60000 });
 
   // Cold start: refreshAll with loading indicators (subsequent polls are silent)
@@ -225,6 +230,15 @@ export function PoolScreen(_props: Props) {
             roundLoyaltyEntries={roundLoyaltyLeaderboard ?? []}
             userAddress={userAddress ?? undefined}
             isLoading={showLeaderboardsSkeleton}
+          />
+        </View>
+
+        {/* Recent blocks — highest diff submitted by a pool user per block */}
+        <View className="px-4 pb-4">
+          <BlocksList
+            blocks={blocks ?? []}
+            isLoading={isLoadingBlocks && !blocks}
+            maxItems={10}
           />
         </View>
       </ScrollView>

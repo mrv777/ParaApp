@@ -10,6 +10,7 @@ import type {
   PoolHistoricalPoint,
   DifficultyLeaderboardEntry,
   LoyaltyLeaderboardEntry,
+  LeaderboardEntry,
   HistoricalPeriod,
   HistoricalInterval,
 } from '@/types';
@@ -25,6 +26,7 @@ interface PoolState {
   loyaltyLeaderboard: CachedData<LoyaltyLeaderboardEntry[]> | null;
   roundDifficultyLeaderboard: CachedData<DifficultyLeaderboardEntry[]> | null;
   roundLoyaltyLeaderboard: CachedData<LoyaltyLeaderboardEntry[]> | null;
+  blocks: CachedData<LeaderboardEntry[]> | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -34,6 +36,7 @@ interface PoolState {
   isLoadingHistorical: boolean;
   isLoadingLeaderboards: boolean;
   isLoadingRoundLeaderboards: boolean;
+  isLoadingBlocks: boolean;
 
   // Error state
   error: ApiError | null;
@@ -43,6 +46,7 @@ interface PoolActions {
   fetchPoolStats: (options?: { silent?: boolean }) => Promise<void>;
   fetchLeaderboards: (limit?: number) => Promise<void>;
   fetchRoundLeaderboards: (limit?: number) => Promise<void>;
+  fetchBlocks: (limit?: number) => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
     interval?: HistoricalInterval
@@ -61,11 +65,13 @@ const initialState: PoolState = {
   loyaltyLeaderboard: null,
   roundDifficultyLeaderboard: null,
   roundLoyaltyLeaderboard: null,
+  blocks: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
   isLoadingLeaderboards: false,
   isLoadingRoundLeaderboards: false,
+  isLoadingBlocks: false,
   error: null,
 };
 
@@ -154,6 +160,21 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
     set({ isLoadingRoundLeaderboards: false });
   },
 
+  fetchBlocks: async (limit = 25) => {
+    set({ isLoadingBlocks: true });
+
+    const result = await parasite.getHighestDiffBlocks(limit);
+
+    if (isSuccess(result)) {
+      set({
+        blocks: { data: result.data, timestamp: Date.now() },
+        isLoadingBlocks: false,
+      });
+    } else {
+      set({ error: result.error, isLoadingBlocks: false });
+    }
+  },
+
   fetchHistorical: async (period, interval) => {
     set({ isLoadingHistorical: true, historicalPeriod: period });
 
@@ -190,11 +211,18 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
   clearError: () => set({ error: null }),
 
   refreshAll: async () => {
-    const { fetchPoolStats, fetchLeaderboards, fetchRoundLeaderboards, fetchBitcoinPrice } = get();
+    const {
+      fetchPoolStats,
+      fetchLeaderboards,
+      fetchRoundLeaderboards,
+      fetchBlocks,
+      fetchBitcoinPrice,
+    } = get();
     await Promise.all([
       fetchPoolStats(),
       fetchLeaderboards(),
       fetchRoundLeaderboards(),
+      fetchBlocks(),
       fetchBitcoinPrice(),
     ]);
   },
@@ -210,6 +238,7 @@ export const selectRoundDifficultyLeaderboard = (state: PoolState) =>
   state.roundDifficultyLeaderboard?.data;
 export const selectRoundLoyaltyLeaderboard = (state: PoolState) =>
   state.roundLoyaltyLeaderboard?.data;
+export const selectBlocks = (state: PoolState) => state.blocks?.data;
 export const selectHistorical = (state: PoolState) => state.historical?.data;
 export const selectBitcoinPrice = (state: PoolState) =>
   state.bitcoinPrice?.data;

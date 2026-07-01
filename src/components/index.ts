@@ -4,6 +4,7 @@ export * from './navigation';
 export { Text, type TextProps, type TextVariant, type TextColor, type TextAlign } from './Text';
 export { Badge, type BadgeProps, type BadgeVariant, type BadgeSize } from './Badge';
 export { Card, type CardProps, type CardVariant, type CardPadding } from './Card';
+export { InfoSheet, type InfoSheetProps, type InfoItem } from './InfoSheet';
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from './Button';
 export {
   StatItem,

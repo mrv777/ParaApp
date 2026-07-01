@@ -9,6 +9,7 @@ import type {
   PoolHistoricalPoint,
   DifficultyLeaderboardEntry,
   LoyaltyLeaderboardEntry,
+  LeaderboardEntry,
   UserStats,
   UserStatsApiResponse,
   UserWorkerApiResponse,
@@ -227,6 +228,20 @@ export async function getLoyaltyLeaderboard(
   if (round) params.set('round', round);
   return fetchWithTimeout<LoyaltyLeaderboardEntry[]>(
     `${BASE_URL}/api/leaderboard?${params}`
+  );
+}
+
+/**
+ * Get recent blocks with the highest difficulty share submitted by a pool user
+ * for each block (powers the per-block top-diff feed on the pool page).
+ * @param limit - Number of blocks to return (default: 25)
+ */
+export async function getHighestDiffBlocks(
+  limit: number = 25
+): Promise<ApiResult<LeaderboardEntry[]>> {
+  const params = new URLSearchParams({ limit: limit.toString() });
+  return fetchWithTimeout<LeaderboardEntry[]>(
+    `${BASE_URL}/api/highest-diff?${params}`
   );
 }
 

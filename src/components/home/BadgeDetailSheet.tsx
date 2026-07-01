@@ -21,8 +21,10 @@ export type BadgeDetail =
       type: 'block';
       blockHeight: number;
       rank: number;
+      workRank: number;
       totalParticipants: number;
       topDiff: number;
+      totalWork: number;
       isWinner: boolean;
     }
   | { type: 'refinery' };
@@ -166,12 +168,22 @@ export function BadgeDetailSheet({
           <View className="flex-row mt-4">
             <Stat label={t('home.badgeRank')} value={`#${displayBadge.rank}`} />
             <Stat
+              label={t('home.workRank')}
+              value={`#${displayBadge.workRank}`}
+            />
+            <Stat
               label={t('home.badgeParticipants')}
               value={`${displayBadge.totalParticipants}`}
             />
+          </View>
+          <View className="flex-row mt-3">
             <Stat
               label={t('home.badgeTopDiff')}
               value={formatDifficulty(displayBadge.topDiff)}
+            />
+            <Stat
+              label={t('home.colWork')}
+              value={formatDifficulty(displayBadge.totalWork)}
             />
           </View>
           <Text

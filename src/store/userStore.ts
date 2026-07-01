@@ -170,7 +170,9 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const result = await parasite.getUserRounds(address);
+    // Cap at 20 recent rounds (matches the website); the card collapses to a
+    // few of these by default with a "Show all" toggle.
+    const result = await parasite.getUserRounds(address, 20);
 
     // Skip if address changed during fetch
     if (useSettingsStore.getState().bitcoinAddress !== address) return;
