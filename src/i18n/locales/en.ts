@@ -363,7 +363,7 @@ const en = {
     widgets: 'Widgets',
     widgetUpdates: 'Widget Updates',
     widgetUpdatesDesc:
-      'Use background refresh and silent pushes when available to keep iOS widgets current.',
+      'Use background refresh and silent pushes when available to keep your widgets current.',
     widgetUpdatesPermissionHint:
       'Silent widget pushes are unavailable while notifications are denied, but background refresh may still update widgets.',
     openSettings: 'Open Settings',

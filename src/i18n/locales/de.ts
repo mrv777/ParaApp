@@ -320,7 +320,7 @@ const de = {
     widgets: 'Widgets',
     widgetUpdates: 'Widget-Updates',
     widgetUpdatesDesc:
-      'Nutzt Hintergrundaktualisierung und stille Pushs, wenn verfügbar, um iOS-Widgets aktuell zu halten.',
+      'Nutzt Hintergrundaktualisierung und stille Pushs, wenn verfügbar, um deine Widgets aktuell zu halten.',
     widgetUpdatesPermissionHint:
       'Stille Widget-Pushs sind nicht verfügbar, solange Benachrichtigungen verweigert werden. Hintergrundaktualisierung kann Widgets weiterhin aktualisieren.',
     openSettings: 'Einstellungen öffnen',

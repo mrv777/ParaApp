@@ -13,7 +13,7 @@ export async function upsertSubscription(
   db: D1Database,
   pushToken: string,
   btcAddress: string,
-  options?: { widgetUpdatesEnabled?: boolean }
+  options?: { widgetUpdatesEnabled?: boolean; notificationsEnabled?: boolean }
 ): Promise<void> {
   // Check if this token already exists (update case - no limit needed)
   const existing = await db
@@ -35,19 +35,29 @@ export async function upsertSubscription(
     }
   }
 
+  // notifications_enabled defaults to 1 (enabled) when the caller doesn't
+  // specify it, matching the column default; only an explicit `false` disables.
+  const notificationsEnabled = options?.notificationsEnabled === false ? 0 : 1;
+
   await db
     .prepare(
       `
-      INSERT INTO push_subscriptions (push_token, btc_address, active, widget_updates_enabled, updated_at)
-      VALUES (?, ?, 1, ?, unixepoch())
+      INSERT INTO push_subscriptions (push_token, btc_address, active, widget_updates_enabled, notifications_enabled, updated_at)
+      VALUES (?, ?, 1, ?, ?, unixepoch())
       ON CONFLICT(push_token) DO UPDATE SET
         btc_address = excluded.btc_address,
         active = 1,
         widget_updates_enabled = excluded.widget_updates_enabled,
+        notifications_enabled = excluded.notifications_enabled,
         updated_at = unixepoch()
     `
     )
-    .bind(pushToken, btcAddress, options?.widgetUpdatesEnabled ? 1 : 0)
+    .bind(
+      pushToken,
+      btcAddress,
+      options?.widgetUpdatesEnabled ? 1 : 0,
+      notificationsEnabled
+    )
     .run();
 }
 
@@ -142,6 +152,22 @@ export async function updateSubscriptionWidgetUpdates(
     .run();
 }
 
+export async function updateSubscriptionNotificationsEnabled(
+  db: D1Database,
+  pushToken: string,
+  btcAddress: string,
+  enabled: boolean
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE push_subscriptions
+       SET notifications_enabled = ?, updated_at = unixepoch()
+       WHERE push_token = ? AND btc_address = ? AND active = 1`
+    )
+    .bind(enabled ? 1 : 0, pushToken, btcAddress)
+    .run();
+}
+
 export async function getPreferences(
   db: D1Database,
   btcAddress: string
@@ -167,30 +193,6 @@ export async function markTokenInactive(
     .prepare('UPDATE push_subscriptions SET active = 0, updated_at = unixepoch() WHERE push_token = ?')
     .bind(pushToken)
     .run();
-}
-
-/**
- * Get all active push tokens for a BTC address
- */
-export async function getActiveTokensByAddress(
-  db: D1Database,
-  btcAddress: string
-): Promise<PushSubscription[]> {
-  const result = await db
-    .prepare('SELECT * FROM push_subscriptions WHERE btc_address = ? AND active = 1')
-    .bind(btcAddress)
-    .all<PushSubscription>();
-  return result.results;
-}
-
-/**
- * Get all unique BTC addresses with active subscriptions
- */
-export async function getUniqueAddresses(db: D1Database): Promise<string[]> {
-  const result = await db
-    .prepare('SELECT DISTINCT btc_address FROM push_subscriptions WHERE active = 1')
-    .all<{ btc_address: string }>();
-  return result.results.map((r) => r.btc_address);
 }
 
 /**

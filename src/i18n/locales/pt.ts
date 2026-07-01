@@ -320,7 +320,7 @@ const pt = {
     widgets: 'Widgets',
     widgetUpdates: 'Atualizações de widgets',
     widgetUpdatesDesc:
-      'Usa atualização em segundo plano e pushes silenciosos quando disponíveis para manter os widgets iOS atualizados.',
+      'Usa atualização em segundo plano e pushes silenciosos quando disponíveis para manter os seus widgets atualizados.',
     widgetUpdatesPermissionHint:
       'Pushes silenciosos de widget ficam indisponíveis enquanto notificações estão negadas, mas a atualização em segundo plano ainda pode atualizar widgets.',
     openSettings: 'Abrir Configurações',

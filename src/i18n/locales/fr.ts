@@ -320,7 +320,7 @@ const fr = {
     widgets: 'Widgets',
     widgetUpdates: 'Mises à jour des widgets',
     widgetUpdatesDesc:
-      'Utilise l’actualisation en arrière-plan et les pushs silencieux quand ils sont disponibles pour garder les widgets iOS à jour.',
+      'Utilise l’actualisation en arrière-plan et les pushs silencieux quand ils sont disponibles pour garder vos widgets à jour.',
     widgetUpdatesPermissionHint:
       'Les pushs silencieux de widget ne sont pas disponibles tant que les notifications sont refusées, mais l’actualisation en arrière-plan peut encore mettre à jour les widgets.',
     openSettings: 'Ouvrir les paramètres',

@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, ScrollView, Pressable, TextInput, Linking, AppState, Platform } from 'react-native';
+import { View, ScrollView, Pressable, TextInput, Linking, AppState } from 'react-native';
 import {
   LanguageSelectorSheet,
   OptionToggleGroup,
@@ -473,42 +473,40 @@ export function SettingsMainScreen({ navigation }: Props) {
           )}
 
           {/* ── Widgets ───────────────────────────────────── */}
-          {Platform.OS === 'ios' && (
-            <SettingsCard header={t('settings.widgets')}>
-              <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 14 }}>
-                <View
-                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text variant="body" style={{ fontSize: 16, color: LABEL_COLOR }}>
-                      {t('settings.widgetUpdates')}
-                    </Text>
-                    <Text
-                      variant="mono"
-                      style={{ fontSize: 11, lineHeight: 17, color: colors.textDim, marginTop: 6 }}
-                    >
-                      {t('settings.widgetUpdatesDesc')}
-                    </Text>
-                  </View>
-                  <View style={{ marginTop: 2 }}>
-                    <Switch
-                      value={widgetUpdatesEnabled}
-                      onValueChange={() => handleToggleWidgetUpdates()}
-                    />
-                  </View>
-                </View>
-
-                {permissionStatus === 'denied' && widgetUpdatesEnabled && (
+          <SettingsCard header={t('settings.widgets')}>
+            <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 14 }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text variant="body" style={{ fontSize: 16, color: LABEL_COLOR }}>
+                    {t('settings.widgetUpdates')}
+                  </Text>
                   <Text
                     variant="mono"
-                    style={{ fontSize: 11, lineHeight: 17, color: colors.textFaint, marginTop: 8 }}
+                    style={{ fontSize: 11, lineHeight: 17, color: colors.textDim, marginTop: 6 }}
                   >
-                    {t('settings.widgetUpdatesPermissionHint')}
+                    {t('settings.widgetUpdatesDesc')}
                   </Text>
-                )}
+                </View>
+                <View style={{ marginTop: 2 }}>
+                  <Switch
+                    value={widgetUpdatesEnabled}
+                    onValueChange={() => handleToggleWidgetUpdates()}
+                  />
+                </View>
               </View>
-            </SettingsCard>
-          )}
+
+              {permissionStatus === 'denied' && widgetUpdatesEnabled && (
+                <Text
+                  variant="mono"
+                  style={{ fontSize: 11, lineHeight: 17, color: colors.textFaint, marginTop: 8 }}
+                >
+                  {t('settings.widgetUpdatesPermissionHint')}
+                </Text>
+              )}
+            </View>
+          </SettingsCard>
 
           {/* ── About ─────────────────────────────────────── */}
           <SettingsCard header={t('settings.about')}>

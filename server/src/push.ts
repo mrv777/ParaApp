@@ -11,6 +11,11 @@ const BATCH_SIZE = 100; // Expo recommends max 100 messages per request
 export interface SendResult {
   tickets: ExpoPushTicket[];
   invalidTokens: string[]; // Tokens that returned DeviceNotRegistered
+  // Tokens whose message was NOT accepted by Expo this call — either the whole
+  // batch failed to submit (network/HTTP error) or the ticket came back with
+  // status 'error'. Callers that gate follow-up work on successful delivery
+  // (e.g. widget last-pushed bookkeeping) should skip these and retry later.
+  failedTokens: string[];
 }
 
 /**
@@ -21,11 +26,12 @@ export async function sendPushNotifications(
   messages: ExpoPushMessage[]
 ): Promise<SendResult> {
   if (messages.length === 0) {
-    return { tickets: [], invalidTokens: [] };
+    return { tickets: [], invalidTokens: [], failedTokens: [] };
   }
 
   const allTickets: ExpoPushTicket[] = [];
   const invalidTokens: string[] = [];
+  const failedTokens: string[] = [];
 
   // Process in batches
   for (let i = 0; i < messages.length; i += BATCH_SIZE) {
@@ -45,33 +51,45 @@ export async function sendPushNotifications(
         console.error(
           `Expo Push API error: ${response.status} ${response.statusText}`
         );
+        // Whole batch never reached Expo — none of these tokens were accepted.
+        for (const message of batch) failedTokens.push(message.to);
         continue;
       }
 
       const result = (await response.json()) as { data: ExpoPushTicket[] };
       const tickets = result.data;
 
-      // Check for invalid tokens
+      // Check ticket-level status per message.
       tickets.forEach((ticket, index) => {
         allTickets.push(ticket);
 
-        if (
-          ticket.status === 'error' &&
-          ticket.details?.error === 'DeviceNotRegistered'
-        ) {
-          const originalMessage = batch[index];
-          if (originalMessage) {
+        const originalMessage = batch[index];
+        if (!originalMessage) return;
+
+        if (ticket.status === 'error') {
+          // Not accepted — record as failed so callers can retry later. Also
+          // surface DeviceNotRegistered separately for token cleanup.
+          failedTokens.push(originalMessage.to);
+          if (ticket.details?.error === 'DeviceNotRegistered') {
             invalidTokens.push(originalMessage.to);
           }
         }
       });
+
+      // Fewer tickets than messages (malformed/truncated response): treat the
+      // unmatched tail as not-accepted rather than silently assuming success.
+      for (let j = tickets.length; j < batch.length; j++) {
+        failedTokens.push(batch[j].to);
+      }
     } catch (error) {
       console.error('Error sending push notifications:', error);
+      // Batch threw before we got tickets — none accepted.
+      for (const message of batch) failedTokens.push(message.to);
       // Continue with other batches even if one fails
     }
   }
 
-  return { tickets: allTickets, invalidTokens };
+  return { tickets: allTickets, invalidTokens, failedTokens };
 }
 
 /**
@@ -100,16 +118,4 @@ export function createSilentWidgetRefreshMessage(token: string): ExpoPushMessage
     data: { type: 'widget_refresh' },
     _contentAvailable: true,
   };
-}
-
-/**
- * Create push messages for multiple tokens with the same content
- */
-export function createBroadcastMessages(
-  tokens: string[],
-  title: string,
-  body: string,
-  data?: Record<string, unknown>
-): ExpoPushMessage[] {
-  return tokens.map((token) => createPushMessage(token, title, body, data));
 }

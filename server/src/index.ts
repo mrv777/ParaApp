@@ -14,6 +14,7 @@ import {
   verifyTokenOwnership,
   MaxDevicesExceededError,
   updateSubscriptionWidgetUpdates,
+  updateSubscriptionNotificationsEnabled,
   getWidgetPoolSnapshot,
   upsertWidgetPoolSnapshot,
   getWidgetUserSnapshot,
@@ -47,7 +48,8 @@ app.post('/register', async (c) => {
       return c.json({ success: false, error: result.error.flatten() }, 400);
     }
 
-    const { pushToken, btcAddress, preferences, widgetUpdatesEnabled } = result.data;
+    const { pushToken, btcAddress, preferences, widgetUpdatesEnabled, notificationsEnabled } =
+      result.data;
 
     // Rate limit: Atomically check if recently registered and touch timestamp to prevent race conditions
     // This UPDATE only succeeds if: token exists, same address, AND was updated > 60s ago
@@ -77,6 +79,14 @@ app.post('/register', async (c) => {
             widgetUpdatesEnabled
           );
         }
+        if (notificationsEnabled !== undefined) {
+          await updateSubscriptionNotificationsEnabled(
+            c.env.DB,
+            pushToken,
+            btcAddress,
+            notificationsEnabled
+          );
+        }
         const prefs = await getPreferences(c.env.DB, btcAddress);
         return c.json({
           success: true,
@@ -101,6 +111,7 @@ app.post('/register', async (c) => {
 
     await upsertSubscription(c.env.DB, pushToken, btcAddress, {
       widgetUpdatesEnabled,
+      notificationsEnabled,
     });
 
     if (preferences) {
@@ -157,7 +168,8 @@ app.patch('/preferences', async (c) => {
       return c.json({ success: false, error: result.error.flatten() }, 400);
     }
 
-    const { pushToken, btcAddress, widgetUpdatesEnabled, ...prefs } = result.data;
+    const { pushToken, btcAddress, widgetUpdatesEnabled, notificationsEnabled, ...prefs } =
+      result.data;
 
     // Verify ownership: pushToken must be registered to this address
     const isOwner = await verifyTokenOwnership(c.env.DB, pushToken, btcAddress);
@@ -172,6 +184,14 @@ app.patch('/preferences', async (c) => {
         pushToken,
         btcAddress,
         widgetUpdatesEnabled
+      );
+    }
+    if (notificationsEnabled !== undefined) {
+      await updateSubscriptionNotificationsEnabled(
+        c.env.DB,
+        pushToken,
+        btcAddress,
+        notificationsEnabled
       );
     }
 
