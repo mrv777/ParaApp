@@ -194,6 +194,14 @@ export async function fetchServerWidgetSnapshots(): Promise<FetchedWidgetSnapsho
   const settings = useSettingsStore.getState();
   const out: FetchedWidgetSnapshots = {};
 
+  // Respect the Widget Updates opt-out. This helper only runs as a background
+  // network refresh (foreground uses in-memory stores via updateWidgetsFromStores),
+  // so gating here is the single choke point that keeps every background path —
+  // including Android's native updatePeriodMillis WIDGET_UPDATE tick, which fires
+  // regardless of app state — from hitting the network when the user disabled it.
+  // Returning empty leaves callers rendering the last stored snapshot.
+  if (!settings.widgetUpdatesEnabled) return out;
+
   const poolResult = await getPoolWidgetSnapshot();
   if (isSuccess(poolResult) && poolResult.data.success) {
     out.pool = { ...poolResult.data.data, source: 'server' };
