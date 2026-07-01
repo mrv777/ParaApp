@@ -2,6 +2,95 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.4.0] - 2026-07-01
+
+### Added
+- **Terminal/Brutalist Redesign** - App-wide restyle to a monochrome, square-cornered "terminal" aesthetic matching parasite.space (pure-black canvas, hairline borders, mono data labels)
+- Space Grotesk (titles) + JetBrains Mono (data/numbers) typography throughout
+- **2-Column Miner Card Grid** - New card view for the Miners tab: hashrate hero with 2×2 vitals (temp/power/best diff/fan), per-type thermal color ramp, swipe-to-remove and tap-to-detail
+- Shared UI primitives: square stat cells, animated toggles, framed settings cards, segmented controls
+
+### Changed
+- Full Settings screen rebuild with framed cards, address VALID chip, and larger title
+- Home, Pool, and Miners screens restyled to the new design system (hashrate heroes, stat grids, leaderboards, blocks)
+- Charts, tab bar, skeletons, and banners updated to match
+
+### Fixed
+- Push notifications now gated on the master notification toggle
+- Android widget update control refinements
+- Various review findings across miners, charts, and server
+- Avalon miner discovery save path
+
+### Security
+- Updated dependencies and cleared outstanding security advisories
+
+## [0.3.5] - 2026-06-22
+
+### Added
+- **Android Home-Screen Widgets** - Personal Mining and Pool Overview widgets for Android (mirrors the iOS widget pipeline), with best-effort self-refresh on a ~30-minute tick even when the app is never opened
+- **Work Rank & Rounds** - New Work Rank stat on Home plus a phone-friendly per-round table (diff/work/blocks rank, participant totals, tap-through to parasite.space)
+- **Best Shares Feed** - Pool tab now lists the highest-difficulty share submitted per block, linking to parasite.space
+- Reusable info sheets with contextual help icons
+
+### Fixed
+- Push notification deduplication via atomic block claim and single-flight cron (no more duplicate block alerts)
+- Monotonic block detection to prevent out-of-order notifications
+- Eliminated D1 read amplification in the notification cron
+- Android widgets honor the Widget Updates opt-out setting
+
+## [0.3.4] - 2026-06-19
+
+### Added
+- **Refinery Operator Badge** - New achievement badge with a unified badge detail sheet (round stats, mempool link, share)
+
+### Changed
+- Replaced `@gorhom/bottom-sheet` with a custom RN Modal + Reanimated sheet that renders correctly on the RN 0.85 / New Architecture stack; migrated all sheets (badge, language, worker note, sort/filter, alias, Avalon auth) with drag-to-dismiss and keyboard avoidance
+
+## [0.3.0] - 2026-06-15
+
+### Added
+- **iOS Home-Screen Widgets** - At-a-glance widgets for your mining stats, refreshed event-driven via silent push within APNs budget
+
+### Fixed
+- Guarded a native iOS crash (`SIGABRT` on nil host) when Avalon TCP connections were in flight during background→foreground transitions
+- Hardened widget refresh against unhydrated settings and stale stats
+- Fixed widget text truncation and staleness thresholds (aligned to refresh cadence)
+
+## [0.2.12] - 2026-05-14
+
+### Added
+- **Dispenser / Rewards Card** - New Home screen card showing mining rewards
+
+### Fixed
+- Hardened the rewards card against stale data and text overflow
+- Avalon chip voltage parsing (ATA1) and Nano 3S power fallback
+
+## [0.2.11] - 2026-05-07
+
+### Added
+- Tappable miner IP address row to open the device's web UI in a browser
+
+### Fixed
+- Corrected Avalon stats parsing and added Avalon-aware temperature thresholds
+- Live power now read from `PS[6]` instead of the MPO setting
+- Avalon no longer auto-reboots after a work-mode change
+- Fixed intermittent blank tab screens
+- Clarified Avalon air-temperature wording
+
+## [0.2.10] - 2026-05-02
+
+### Added
+- **Canaan Avalon Miner Support** - Monitor and manage Avalon miners (Q, Nano, Mini) alongside AxeOS and Hammer devices
+- CGMiner JSON-RPC client over TCP with a web CGI fallback for pool config
+- Dual-port network discovery (probes AxeOS/Hammer on port 80 and Avalon on port 4028)
+- Avalon detail UI: work-mode picker, hashboard temps, per-fan RPMs, and a collapsible ASIC PVT heatmap
+- Dedicated Avalon settings screen with 3 pool slots and admin-password auth (stored in secure storage)
+- Auto-fan target temperature option in miner settings
+
+### Fixed
+- Taproot (`bc1p...`) addresses now validate correctly; added a non-blocking warning when a taproot address may be an Ordinals (Xverse) address unsuitable for payouts
+- Tightened miner settings validation
+
 ## [0.2.9] - 2026-04-09
 
 ### Added
