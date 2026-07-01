@@ -19,6 +19,11 @@ export interface UserHashrateChartProps {
   height?: number;
   onDataPointSelect?: (point: UserHistoricalPoint | null) => void;
   className?: string;
+  /**
+   * 'embedded' = minimal in-card sparkline (white stroke + gradient, no axes,
+   * transparent square container). 'default' = full interactive chart.
+   */
+  variant?: 'default' | 'embedded';
 }
 
 /**
@@ -68,7 +73,9 @@ export function UserHashrateChart({
   height = 200,
   onDataPointSelect,
   className = '',
+  variant = 'default',
 }: UserHashrateChartProps) {
+  const embedded = variant === 'embedded';
   const chartRef = useRef<unknown>(null);
   const chartInstanceRef = useRef<ReturnType<typeof import('echarts/core').init> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 300, height });
@@ -100,13 +107,9 @@ export function UserHashrateChart({
 
     return {
       backgroundColor: 'transparent',
-      grid: {
-        left: 55,
-        right: 15,
-        top: 15,
-        bottom: 25,
-        containLabel: false,
-      },
+      grid: embedded
+        ? { left: 0, right: 0, top: 6, bottom: 6, containLabel: false }
+        : { left: 55, right: 15, top: 15, bottom: 25, containLabel: false },
       xAxis: {
         type: 'time' as const,
         axisLine: {
@@ -116,6 +119,7 @@ export function UserHashrateChart({
           show: false,
         },
         axisLabel: {
+          show: !embedded,
           color: colors.textMuted,
           fontSize: 10,
           hideOverlap: true,
@@ -134,11 +138,13 @@ export function UserHashrateChart({
           show: false,
         },
         axisLabel: {
+          show: !embedded,
           color: colors.textMuted,
           fontSize: 10,
           formatter: (value: number) => formatHashrate(value),
         },
         splitLine: {
+          show: !embedded,
           lineStyle: {
             color: colors.chartGrid,
             type: 'dashed' as const,
@@ -153,7 +159,7 @@ export function UserHashrateChart({
           symbol: 'none',
           lineStyle: {
             color: colors.chartLine,
-            width: 2,
+            width: 1.6,
           },
           areaStyle: {
             color: {
@@ -163,14 +169,15 @@ export function UserHashrateChart({
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: 'rgba(237, 237, 237, 0.2)' },
-                { offset: 1, color: 'rgba(237, 237, 237, 0)' },
+                { offset: 0, color: 'rgba(255, 255, 255, 0.14)' },
+                { offset: 1, color: 'rgba(255, 255, 255, 0)' },
               ],
             },
           },
         },
       ],
       tooltip: {
+        show: !embedded,
         trigger: 'axis' as const,
         backgroundColor: colors.chartTooltipBg,
         borderColor: colors.border,
@@ -201,7 +208,7 @@ export function UserHashrateChart({
         },
       },
     };
-  }, [chartData, period]);
+  }, [chartData, period, embedded]);
 
   // Keep option ref in sync for use in chart creation effect
   const optionRef = useRef(option);
@@ -278,7 +285,7 @@ export function UserHashrateChart({
   if (!data || data.length === 0) {
     return (
       <View
-        className={`bg-secondary rounded-xl items-center justify-center ${className}`}
+        className={`${embedded ? '' : 'bg-secondary'} items-center justify-center ${className}`}
         style={{ height }}
       />
     );
@@ -292,7 +299,7 @@ export function UserHashrateChart({
 
   return (
     <View
-      className={`bg-secondary rounded-xl overflow-hidden ${className}`}
+      className={`${embedded ? '' : 'bg-secondary'} overflow-hidden ${className}`}
       style={{ height }}
       onLayout={(e) => {
         const { width: w, height: h } = e.nativeEvent.layout;

@@ -7,7 +7,7 @@ import { View, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
-import { Badge } from '@/components/Badge';
+import { Card } from '@/components/Card';
 import {
   AliasEditSheet,
   AsicHeatmap,
@@ -120,22 +120,26 @@ export function MinerDetailScreen({ route, navigation }: Props) {
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <View className="flex-1">
-          <View className="flex-row items-center gap-2">
+          <View className="flex-row items-baseline gap-2">
             <Text
               variant="subtitle"
-              className="font-semibold"
+              style={{ fontSize: 16, color: colors.textHigh }}
               numberOfLines={1}
             >
               {displayName}
             </Text>
-            {miner.deviceModel && (
-              <Badge variant="default" size="sm">
+            {miner.deviceModel && miner.deviceModel !== 'Unknown' && (
+              <Text
+                variant="mono"
+                style={{ fontSize: 11, color: colors.textFaint }}
+                numberOfLines={1}
+              >
                 {miner.deviceModel}
-              </Badge>
+              </Text>
             )}
           </View>
           {!miner.isOnline && (
-            <Text variant="caption" color="danger">
+            <Text variant="mono" style={{ fontSize: 11, color: colors.danger }}>
               {t('common.offline')}
             </Text>
           )}
@@ -167,20 +171,29 @@ export function MinerDetailScreen({ route, navigation }: Props) {
             tintColor={colors.text}
           />
         }
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 32, gap: 16 }}
       >
-        {/* Warning badges */}
+        {/* Warnings — colored mono lines (no pills) */}
         {warnings.length > 0 && (
-          <View className="flex-row flex-wrap gap-2 px-4 py-3">
-            {warnings.map((warning) => (
-              <Badge
-                key={warning.type}
-                variant={warning.severity === 'danger' ? 'danger' : 'warning'}
-                size="md"
-              >
-                {warning.message}
-              </Badge>
-            ))}
+          <View
+            className="border border-border"
+            style={{ paddingHorizontal: 14, paddingVertical: 12, gap: 8 }}
+          >
+            {warnings.map((warning) => {
+              const warnColor =
+                warning.severity === 'danger' ? colors.danger : colors.warning;
+              return (
+                <View key={warning.type} className="flex-row items-center" style={{ gap: 8 }}>
+                  <Ionicons name="alert-circle" size={16} color={warnColor} />
+                  <Text
+                    variant="mono"
+                    style={{ fontSize: 12, color: warnColor, flex: 1 }}
+                  >
+                    {warning.message}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -189,36 +202,41 @@ export function MinerDetailScreen({ route, navigation }: Props) {
           <MinerStatsSection miner={miner} temperatureUnit={temperatureUnit} />
         ) : (
           /* Offline state */
-          <View className="px-4 mb-4">
-            <View className="bg-secondary rounded-lg p-4">
-              <View className="flex-row items-center gap-2 mb-3">
-                <View className="w-2 h-2 rounded-full bg-danger" />
-                <Text variant="body" className="font-medium">
-                  {t('miners.minerIsOffline')}
+          <Card padding="none">
+            <View
+              className="flex-row items-center border-b border-border-light"
+              style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
+            >
+              <View className="w-2 h-2 rounded-full bg-danger" />
+              <Text variant="mono" className="font-bold" style={{ fontSize: 14, color: colors.textHigh }}>
+                {t('miners.minerIsOffline')}
+              </Text>
+            </View>
+            <View
+              className="flex-row items-center justify-between"
+              style={{ paddingHorizontal: 16, paddingVertical: 11 }}
+            >
+              <Text variant="mono" style={{ fontSize: 12, color: colors.textMuted }}>
+                {t('miners.lastSeen')}
+              </Text>
+              <Text variant="mono" style={{ fontSize: 12, color: colors.textValue }}>
+                {miner.lastSeen ? formatTimestamp(miner.lastSeen) : t('common.never')}
+              </Text>
+            </View>
+            {miner.bestDiff > 0 && (
+              <View
+                className="flex-row items-center justify-between border-t border-border-light"
+                style={{ paddingHorizontal: 16, paddingVertical: 11 }}
+              >
+                <Text variant="mono" style={{ fontSize: 12, color: colors.textMuted }}>
+                  {t('miners.lastBestDiff')}
+                </Text>
+                <Text variant="mono" style={{ fontSize: 12, color: colors.textValue }}>
+                  {formatDifficulty(miner.bestDiff)}
                 </Text>
               </View>
-              <View className="gap-2">
-                <View className="flex-row justify-between">
-                  <Text variant="body" color="muted">
-                    {t('miners.lastSeen')}
-                  </Text>
-                  <Text variant="body">
-                    {miner.lastSeen ? formatTimestamp(miner.lastSeen) : t('common.never')}
-                  </Text>
-                </View>
-                {miner.bestDiff > 0 && (
-                  <View className="flex-row justify-between">
-                    <Text variant="body" color="muted">
-                      {t('miners.lastBestDiff')}
-                    </Text>
-                    <Text variant="body">
-                      {formatDifficulty(miner.bestDiff)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
+            )}
+          </Card>
         )}
 
         {/* Per-ASIC heatmap (Avalon only). Self-fetches estats while expanded. */}

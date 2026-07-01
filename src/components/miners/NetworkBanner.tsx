@@ -42,7 +42,7 @@ export function NetworkBanner({
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(200)}
-      className={`bg-warning/10 border border-warning/20 rounded-lg p-3 ${className}`}
+      className={`bg-warning/10 border border-warning/20 p-3 ${className}`}
     >
       <View className="flex-row items-center gap-3">
         {/* Wifi off icon */}

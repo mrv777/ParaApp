@@ -1,18 +1,20 @@
 /**
- * SettingsMainScreen - User preferences and Bitcoin address management
+ * SettingsMainScreen - User preferences and Bitcoin address management.
+ *
+ * "Monochrome / framed" direction: a scrolling column of square hairline cards
+ * (SettingsCard), each with a monospace uppercase header. Preferences use the
+ * shared square segmented control (OptionToggleGroup); the widget/notification
+ * booleans use the square Switch. Matches the Settings handoff spec.
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { View, ScrollView, Pressable, TextInput, Linking, AppState } from 'react-native';
 import {
-  View,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Linking,
-  AppState,
-  Platform,
-} from 'react-native';
-import { LanguageSelectorSheet, OptionToggleGroup } from '@/components/settings';
+  LanguageSelectorSheet,
+  OptionToggleGroup,
+  SettingsCard,
+} from '@/components/settings';
+import { Switch } from '@/components/Switch';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -68,11 +70,14 @@ const SORT_OPTIONS: { value: WorkerSortOrder; label: string }[] = [
   { value: 'bestDiff', label: 'Best Diff' },
 ];
 
-
 /** External links */
 const LINKS = {
   parasite: 'https://parasite.space',
 };
+
+// Row label = near-white (#f4f4f5); values/desc use the muted/dim ramp.
+const LABEL_COLOR = colors.primary;
+const ROW_H_PAD = 14;
 
 export function SettingsMainScreen({ navigation }: Props) {
   const { t } = useTranslation();
@@ -113,6 +118,9 @@ export function SettingsMainScreen({ navigation }: Props) {
     () => isAddressValid === true && !!bitcoinAddress && isTaprootAddress(bitcoinAddress),
     [isAddressValid, bitcoinAddress]
   );
+
+  // Address is "valid" for the header chip only when saved + confirmed valid.
+  const showValidTag = isAddressValid === true && !!bitcoinAddress;
 
   // Sync input with store
   useEffect(() => {
@@ -177,7 +185,6 @@ export function SettingsMainScreen({ navigation }: Props) {
     navigation.navigate('QRScanner');
   }, [navigation]);
 
-
   const handleOpenLanguageSheet = useCallback(() => {
     haptics.light();
     setShowLanguageSheet(true);
@@ -234,161 +241,180 @@ export function SettingsMainScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      {/* Header */}
-      <View className="px-4 py-4 border-b border-border">
-        <Text variant="title" className="font-bold">
-          {t('settings.title')}
-        </Text>
-      </View>
-
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-          {/* Bitcoin Address Section */}
-          <View className="px-4 py-4">
-            <View className="flex-row items-center mb-3">
-              <Text variant="caption" color="muted" className="uppercase tracking-wide">
-                {t('settings.bitcoinAddress')}
-              </Text>
-              {bitcoinAddress && (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={14}
-                  color={colors.success}
-                  style={{ marginLeft: 6 }}
-                />
-              )}
-            </View>
+        {/* Screen title */}
+        <Text
+          variant="title"
+          className="font-bold"
+          style={{ fontSize: 30, lineHeight: 36, color: LABEL_COLOR, marginTop: 12, marginBottom: 16 }}
+        >
+          {t('settings.title')}
+        </Text>
 
-            {/* Address Input Row */}
-            <View className="flex-row items-center gap-2">
-              <View className="flex-1">
+        <View style={{ gap: 16 }}>
+          {/* ── Bitcoin Address ───────────────────────────── */}
+          <SettingsCard
+            header={t('settings.bitcoinAddress')}
+            headerRight={
+              showValidTag ? (
+                <View
+                  style={{
+                    backgroundColor: colors.textSecondary,
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                  }}
+                >
+                  <Text
+                    variant="mono"
+                    style={{ fontSize: 10, letterSpacing: 0.6, color: '#0c0c0d' }}
+                  >
+                    {t('settings.valid')}
+                  </Text>
+                </View>
+              ) : undefined
+            }
+          >
+            <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <TextInput
                   value={addressInput}
                   onChangeText={handleAddressChange}
                   onBlur={handleAddressSubmit}
                   onSubmitEditing={handleAddressSubmit}
-                  className="bg-secondary rounded-lg px-4 py-3"
-                  style={{ color: colors.text }}
-                  placeholderTextColor={colors.textMuted}
-                  placeholder="bc1q... or 1... or 3..."
+                  style={{
+                    flex: 1,
+                    fontFamily: 'JetBrainsMono_400Regular',
+                    fontSize: 14,
+                    color: colors.textValue,
+                    padding: 0,
+                  }}
+                  placeholderTextColor={colors.textDim}
+                  placeholder={t('settings.addressPlaceholder')}
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="done"
                 />
+                <Pressable
+                  onPress={handleScanQR}
+                  hitSlop={6}
+                  accessibilityLabel={t('settings.scanQr')}
+                  className="items-center justify-center active:opacity-70"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.14)',
+                    backgroundColor: colors.background,
+                  }}
+                >
+                  <Ionicons name="qr-code-outline" size={20} color={colors.textValue} />
+                </Pressable>
               </View>
-              <Pressable
-                onPress={handleScanQR}
-                className="p-3 bg-secondary rounded-lg active:opacity-70"
-                hitSlop={8}
-              >
-                <Ionicons name="qr-code-outline" size={24} color={colors.text} />
-              </Pressable>
+
+              {/* Validation error */}
+              {validationError && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(200)}
+                  className="flex-row items-center"
+                  style={{ marginTop: 10 }}
+                >
+                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
+                  <Text variant="caption" color="danger" className="ml-1">
+                    {validationError}
+                  </Text>
+                </Animated.View>
+              )}
+
+              {/* Taproot / Xverse warning */}
+              {showTaprootWarning && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(200)}
+                  className="flex-row"
+                  style={{ marginTop: 10 }}
+                >
+                  <Ionicons
+                    name="warning-outline"
+                    size={16}
+                    color={colors.warning}
+                    style={{ marginTop: 2 }}
+                  />
+                  <Text variant="caption" color="warning" className="ml-1 flex-1">
+                    {t('settings.taprootWarning')}
+                  </Text>
+                </Animated.View>
+              )}
             </View>
+          </SettingsCard>
 
-            {/* Validation Error */}
-            {validationError && (
-              <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(200)}
-                className="flex-row items-center mt-2"
-              >
-                <Ionicons
-                  name="alert-circle"
-                  size={16}
-                  color={colors.danger}
-                />
-                <Text variant="caption" color="danger" className="ml-1">
-                  {validationError}
-                </Text>
-              </Animated.View>
-            )}
-
-            {/* Taproot / Xverse warning */}
-            {showTaprootWarning && (
-              <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(200)}
-                className="flex-row mt-2"
-              >
-                <Ionicons
-                  name="warning-outline"
-                  size={16}
-                  color={colors.warning}
-                  style={{ marginTop: 2 }}
-                />
-                <Text variant="caption" color="warning" className="ml-1 flex-1">
-                  {t('settings.taprootWarning')}
-                </Text>
-              </Animated.View>
-            )}
-          </View>
-
-          {/* Preferences Section */}
-          <View className="px-4 py-4 border-t border-border">
-            <Text variant="caption" color="muted" className="mb-4 uppercase tracking-wide">
-              {t('settings.preferences')}
-            </Text>
-
+          {/* ── Preferences ───────────────────────────────── */}
+          <SettingsCard header={t('settings.preferences')}>
             {/* Language */}
             <Pressable
               onPress={handleOpenLanguageSheet}
-              className="flex-row items-center justify-between mb-4 active:opacity-70"
+              className="flex-row items-center justify-between active:opacity-70"
+              style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 14 }}
             >
-              <Text variant="body">{t('settings.language')}</Text>
-              <View className="flex-row items-center">
-                <Text variant="body" color="muted" className="mr-1">
+              <Text variant="body" style={{ fontSize: 16, color: LABEL_COLOR }}>
+                {t('settings.language')}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text variant="body" style={{ fontSize: 15, color: colors.textMuted }}>
                   {languageDisplayName}
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
               </View>
             </Pressable>
 
-            {/* Temperature Unit */}
-            <View className="mb-4">
+            {/* Temperature */}
+            <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 12 }}>
               <OptionToggleGroup
                 options={TEMP_OPTIONS}
                 selected={temperatureUnit}
                 onSelect={setTemperatureUnit}
                 label={t('settings.temperature')}
-                buttonClassName="px-4"
+                layout="inline"
+                font="mono"
               />
             </View>
 
             {/* Polling Interval */}
-            <View className="mb-4">
+            <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 12 }}>
               <OptionToggleGroup
                 options={POLLING_OPTIONS}
                 selected={pollingInterval}
                 onSelect={setPollingInterval}
                 label={t('settings.pollingInterval')}
+                layout="stacked"
+                font="mono"
               />
             </View>
 
-            {/* Worker Sort Order */}
-            <OptionToggleGroup
-              options={SORT_OPTIONS}
-              selected={workerSortOrder}
-              onSelect={setWorkerSortOrder}
-              label={t('settings.workerSort')}
-            />
-          </View>
+            {/* Worker Sort */}
+            <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 12 }}>
+              <OptionToggleGroup
+                options={SORT_OPTIONS}
+                selected={workerSortOrder}
+                onSelect={setWorkerSortOrder}
+                label={t('settings.workerSort')}
+                layout="stacked"
+                font="grotesk"
+              />
+            </View>
+          </SettingsCard>
 
-          {/* Notifications Section */}
+          {/* ── Notifications (kept, restyled) ─────────────── */}
           {canReceivePushNotifications() && (
-            <View className="px-4 py-4 border-t border-border">
-              <Text variant="caption" color="muted" className="mb-4 uppercase tracking-wide">
-                {t('settings.notifications')}
-              </Text>
-
+            <SettingsCard header={t('settings.notifications')}>
               {/* Permission denied banner */}
               {permissionStatus === 'denied' && (
-                <Animated.View
-                  entering={FadeIn.duration(200)}
-                  className="bg-secondary rounded-lg p-3 mb-4"
-                >
+                <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 12 }}>
                   <Text variant="caption" color="muted" className="mb-2">
                     {t('settings.notificationsDenied')}
                   </Text>
@@ -396,7 +422,7 @@ export function SettingsMainScreen({ navigation }: Props) {
                     onPress={handleOpenNotificationSettings}
                     className="flex-row items-center active:opacity-70"
                   >
-                    <Text variant="body" className="text-primary">
+                    <Text variant="body" style={{ color: LABEL_COLOR }}>
                       {t('settings.openSettings')}
                     </Text>
                     <Ionicons
@@ -406,140 +432,103 @@ export function SettingsMainScreen({ navigation }: Props) {
                       style={{ marginLeft: 4 }}
                     />
                   </Pressable>
-                </Animated.View>
+                </View>
               )}
 
               {/* Master toggle */}
-              <Pressable
-                onPress={handleToggleNotifications}
-                className="flex-row items-center justify-between py-2 active:opacity-70"
-                disabled={permissionStatus === 'denied'}
-              >
-                <Text
-                  variant="body"
-                  color={permissionStatus === 'denied' ? 'muted' : undefined}
-                >
-                  {t('settings.enableNotifications')}
-                </Text>
-                <Ionicons
-                  name={notificationsEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={24}
-                  color={
-                    permissionStatus === 'denied'
-                      ? colors.textMuted
-                      : notificationsEnabled
-                        ? colors.success
-                        : colors.textMuted
-                  }
+              <SettingRow label={t('settings.enableNotifications')} disabled={permissionStatus === 'denied'}>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={() => handleToggleNotifications()}
+                  disabled={permissionStatus === 'denied'}
                 />
-              </Pressable>
+              </SettingRow>
 
-              {/* Sub-toggles (visible when enabled) */}
+              {/* Sub-toggles (visible when enabled + granted) */}
               {notificationsEnabled && permissionStatus === 'granted' && (
-                <Animated.View
-                  entering={FadeIn.duration(200)}
-                  exiting={FadeOut.duration(200)}
-                  className="mt-2 ml-4 border-l-2 border-border pl-4"
-                >
-                  {/* Block found */}
-                  <Pressable
-                    onPress={() => handleToggleNotificationPref('blocks')}
-                    className="flex-row items-center justify-between py-2 active:opacity-70"
-                  >
-                    <Text variant="body">{t('settings.blockNotifications')}</Text>
-                    <Ionicons
-                      name={notificationPrefs.blocks ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={20}
-                      color={notificationPrefs.blocks ? colors.success : colors.textMuted}
-                    />
-                  </Pressable>
-
-                  {/* Worker status */}
-                  <Pressable
-                    onPress={() => handleToggleNotificationPref('workers')}
-                    className="flex-row items-center justify-between py-2 active:opacity-70"
-                  >
-                    <Text variant="body">{t('settings.workerNotifications')}</Text>
-                    <Ionicons
-                      name={notificationPrefs.workers ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={20}
-                      color={notificationPrefs.workers ? colors.success : colors.textMuted}
-                    />
-                  </Pressable>
-
-                  {/* Best difficulty */}
-                  <Pressable
-                    onPress={() => handleToggleNotificationPref('bestDiff')}
-                    className="flex-row items-center justify-between py-2 active:opacity-70"
-                  >
-                    <Text variant="body">{t('settings.bestDiffNotifications')}</Text>
-                    <Ionicons
-                      name={notificationPrefs.bestDiff ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={20}
-                      color={notificationPrefs.bestDiff ? colors.success : colors.textMuted}
-                    />
-                  </Pressable>
-                </Animated.View>
+                <SettingRow label={t('settings.blockNotifications')}>
+                  <Switch
+                    value={notificationPrefs.blocks}
+                    onValueChange={() => handleToggleNotificationPref('blocks')}
+                  />
+                </SettingRow>
               )}
-            </View>
+              {notificationsEnabled && permissionStatus === 'granted' && (
+                <SettingRow label={t('settings.workerNotifications')}>
+                  <Switch
+                    value={notificationPrefs.workers}
+                    onValueChange={() => handleToggleNotificationPref('workers')}
+                  />
+                </SettingRow>
+              )}
+              {notificationsEnabled && permissionStatus === 'granted' && (
+                <SettingRow label={t('settings.bestDiffNotifications')}>
+                  <Switch
+                    value={notificationPrefs.bestDiff}
+                    onValueChange={() => handleToggleNotificationPref('bestDiff')}
+                  />
+                </SettingRow>
+              )}
+            </SettingsCard>
           )}
 
-          {/* Widget Updates Section */}
-          {Platform.OS === 'ios' && (
-            <View className="px-4 py-4 border-t border-border">
-              <Text variant="caption" color="muted" className="mb-4 uppercase tracking-wide">
-                {t('settings.widgets')}
-              </Text>
-
-              <Pressable
-                onPress={handleToggleWidgetUpdates}
-                className="flex-row items-center justify-between py-2 active:opacity-70"
+          {/* ── Widgets ───────────────────────────────────── */}
+          <SettingsCard header={t('settings.widgets')}>
+            <View style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 14 }}>
+              <View
+                style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}
               >
-                <View className="flex-1 pr-4">
-                  <Text variant="body">{t('settings.widgetUpdates')}</Text>
-                  <Text variant="caption" color="muted" className="mt-1">
+                <View style={{ flex: 1 }}>
+                  <Text variant="body" style={{ fontSize: 16, color: LABEL_COLOR }}>
+                    {t('settings.widgetUpdates')}
+                  </Text>
+                  <Text
+                    variant="mono"
+                    style={{ fontSize: 11, lineHeight: 17, color: colors.textDim, marginTop: 6 }}
+                  >
                     {t('settings.widgetUpdatesDesc')}
                   </Text>
                 </View>
-                <Ionicons
-                  name={widgetUpdatesEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={24}
-                  color={widgetUpdatesEnabled ? colors.success : colors.textMuted}
-                />
-              </Pressable>
+                <View style={{ marginTop: 2 }}>
+                  <Switch
+                    value={widgetUpdatesEnabled}
+                    onValueChange={() => handleToggleWidgetUpdates()}
+                  />
+                </View>
+              </View>
 
               {permissionStatus === 'denied' && widgetUpdatesEnabled && (
-                <Text variant="caption" color="muted" className="mt-2">
+                <Text
+                  variant="mono"
+                  style={{ fontSize: 11, lineHeight: 17, color: colors.textFaint, marginTop: 8 }}
+                >
                   {t('settings.widgetUpdatesPermissionHint')}
                 </Text>
               )}
             </View>
-          )}
+          </SettingsCard>
 
-          {/* About Section */}
-          <View className="px-4 py-4 border-t border-border">
-            <Text variant="caption" color="muted" className="mb-3 uppercase tracking-wide">
-              {t('settings.about')}
-            </Text>
-
-            {/* Version */}
-            <View className="flex-row items-center justify-between py-3">
-              <Text variant="body">{t('settings.version')}</Text>
-              <Text variant="body" color="muted">
+          {/* ── About ─────────────────────────────────────── */}
+          <SettingsCard header={t('settings.about')}>
+            <SettingRow label={t('settings.version')}>
+              <Text variant="mono" style={{ fontSize: 14, color: colors.textMuted }}>
                 {appVersion}
               </Text>
-            </View>
+            </SettingRow>
 
-            {/* Parasite Pool Link */}
             <Pressable
               onPress={() => handleOpenLink(LINKS.parasite)}
-              className="flex-row items-center justify-between py-3 border-t border-border/50 active:opacity-70"
+              className="flex-row items-center justify-between active:opacity-70"
+              style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 14 }}
             >
-              <Text variant="body">{t('settings.website')}</Text>
-              <Ionicons name="open-outline" size={18} color={colors.textMuted} />
+              <Text variant="body" style={{ fontSize: 16, color: LABEL_COLOR }}>
+                {t('settings.website')}
+              </Text>
+              <Ionicons name="open-outline" size={17} color={colors.textMuted} />
             </Pressable>
-          </View>
-        </ScrollView>
+          </SettingsCard>
+        </View>
+      </ScrollView>
 
       {/* Language Selector Sheet */}
       <LanguageSelectorSheet
@@ -547,5 +536,36 @@ export function SettingsMainScreen({ navigation }: Props) {
         onClose={() => setShowLanguageSheet(false)}
       />
     </SafeAreaView>
+  );
+}
+
+/** A label-left / control-right card row with consistent padding. */
+function SettingRow({
+  label,
+  disabled = false,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: ROW_H_PAD,
+        paddingVertical: 14,
+      }}
+    >
+      <Text
+        variant="body"
+        style={{ fontSize: 16, color: disabled ? colors.textMuted : LABEL_COLOR }}
+      >
+        {label}
+      </Text>
+      {children}
+    </View>
   );
 }

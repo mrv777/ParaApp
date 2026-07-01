@@ -8,10 +8,10 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
-import { Badge } from '../Badge';
 import { aggregateMinerStats } from '@/utils/minerAggregation';
 import { formatHashrate } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import type { LocalMiner } from '@/types';
 import type { MinersStackParamList } from '@/types/navigation';
@@ -29,6 +29,7 @@ export function MultiMinerSection({
   expanded,
   onToggle,
 }: MultiMinerSectionProps) {
+  const { t } = useTranslation();
   const navigation =
     useNavigation<NativeStackNavigationProp<MinersStackParamList>>();
 
@@ -47,31 +48,34 @@ export function MultiMinerSection({
   };
 
   return (
-    <View className="mt-3 pt-3 border-t border-border">
+    <View className="border-t border-border-light" style={{ paddingTop: 12 }}>
       {/* Aggregated stats header */}
       <Pressable
         onPress={handleToggle}
         className="flex-row items-center justify-between"
       >
-        <View>
-          <Text variant="caption" color="muted">
-            Combined Local Fleet ({aggregatedStats.onlineCount}/
-            {aggregatedStats.minerCount} online)
+        <View style={{ gap: 2 }}>
+          <Text
+            variant="mono"
+            className="uppercase"
+            style={{ fontSize: 8, letterSpacing: 0.8, color: colors.textDim }}
+          >
+            {`Combined Fleet · ${aggregatedStats.onlineCount}/${aggregatedStats.minerCount} online`}
           </Text>
-          <Text variant="body" className="font-medium">
+          <Text variant="mono" className="font-bold" style={{ fontSize: 14, color: colors.text }}>
             {formatHashrate(aggregatedStats.totalHashrate * 1e9)}
           </Text>
         </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={16}
-          color={colors.textMuted}
+          color={colors.textDim}
         />
       </Pressable>
 
       {/* Expandable miner list */}
       {expanded && (
-        <View className="mt-3 gap-2">
+        <View style={{ marginTop: 6 }}>
           {miners.map((miner) => {
             const isCurrent = miner.ip === currentMinerIp;
             const displayName = miner.alias || miner.hostname || miner.ip;
@@ -81,9 +85,10 @@ export function MultiMinerSection({
                 key={miner.ip}
                 onPress={() => handleNavigateToMiner(miner.ip)}
                 disabled={isCurrent}
-                className={`flex-row items-center justify-between py-2 ${
-                  isCurrent ? 'opacity-60' : ''
+                className={`flex-row items-center justify-between border-t border-border-light ${
+                  isCurrent ? 'opacity-60' : 'active:opacity-70'
                 }`}
+                style={{ paddingVertical: 9 }}
               >
                 <View className="flex-row items-center gap-2 flex-1">
                   <View
@@ -91,19 +96,32 @@ export function MultiMinerSection({
                       miner.isOnline ? 'bg-success' : 'bg-danger'
                     }`}
                   />
-                  <Text variant="body" numberOfLines={1} className="flex-1">
+                  <Text
+                    variant="mono"
+                    numberOfLines={1}
+                    className="flex-1"
+                    style={{ fontSize: 12, color: colors.textValue }}
+                  >
                     {displayName}
                   </Text>
                   {isCurrent && (
-                    <Badge variant="default" size="sm">
+                    <Text
+                      variant="mono"
+                      className="uppercase"
+                      style={{ fontSize: 8, letterSpacing: 0.8, color: colors.textFaint }}
+                    >
                       This
-                    </Badge>
+                    </Text>
                   )}
                 </View>
-                <Text variant="mono" className="text-sm ml-2">
+                <Text
+                  variant="mono"
+                  className="ml-2"
+                  style={{ fontSize: 12, color: miner.isOnline ? colors.textValue : colors.textFaint }}
+                >
                   {miner.isOnline
                     ? formatHashrate(miner.hashRate * 1e9)
-                    : 'Offline'}
+                    : t('common.offline')}
                 </Text>
               </Pressable>
             );

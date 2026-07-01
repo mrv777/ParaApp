@@ -7,7 +7,7 @@
  */
 
 import NetInfo from '@react-native-community/netinfo';
-import type { DiscoveryProgress, DiscoveryOptions } from '@/types';
+import type { DiscoveryProgress, DiscoveryOptions, MinerType } from '@/types';
 import { isAvalon } from '@/api/avalon';
 import { extractSubnet } from './validation';
 
@@ -26,7 +26,7 @@ const DEFAULT_CONCURRENCY = 30;
  */
 export interface DiscoveryCallbacks {
   onProgress: (progress: DiscoveryProgress) => void;
-  onFound: (ip: string) => void;
+  onFound: (ip: string, minerType?: MinerType) => void;
   onComplete: () => void;
   onError: (error: string) => void;
 }
@@ -93,24 +93,32 @@ async function probeAxeOS(ip: string, signal?: AbortSignal): Promise<boolean> {
 
 /**
  * Probe both supported miner protocols against a single IP. Returns
- * true as soon as either responds. The two probes run concurrently so
- * scan wall-clock time stays close to the original AxeOS-only path.
+ * the detected protocol hint as soon as either responds. The two probes
+ * run concurrently so scan wall-clock time stays close to the original
+ * AxeOS-only path.
  *
  * AbortSignal is honored by the AxeOS probe; the Avalon TCP probe
  * uses its own short timeout via `isAvalon`.
  */
-async function probeMiner(ip: string, signal?: AbortSignal): Promise<boolean> {
+async function probeMiner(
+  ip: string,
+  signal?: AbortSignal
+): Promise<MinerType | null> {
   // Promise.any resolves on first true; we wrap each probe so a false
   // result *rejects* (so .any can pick the first true) and convert
   // back at the end.
   const probes = [
-    probeAxeOS(ip, signal).then((ok) => (ok ? true : Promise.reject())),
-    isAvalon(ip).then((ok) => (ok ? true : Promise.reject())),
+    probeAxeOS(ip, signal).then((ok) =>
+      ok ? ('unknown' as MinerType) : Promise.reject()
+    ),
+    isAvalon(ip).then((ok) =>
+      ok ? ('avalon' as MinerType) : Promise.reject()
+    ),
   ];
   try {
     return await Promise.any(probes);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -184,15 +192,15 @@ export function scanSubnet(
           const ip = ips[currentIndex];
 
           try {
-            const isMiner = await probeMiner(ip, controller.signal);
+            const minerType = await probeMiner(ip, controller.signal);
 
             if (controller.signal.aborted) {
               break;
             }
 
-            if (isMiner) {
+            if (minerType) {
               found++;
-              callbacks.onFound(ip);
+              callbacks.onFound(ip, minerType);
             }
           } catch {
             // Ignore individual probe errors

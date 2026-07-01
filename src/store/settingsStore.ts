@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { TemperatureUnit } from '@/utils/formatting';
-import type { MinerSortOption, MinerFilterOption } from '@/types';
+import type { MinerSortOption, MinerFilterOption, MinerViewMode } from '@/types';
 
 export type PollingInterval = 5000 | 10000 | 20000 | 30000;
 export type WorkerSortOrder = 'hashrate' | 'name' | 'bestDiff';
@@ -26,6 +26,7 @@ interface SettingsState {
   workerSortOrder: WorkerSortOrder;
   minerSortBy: MinerSortOption;
   minerFilterBy: MinerFilterOption;
+  minerViewMode: MinerViewMode;
   language: Language;
 
   // User Bitcoin address (persisted)
@@ -62,6 +63,7 @@ interface SettingsActions {
   setWorkerSortOrder: (order: WorkerSortOrder) => void;
   setMinerSortBy: (sort: MinerSortOption) => void;
   setMinerFilterBy: (filter: MinerFilterOption) => void;
+  setMinerViewMode: (mode: MinerViewMode) => void;
   setBitcoinAddress: (address: string | null) => void;
   setRoundMode: (mode: RoundMode) => void;
   setLanguage: (lang: Language) => void;
@@ -81,6 +83,7 @@ const initialState: SettingsState = {
   workerSortOrder: 'hashrate',
   minerSortBy: 'status',
   minerFilterBy: 'all',
+  minerViewMode: 'list',
   roundMode: 'round',
   language: 'auto',
   bitcoinAddress: null,
@@ -109,6 +112,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setMinerSortBy: (sort) => set({ minerSortBy: sort }),
 
       setMinerFilterBy: (filter) => set({ minerFilterBy: filter }),
+
+      setMinerViewMode: (mode) => set({ minerViewMode: mode }),
 
       setBitcoinAddress: (address) => set({ bitcoinAddress: address }),
 
@@ -167,6 +172,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         workerSortOrder: state.workerSortOrder,
         minerSortBy: state.minerSortBy,
         minerFilterBy: state.minerFilterBy,
+        minerViewMode: state.minerViewMode,
         roundMode: state.roundMode,
         language: state.language,
         bitcoinAddress: state.bitcoinAddress,
@@ -237,4 +243,6 @@ export const selectPushToken = (state: SettingsState) => state.pushToken;
 export const selectWidgetUpdatesEnabled = (state: SettingsState) =>
   state.widgetUpdatesEnabled;
 export const selectRoundMode = (state: SettingsState) => state.roundMode;
+export const selectMinerViewMode = (state: SettingsState) =>
+  state.minerViewMode;
 export const selectWorkerNotes = (state: SettingsState) => state.workerNotes;

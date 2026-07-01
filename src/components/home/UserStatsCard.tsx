@@ -1,39 +1,75 @@
 /**
- * UserStatsCard - Displays user hashrate stats when address is configured
+ * UserStatsCard - The "Mining Stats" card: wallet header + share, a live hero
+ * hashrate with a 1h/24h/7d/30d segmented control, three sub-stats, the
+ * embedded 24h-style hashrate chart with axis labels, and a badges footer that
+ * opens the achievements sheet. Terminal/brutalist styling.
  */
 
+import { useMemo, type ReactNode } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../Card';
 import { Text } from '../Text';
-import { StatItem } from '../StatItem';
 import { SkeletonStatItem } from '../SkeletonLoader';
-import { formatHashrate } from '@/utils/formatting';
+import { TimePresetButtons, UserHashrateChart } from '../charts';
+import { formatXAxisLabel } from '../charts/chart-utils';
+import { BlockMedal, RefineryMedal } from './BadgeMedals';
+import { formatHashrate, truncateAddress } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
-import type { UserStats } from '@/types';
+import type {
+  UserStats,
+  UserHistoricalPoint,
+  UserRoundsResponse,
+  HistoricalPeriod,
+} from '@/types';
+
+const CHART_HEIGHT = 96;
+const EMPTY_HISTORY: UserHistoricalPoint[] = [];
 
 export interface UserStatsCardProps {
   stats: UserStats | null;
-  difficultyRank?: number | null;
-  loyaltyRank?: number | null;
-  workRank?: number | null;
+  walletAddress?: string;
+  period: HistoricalPeriod;
+  historical?: UserHistoricalPoint[];
+  onPeriodChange: (period: HistoricalPeriod) => void;
+  isLoadingHistorical?: boolean;
+  onChartPress?: () => void;
+  rounds?: UserRoundsResponse | null;
+  hasRefineryBadge?: boolean;
+  onBadgesPress?: () => void;
   isLoading?: boolean;
   className?: string;
   onShare?: () => void;
   isSharing?: boolean;
 }
 
-const formatRank = (rank: number | null | undefined): string => {
-  if (rank == null) return '--';
-  return `#${rank}`;
-};
+/** Split "6.11 PH/s" into ["6.11", "PH/s"]. */
+function splitHashrate(value: string): [string, string] {
+  const idx = value.indexOf(' ');
+  if (idx === -1) return [value, ''];
+  return [value.slice(0, idx), value.slice(idx + 1)];
+}
+
+function SubStat({ label, value }: { label: string; value: string }) {
+  return (
+    <Text variant="mono" style={{ fontSize: 12, color: colors.textMuted }}>
+      {label} <Text variant="mono" style={{ fontSize: 12, color: colors.textValue }}>{value}</Text>
+    </Text>
+  );
+}
 
 export function UserStatsCard({
   stats,
-  difficultyRank,
-  loyaltyRank,
-  workRank,
+  walletAddress = '',
+  period,
+  historical = EMPTY_HISTORY,
+  onPeriodChange,
+  isLoadingHistorical = false,
+  onChartPress,
+  rounds,
+  hasRefineryBadge = false,
+  onBadgesPress,
   isLoading = false,
   className = '',
   onShare,
@@ -42,28 +78,61 @@ export function UserStatsCard({
   const { t } = useTranslation();
   const showSkeleton = isLoading && !stats;
 
+  const [heroValue, heroUnit] = stats?.hashrate
+    ? splitHashrate(formatHashrate(stats.hashrate))
+    : ['--', ''];
+
+  // Three evenly-spaced axis labels (start / middle / end) from the series.
+  const axisLabels = useMemo<string[]>(() => {
+    if (!historical || historical.length === 0) return [];
+    const first = historical[0];
+    const mid = historical[Math.floor(historical.length / 2)];
+    const last = historical[historical.length - 1];
+    return [first, mid, last].map((p) => formatXAxisLabel(p.timestamp, period));
+  }, [historical, period]);
+
+  // Badge avatars (real medals) + total count for the footer.
+  const history = rounds?.history ?? [];
+  const totalBadges = history.length + (hasRefineryBadge ? 1 : 0);
+  const avatarMedals = useMemo(() => {
+    const medals: ReactNode[] = history
+      .slice(0, 3)
+      .map((h) => <BlockMedal key={h.block_height} size={20} blockHeight={h.block_height} />);
+    if (medals.length < 3 && hasRefineryBadge) {
+      medals.push(<RefineryMedal key="refinery" size={20} />);
+    }
+    return medals;
+  }, [history, hasRefineryBadge]);
+  const overflow = totalBadges - avatarMedals.length;
+
   return (
-    <Card padding="sm" className={className}>
-      <View className="mb-2 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="speedometer-outline" size={18} color={colors.textMuted} />
-          <Text variant="subtitle" className="text-base">
-            {t('home.miningStats')}
-          </Text>
-        </View>
+    <Card padding="none" className={className}>
+      {/* Header: wallet address + share */}
+      <View
+        className="flex-row items-center justify-between"
+        style={{ paddingHorizontal: 16, paddingTop: 12 }}
+      >
+        <Text
+          variant="mono"
+          style={{ fontSize: 12, letterSpacing: 0.72, color: colors.textSecondary }}
+          numberOfLines={1}
+        >
+          {walletAddress ? truncateAddress(walletAddress, 5) : t('home.miningStats')}
+        </Text>
         {onShare && (
           <Pressable
             onPress={onShare}
             disabled={isSharing || showSkeleton}
             hitSlop={8}
             className="active:opacity-60"
+            style={{ padding: 2 }}
           >
             {isSharing ? (
               <ActivityIndicator size="small" color={colors.textMuted} />
             ) : (
               <Ionicons
                 name="share-outline"
-                size={20}
+                size={16}
                 color={showSkeleton ? colors.textDisabled : colors.textMuted}
               />
             )}
@@ -71,99 +140,141 @@ export function UserStatsCard({
         )}
       </View>
 
-      {showSkeleton ? (
-        <View className="gap-3">
-          <SkeletonStatItem />
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <SkeletonStatItem />
-            </View>
-            <View className="flex-1">
-              <SkeletonStatItem />
-            </View>
-            <View className="flex-1">
-              <SkeletonStatItem />
-            </View>
-          </View>
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <SkeletonStatItem />
-            </View>
-            <View className="flex-1">
-              <SkeletonStatItem />
-            </View>
-            <View className="flex-1">
-              <SkeletonStatItem />
-            </View>
-          </View>
+      {/* Body */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
+        {/* Label + segmented control */}
+        <View className="flex-row items-center justify-between">
+          <Text
+            variant="caption"
+            className="uppercase"
+            style={{ fontSize: 10, letterSpacing: 1.6, color: colors.textDim }}
+          >
+            {t('home.currentHashrate')}
+          </Text>
+          <TimePresetButtons
+            selected={period}
+            onSelect={onPeriodChange}
+            disabled={isLoadingHistorical}
+          />
         </View>
-      ) : (
-        <View className="gap-3">
-          {/* Primary hashrate — hero size (inline fontSize so it reliably wins
-              over the mono Text variant's base size) */}
-          <View className="gap-1">
-            <Text variant="caption" className="text-base">
-              {t('home.currentHashrate')}
-            </Text>
-            <Text
-              variant="mono"
-              className="font-bold text-foreground"
-              style={{ fontSize: 26, lineHeight: 32 }}
-            >
-              {stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
-            </Text>
-          </View>
 
-          {/* Secondary stats row */}
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <StatItem
-                label={t('home.avg1h')}
+        {showSkeleton ? (
+          <View style={{ marginTop: 8, gap: 12 }}>
+            <SkeletonStatItem />
+            <SkeletonStatItem />
+          </View>
+        ) : (
+          <>
+            {/* Hero (live current hashrate) */}
+            <View className="flex-row items-baseline" style={{ marginTop: 6, gap: 12 }}>
+              <Text
+                variant="mono"
+                className="font-bold text-foreground"
+                style={{ fontSize: 44, lineHeight: 53 }}
+              >
+                {heroValue}
+              </Text>
+              {heroUnit ? (
+                <Text variant="mono" style={{ fontSize: 19, color: '#b4b4b6' }}>
+                  {heroUnit}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Sub-stats */}
+            <View className="flex-row flex-wrap" style={{ marginTop: 8, gap: 16 }}>
+              <SubStat
+                label={t('home.oneHourShort')}
                 value={stats?.hashrate1h ? formatHashrate(stats.hashrate1h) : '--'}
-                size="sm"
               />
-            </View>
-            <View className="flex-1">
-              <StatItem
-                label={t('home.avg24h')}
+              <SubStat
+                label={t('home.oneDayShort')}
                 value={stats?.hashrate24h ? formatHashrate(stats.hashrate24h) : '--'}
-                size="sm"
               />
-            </View>
-            <View className="flex-1">
-              <StatItem
-                label={t('home.bestDiff')}
+              <SubStat
+                label={t('home.bestShort')}
                 value={stats?.bestDifficultyFormatted || '--'}
-                size="sm"
               />
             </View>
-          </View>
+          </>
+        )}
 
-          {/* Leaderboard ranks row (no icons — keeps long labels on one line) */}
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <StatItem
-                label={t('home.difficultyRank')}
-                value={formatRank(difficultyRank)}
-                size="sm"
-              />
-            </View>
-            <View className="flex-1">
-              <StatItem
-                label={t('home.workRank')}
-                value={formatRank(workRank)}
-                size="sm"
-              />
-            </View>
-            <View className="flex-1">
-              <StatItem
-                label={t('home.loyaltyRank')}
-                value={formatRank(loyaltyRank)}
-                size="sm"
-              />
+        {/* Chart — a sparkline; tap anywhere opens the full-screen interactive
+            chart. pointerEvents="none" lets the tap fall through to the Pressable
+            (and keeps the embedded chart from showing its own clipped tooltip). */}
+        <Pressable onPress={onChartPress} style={{ marginTop: 12 }}>
+          <View pointerEvents="none">
+            <UserHashrateChart
+              data={historical}
+              period={period}
+              isLoading={isLoadingHistorical}
+              height={CHART_HEIGHT}
+              variant="embedded"
+            />
+          </View>
+        </Pressable>
+
+        {/* Axis labels */}
+        {axisLabels.length === 3 && (
+          <View
+            className="flex-row justify-between"
+            style={{ paddingBottom: 12, marginTop: 2 }}
+          >
+            {axisLabels.map((label, i) => (
+              <Text
+                key={i}
+                variant="mono"
+                style={{ fontSize: 10, color: colors.textFaint }}
+              >
+                {label}
+              </Text>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {/* Badges footer */}
+      {totalBadges > 0 && (
+        <Pressable
+          onPress={onBadgesPress}
+          className="flex-row items-center justify-between border-t border-border-light active:opacity-60"
+          style={{ paddingHorizontal: 16, paddingVertical: 11 }}
+        >
+          <View className="flex-row items-center" style={{ gap: 9 }}>
+            <Text
+              variant="caption"
+              className="uppercase"
+              style={{ fontSize: 11, letterSpacing: 1.32, color: colors.textMuted }}
+            >
+              {t('home.badgesCount', { count: totalBadges })}
+            </Text>
+            <View className="flex-row items-center">
+              {avatarMedals.map((medal, i) => (
+                <View key={i} style={{ marginLeft: i === 0 ? 0 : -6 }}>
+                  {medal}
+                </View>
+              ))}
+              {overflow > 0 && (
+                <View
+                  className="items-center justify-center rounded-full"
+                  style={{
+                    width: 20,
+                    height: 20,
+                    marginLeft: -6,
+                    backgroundColor: '#111111',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.4)',
+                  }}
+                >
+                  <Text variant="mono" style={{ fontSize: 8, color: '#b4b4b6' }}>
+                    +{overflow}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
+        </Pressable>
       )}
     </Card>
   );

@@ -3,31 +3,25 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
 import { ShareableStatsCard } from '@/components/home/ShareableStatsCard';
 import { useShareStats } from '@/hooks/useShareStats';
 
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { Text } from '@/components/Text';
 import { TipBanner } from '@/components/TipBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
 import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
 import { MiningRewardCard } from '@/components/home/MiningRewardCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
-import { AchievementsCard } from '@/components/home/AchievementsCard';
 import { RoundsTable } from '@/components/home/RoundsTable';
 import { BadgeDetailSheet, type BadgeDetail } from '@/components/home/BadgeDetailSheet';
+import { AchievementsSheet } from '@/components/home/AchievementsSheet';
 import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
-import {
-  UserHashrateChart,
-  UserFullScreenChart,
-  TimePresetButtons,
-} from '@/components/charts';
-import { usePoolPolling, useUserPolling, useUserRanks } from '@/hooks';
+import { UserFullScreenChart } from '@/components/charts';
+import { usePoolPolling, useUserPolling } from '@/hooks';
 import {
   usePoolStore,
   selectPoolError,
@@ -59,6 +53,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<BadgeDetail | null>(null);
+  const [achievementsVisible, setAchievementsVisible] = useState(false);
 
   // Share stats functionality
   const shareCardRef = useRef<View>(null);
@@ -152,9 +147,6 @@ export function HomeMainScreen({ navigation }: Props) {
     }
   }, [hasAddress, historical, fetchHistorical, historicalPeriod]);
 
-  // Get user leaderboard ranks
-  const { difficultyRank, loyaltyRank, workRank } = useUserRanks();
-
   // Determine which error to show
   const error = hasAddress ? userError : poolError;
   const clearError = hasAddress ? clearUserError : clearPoolError;
@@ -197,6 +189,23 @@ export function HomeMainScreen({ navigation }: Props) {
     [setHistoricalPeriod]
   );
 
+  // Badge flow: the achievements sheet and the badge-detail sheet are both RN
+  // Modals, and RN can't reliably present a second Modal while the first is
+  // dismissing. Close the achievements sheet first, then open the detail once
+  // it has fully unmounted (Sheet close animation ~200ms).
+  const badgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+    },
+    []
+  );
+  const handleAchievementBadgePress = useCallback((badge: BadgeDetail) => {
+    setAchievementsVisible(false);
+    if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+    badgeTimerRef.current = setTimeout(() => setSelectedBadge(badge), 280);
+  }, []);
+
   // Full screen chart handlers
   const openFullScreen = useCallback(() => {
     haptics.light();
@@ -236,54 +245,26 @@ export function HomeMainScreen({ navigation }: Props) {
         )}
 
         {hasAddress ? (
-          /* With Address: Show user stats, chart, and workers */
-          <View className="px-4 pt-3 gap-3">
+          /* With Address: Mining Stats → Rounds → Workers, then extras */
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 14 }}>
             <UserStatsCard
               stats={userStats ?? null}
-              difficultyRank={difficultyRank}
-              loyaltyRank={loyaltyRank}
-              workRank={workRank}
+              walletAddress={bitcoinAddress ?? ''}
+              period={historicalPeriod}
+              historical={historical ?? []}
+              onPeriodChange={handlePeriodChange}
+              isLoadingHistorical={isLoadingHistorical}
+              onChartPress={openFullScreen}
+              rounds={userRounds ?? null}
+              hasRefineryBadge={hasRefineryBadge}
+              onBadgesPress={() => setAchievementsVisible(true)}
               isLoading={isUserLoading}
               onShare={captureAndShare}
               isSharing={isSharing}
             />
 
-            {/* Achievements */}
-            <AchievementsCard
-              rounds={userRounds ?? null}
-              hasRefineryBadge={hasRefineryBadge}
-              isLoading={isUserLoading}
-              onBadgePress={setSelectedBadge}
-            />
-
             {/* Rounds table (diff/work/blocks ranks per round) */}
             <RoundsTable rounds={userRounds ?? null} isLoading={isUserLoading} />
-
-            {/* User Hashrate Chart */}
-            <View>
-              <TimePresetButtons
-                selected={historicalPeriod}
-                onSelect={handlePeriodChange}
-                disabled={isLoadingHistorical}
-                className="mb-3"
-              />
-
-              <Pressable onPress={openFullScreen} className="relative">
-                <UserHashrateChart
-                  data={historical ?? []}
-                  period={historicalPeriod}
-                  isLoading={isLoadingHistorical}
-                  height={200}
-                />
-                {/* Expand hint overlay */}
-                <View className="absolute bottom-2 right-2 flex-row items-center bg-background/80 rounded-full px-2 py-1">
-                  <Ionicons name="expand-outline" size={14} color={colors.textMuted} />
-                  <Text variant="caption" color="muted" className="ml-1 text-xs">
-                    {t('home.tapToExpand')}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
 
             <WorkersPreviewCard
               workers={sortedWorkers}
@@ -309,7 +290,7 @@ export function HomeMainScreen({ navigation }: Props) {
           </View>
         ) : (
           /* Without Address: Show add address CTA */
-          <View className="px-4 pt-3 gap-3">
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, gap: 14 }}>
             <AddAddressPrompt onPress={handleAddAddress} />
 
             {/* Fleet Overview Card (shown even without address) */}
@@ -319,6 +300,15 @@ export function HomeMainScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      {/* Achievements sheet — opened from the Mining Stats badges footer */}
+      <AchievementsSheet
+        visible={achievementsVisible}
+        onClose={() => setAchievementsVisible(false)}
+        rounds={userRounds ?? null}
+        hasRefineryBadge={hasRefineryBadge}
+        onBadgePress={handleAchievementBadgePress}
+      />
 
       {/* Badge detail sheet (rendered at screen root, like other sheets) */}
       <BadgeDetailSheet

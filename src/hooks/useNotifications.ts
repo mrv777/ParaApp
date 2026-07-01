@@ -49,6 +49,7 @@ export function useNotifications() {
 
   // Track previous address for re-registration
   const prevAddressRef = useRef<string | null>(null);
+  const prevNotificationsEnabledRef = useRef(notificationsEnabled);
   const prevWidgetUpdatesEnabledRef = useRef(widgetUpdatesEnabled);
   const isRegistering = useRef(false);
   const prefsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,7 +97,8 @@ export function useNotifications() {
         token,
         bitcoinAddress,
         currentPrefs,
-        widgetUpdatesEnabled
+        widgetUpdatesEnabled,
+        notificationsEnabled
       );
 
       // Sync preferences from backend if they exist (cross-device sync)
@@ -133,7 +135,8 @@ export function useNotifications() {
               freshToken,
               bitcoinAddress,
               retryPrefs,
-              widgetUpdatesEnabled
+              widgetUpdatesEnabled,
+              notificationsEnabled
             );
             if (retryResult.success) {
               console.log('[Notifications] Registration succeeded with fresh token');
@@ -251,7 +254,8 @@ export function useNotifications() {
         pushToken,
         bitcoinAddress,
         notificationPrefs,
-        widgetUpdatesEnabled
+        widgetUpdatesEnabled,
+        notificationsEnabled
       ).catch((error) => {
         console.warn('Failed to sync notification preferences:', error);
       });
@@ -290,7 +294,8 @@ export function useNotifications() {
           pushToken,
           bitcoinAddress,
           notificationPrefs,
-          widgetUpdatesEnabled
+          widgetUpdatesEnabled,
+          notificationsEnabled
         ).catch((error) => {
           console.warn('Failed to sync preferences on background:', error);
         });
@@ -308,31 +313,40 @@ export function useNotifications() {
     notificationPrefs,
   ]);
 
-  // If widget updates are disabled while visible notifications are also off,
-  // the normal preference sync is skipped. Still tell the backend to stop
-  // silent widget refresh nudges when a token is available.
+  // When both visible notifications AND widget updates are off, the normal
+  // debounced sync bails (there's nothing to keep the subscription alive for),
+  // so it never tells the backend the flags went false. Whichever toggle was
+  // flipped last to reach the all-off state, push both flags = false once so the
+  // cron stops sending visible pushes (gated on notifications_enabled) and silent
+  // widget refreshes (gated on widget_updates_enabled). Covers both orderings.
   useEffect(() => {
+    const wasNotificationsEnabled = prevNotificationsEnabledRef.current;
     const wasWidgetUpdatesEnabled = prevWidgetUpdatesEnabledRef.current;
+    prevNotificationsEnabledRef.current = notificationsEnabled;
     prevWidgetUpdatesEnabledRef.current = widgetUpdatesEnabled;
 
     if (
       !isHydrated ||
       notificationsEnabled ||
       widgetUpdatesEnabled ||
-      !wasWidgetUpdatesEnabled ||
       !bitcoinAddress ||
       !pushToken
     ) {
       return;
     }
 
+    // Only act on the transition INTO the all-off state (one flag was on last
+    // render); avoids re-sending on unrelated re-renders while already all-off.
+    if (!wasNotificationsEnabled && !wasWidgetUpdatesEnabled) return;
+
     updatePreferences(
       pushToken,
       bitcoinAddress,
       notificationPrefs,
+      false,
       false
     ).catch((error) => {
-      console.warn('Failed to disable widget update preference:', error);
+      console.warn('Failed to sync disabled push preferences:', error);
     });
   }, [
     isHydrated,

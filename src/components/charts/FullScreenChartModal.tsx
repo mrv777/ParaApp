@@ -130,16 +130,17 @@ export function FullScreenChartModal<T>({
         </View>
 
         {/* Chart */}
-        <View className="flex-1 px-4">
+        <View className="flex-1 px-4 py-6">
           {renderChart({ data, height: chartHeight })}
         </View>
 
         {/* Time preset buttons */}
-        <View className="px-4 pb-4 pt-2">
+        <View className="px-4 pb-6 pt-2">
           <TimePresetButtons
             selected={period}
             onSelect={handlePeriodChange}
             disabled={isLoading}
+            fill
           />
         </View>
       </SafeAreaView>

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   btc_address TEXT NOT NULL,
   active INTEGER DEFAULT 1,
   widget_updates_enabled INTEGER DEFAULT 0,
+  notifications_enabled INTEGER DEFAULT 1,
   last_widget_push_at INTEGER,
   created_at INTEGER DEFAULT (unixepoch()),
   updated_at INTEGER DEFAULT (unixepoch())

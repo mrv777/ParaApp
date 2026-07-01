@@ -21,6 +21,7 @@ interface RegisterRequest {
   btcAddress: string;
   preferences?: NotificationPrefs;
   widgetUpdatesEnabled?: boolean;
+  notificationsEnabled?: boolean;
 }
 
 interface RegisterResponse {
@@ -39,7 +40,8 @@ export async function registerDevice(
   pushToken: string,
   btcAddress: string,
   preferences?: NotificationPrefs,
-  widgetUpdatesEnabled?: boolean
+  widgetUpdatesEnabled?: boolean,
+  notificationsEnabled?: boolean
 ): Promise<ApiResult<RegisterResponse>> {
   const body: RegisterRequest = { pushToken, btcAddress };
   if (preferences) {
@@ -47,6 +49,9 @@ export async function registerDevice(
   }
   if (widgetUpdatesEnabled !== undefined) {
     body.widgetUpdatesEnabled = widgetUpdatesEnabled;
+  }
+  if (notificationsEnabled !== undefined) {
+    body.notificationsEnabled = notificationsEnabled;
   }
   return postJson<RegisterResponse>(`${BASE_URL}/register`, body);
 }
@@ -71,12 +76,19 @@ export async function updatePreferences(
   pushToken: string,
   btcAddress: string,
   preferences: NotificationPrefs,
-  widgetUpdatesEnabled?: boolean
+  widgetUpdatesEnabled?: boolean,
+  notificationsEnabled?: boolean
 ): Promise<ApiResult<{ success: boolean }>> {
   return fetchWithTimeout<{ success: boolean }>(`${BASE_URL}/preferences`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pushToken, btcAddress, ...preferences, widgetUpdatesEnabled }),
+    body: JSON.stringify({
+      pushToken,
+      btcAddress,
+      ...preferences,
+      widgetUpdatesEnabled,
+      notificationsEnabled,
+    }),
   });
 }
 

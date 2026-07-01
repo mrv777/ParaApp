@@ -146,6 +146,12 @@ const fr = {
     topDiff: 'Top Diff.',
     bestEver: 'Meilleur jamais',
     blocksParticipated: 'Blocs participés',
+    sinceBlock: 'Depuis bloc',
+    bestSharesSubtitle: 'Diff. max par bloc',
+    leaderboardMeta: 'Top {{shown}} · {{total}} membres',
+    leaderboardMetaShort: 'Top {{shown}}',
+    jumpToYou: 'Aller à vous',
+    notRanked: 'Non classé',
   },
 
   miners: {
@@ -166,6 +172,8 @@ const fr = {
     online: 'En ligne',
     offline: 'Hors ligne',
     connecting: 'Connexion...',
+    viewAsCards: 'Afficher en cartes',
+    viewAsList: 'Afficher en liste',
     hashrate: 'Hashrate',
     temp: 'Temp.',
     temperature: 'Température',
@@ -178,6 +186,7 @@ const fr = {
     frequency: 'Fréquence',
     voltage: 'Tension',
     fanSpeed: 'Vitesse ventilateur',
+    fan: 'Ventil.',
     auto: 'Auto',
     applyParasite: 'Appliquer le préréglage Parasite',
     setToParasite: 'Configurer Parasite Pool',
@@ -275,6 +284,7 @@ const fr = {
   settings: {
     title: 'Paramètres',
     bitcoinAddress: 'Adresse Bitcoin',
+    valid: 'VALIDE',
     addressPlaceholder: 'bc1q... ou 1... ou 3...',
     scanQr: 'Scanner QR',
     temperature: 'Température',
@@ -313,7 +323,7 @@ const fr = {
     widgets: 'Widgets',
     widgetUpdates: 'Mises à jour des widgets',
     widgetUpdatesDesc:
-      'Utilise l’actualisation en arrière-plan et les pushs silencieux quand ils sont disponibles pour garder les widgets iOS à jour.',
+      'Utilise l’actualisation en arrière-plan et les pushs silencieux quand ils sont disponibles pour garder vos widgets à jour.',
     widgetUpdatesPermissionHint:
       'Les pushs silencieux de widget ne sont pas disponibles tant que les notifications sont refusées, mais l’actualisation en arrière-plan peut encore mettre à jour les widgets.',
     openSettings: 'Ouvrir les paramètres',

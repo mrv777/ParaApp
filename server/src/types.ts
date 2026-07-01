@@ -9,6 +9,7 @@ export interface PushSubscription {
   btc_address: string;
   active: number; // 1 or 0
   widget_updates_enabled: number;
+  notifications_enabled: number; // 1 or 0 — per-device master toggle
   last_widget_push_at: number | null;
   created_at: number;
   updated_at: number;

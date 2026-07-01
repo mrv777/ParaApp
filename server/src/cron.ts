@@ -208,7 +208,14 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
         }
       }
 
-      const widgetTokens = [...blanketTokens, ...eventOnlyTokens];
+      // Only advance last_widget_push_at for tokens Expo actually accepted.
+      // Tokens whose submission failed this cycle stay "due" so the fallback
+      // retries them — silent refreshes are idempotent, so at worst a token
+      // that did send refreshes again, never one that's suppressed for ~2h.
+      const failedTokens = new Set(result.failedTokens);
+      const widgetTokens = [...blanketTokens, ...eventOnlyTokens].filter(
+        (token) => !failedTokens.has(token)
+      );
       if (widgetTokens.length > 0) {
         await markWidgetPushSent(env.DB, widgetTokens);
       }
@@ -270,24 +277,27 @@ async function checkPoolBlock(
     // Get all active subscriptions with block notifications enabled
     const allSubscriptions = await getAllActiveSubscriptions(env.DB);
 
-    // Group by address to check preferences
-    const addressTokens = new Map<string, string[]>();
+    // Group by address to check per-address block preference. Keep the full
+    // subscription rows so we can also honor each device's per-token master
+    // notifications flag below.
+    const addressSubs = new Map<string, PushSubscription[]>();
     for (const sub of allSubscriptions) {
-      const tokens = addressTokens.get(sub.btc_address) || [];
-      tokens.push(sub.push_token);
-      addressTokens.set(sub.btc_address, tokens);
+      const subs = addressSubs.get(sub.btc_address) || [];
+      subs.push(sub);
+      addressSubs.set(sub.btc_address, subs);
     }
 
     // Check preferences and create messages
-    for (const [address, tokens] of addressTokens) {
+    for (const [address, subs] of addressSubs) {
       const prefs = await getPreferences(env.DB, address);
       // Default to enabled if no preferences set
       const blocksEnabled = prefs ? prefs.notify_blocks === 1 : true;
 
       if (blocksEnabled) {
-        for (const token of tokens) {
+        for (const sub of subs) {
+          if (sub.notifications_enabled !== 1) continue;
           messages.push(
-            createPushMessage(token, 'Block Found!', 'Parasite Pool found a block!', {
+            createPushMessage(sub.push_token, 'Block Found!', 'Parasite Pool found a block!', {
               type: 'pool_block',
               blockTime: currentBlockTime,
             })
@@ -419,6 +429,7 @@ async function processUser(
           : `${offlineWorkers.length} workers went offline: ${offlineWorkers.join(', ')}`;
 
       for (const sub of tokens) {
+        if (sub.notifications_enabled !== 1) continue;
         messages.push(
           createPushMessage(sub.push_token, title, body, {
             type: 'worker_offline',
@@ -437,6 +448,7 @@ async function processUser(
           : `${onlineWorkers.length} workers are back online: ${onlineWorkers.join(', ')}`;
 
       for (const sub of tokens) {
+        if (sub.notifications_enabled !== 1) continue;
         messages.push(
           createPushMessage(sub.push_token, title, body, {
             type: 'worker_online',
@@ -462,6 +474,7 @@ async function processUser(
 
   if (bestDiffEnabled && newBestDiff) {
     for (const sub of tokens) {
+      if (sub.notifications_enabled !== 1) continue;
       messages.push(
         createPushMessage(
           sub.push_token,

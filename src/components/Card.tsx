@@ -20,8 +20,8 @@ export interface CardProps extends Omit<ViewProps, 'children'> {
 }
 
 const variantClasses: Record<CardVariant, string> = {
-  default: 'bg-secondary rounded-xl border border-border',
-  elevated: 'bg-surface-elevated rounded-xl border border-border',
+  default: 'bg-card border border-border',
+  elevated: 'bg-surface-elevated border border-border',
 };
 
 const paddingClasses: Record<CardPadding, string> = {

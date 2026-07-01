@@ -3,6 +3,17 @@ import '@/i18n'; // Initialize i18n
 
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  JetBrainsMono_400Regular,
+  JetBrainsMono_700Bold,
+} from '@expo-google-fonts/jetbrains-mono';
+import {
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from '@expo-google-fonts/space-grotesk';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import type { LinkingOptions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -64,6 +75,24 @@ export default function App() {
   const isHydrated = useSettingsStore(selectIsHydrated);
   const language = useSettingsStore(selectLanguage);
 
+  // Load brand fonts: JetBrains Mono (data) + Space Grotesk (titles/prose)
+  const [fontsLoaded, fontError] = useFonts({
+    JetBrainsMono_400Regular,
+    JetBrainsMono_700Bold,
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
+
+  // If a bundled font ever fails to load, fall back to system fonts rather than
+  // holding a permanent black screen (see the fontsLoaded gate below).
+  useEffect(() => {
+    if (fontError) {
+      console.warn('[fonts] failed to load brand fonts; using system fonts', fontError);
+    }
+  }, [fontError]);
+
   // Initialize push notifications
   useNotifications();
   useWidgetUpdates();
@@ -74,6 +103,12 @@ export default function App() {
       changeLanguage(language);
     }
   }, [isHydrated, language]);
+
+  // Hold the (black) screen until fonts are ready to avoid a system-font flash.
+  // On a font-load error, proceed anyway (system fonts) instead of hanging.
+  if (!fontsLoaded && !fontError) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

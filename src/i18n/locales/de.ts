@@ -146,6 +146,12 @@ const de = {
     topDiff: 'Top Diff.',
     bestEver: 'Allzeit-Beste',
     blocksParticipated: 'Blöcke teilgenommen',
+    sinceBlock: 'Seit Block',
+    bestSharesSubtitle: 'Höchste Diff. pro Block',
+    leaderboardMeta: 'Top {{shown}} · {{total}} Mitglieder',
+    leaderboardMetaShort: 'Top {{shown}}',
+    jumpToYou: 'Zu dir springen',
+    notRanked: 'Nicht platziert',
   },
 
   miners: {
@@ -166,6 +172,8 @@ const de = {
     online: 'Online',
     offline: 'Offline',
     connecting: 'Verbinden...',
+    viewAsCards: 'Als Karten anzeigen',
+    viewAsList: 'Als Liste anzeigen',
     hashrate: 'Hashrate',
     temp: 'Temp.',
     temperature: 'Temperatur',
@@ -178,6 +186,7 @@ const de = {
     frequency: 'Frequenz',
     voltage: 'Spannung',
     fanSpeed: 'Lüfter',
+    fan: 'Lüfter',
     auto: 'Auto',
     applyParasite: 'Parasite-Einstellung anwenden',
     setToParasite: 'Auf Parasite Pool setzen',
@@ -275,6 +284,7 @@ const de = {
   settings: {
     title: 'Einstellungen',
     bitcoinAddress: 'Bitcoin-Adresse',
+    valid: 'GÜLTIG',
     addressPlaceholder: 'bc1q... oder 1... oder 3...',
     scanQr: 'QR scannen',
     temperature: 'Temperatur',
@@ -313,7 +323,7 @@ const de = {
     widgets: 'Widgets',
     widgetUpdates: 'Widget-Updates',
     widgetUpdatesDesc:
-      'Nutzt Hintergrundaktualisierung und stille Pushs, wenn verfügbar, um iOS-Widgets aktuell zu halten.',
+      'Nutzt Hintergrundaktualisierung und stille Pushs, wenn verfügbar, um deine Widgets aktuell zu halten.',
     widgetUpdatesPermissionHint:
       'Stille Widget-Pushs sind nicht verfügbar, solange Benachrichtigungen verweigert werden. Hintergrundaktualisierung kann Widgets weiterhin aktualisieren.',
     openSettings: 'Einstellungen öffnen',

@@ -181,6 +181,10 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
     const actualInterval = interval || getIntervalForPeriod(period);
     const result = await parasite.getPoolHistorical(period, actualInterval);
 
+    // Skip if the selected period changed during the fetch — a slower
+    // response for a deselected period must not overwrite the chart.
+    if (get().historicalPeriod !== period) return;
+
     if (isSuccess(result)) {
       set({
         historical: { data: result.data, timestamp: Date.now() },

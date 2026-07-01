@@ -146,6 +146,12 @@ const pt = {
     topDiff: 'Top Dif.',
     bestEver: 'Melhor Sempre',
     blocksParticipated: 'Blocos Participados',
+    sinceBlock: 'Desde bloco',
+    bestSharesSubtitle: 'Maior dif. por bloco',
+    leaderboardMeta: 'Top {{shown}} · {{total}} membros',
+    leaderboardMetaShort: 'Top {{shown}}',
+    jumpToYou: 'Ir para você',
+    notRanked: 'Sem classificação',
   },
 
   miners: {
@@ -166,6 +172,8 @@ const pt = {
     online: 'Online',
     offline: 'Offline',
     connecting: 'Conectando...',
+    viewAsCards: 'Ver como cartões',
+    viewAsList: 'Ver como lista',
     hashrate: 'Hashrate',
     temp: 'Temp.',
     temperature: 'Temperatura',
@@ -178,6 +186,7 @@ const pt = {
     frequency: 'Frequência',
     voltage: 'Tensão',
     fanSpeed: 'Velocidade do ventilador',
+    fan: 'Vent.',
     auto: 'Auto',
     applyParasite: 'Aplicar predefinição Parasite',
     setToParasite: 'Configurar Parasite Pool',
@@ -275,6 +284,7 @@ const pt = {
   settings: {
     title: 'Configurações',
     bitcoinAddress: 'Endereço Bitcoin',
+    valid: 'VÁLIDO',
     addressPlaceholder: 'bc1q... ou 1... ou 3...',
     scanQr: 'Escanear QR',
     temperature: 'Temperatura',
@@ -313,7 +323,7 @@ const pt = {
     widgets: 'Widgets',
     widgetUpdates: 'Atualizações de widgets',
     widgetUpdatesDesc:
-      'Usa atualização em segundo plano e pushes silenciosos quando disponíveis para manter os widgets iOS atualizados.',
+      'Usa atualização em segundo plano e pushes silenciosos quando disponíveis para manter os seus widgets atualizados.',
     widgetUpdatesPermissionHint:
       'Pushes silenciosos de widget ficam indisponíveis enquanto notificações estão negadas, mas a atualização em segundo plano ainda pode atualizar widgets.',
     openSettings: 'Abrir Configurações',

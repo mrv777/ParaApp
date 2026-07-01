@@ -43,6 +43,11 @@ export type MinerSortOption = 'name' | 'hashrate' | 'temp' | 'status' | 'bestDif
 export type MinerFilterOption = 'all' | 'online' | 'offline' | 'warning';
 
 /**
+ * View layout for the miners list — compact rows or fuller stat cards
+ */
+export type MinerViewMode = 'list' | 'card';
+
+/**
  * Miner warning state
  */
 export interface MinerWarning {
@@ -354,7 +359,7 @@ export interface DiscoveryOptions {
   startIp?: number;
   /** End of IP range (1-254), default: 254 */
   endIp?: number;
-  /** Concurrent connections, default: 50 */
+  /** Concurrent connections, default: 30 */
   concurrency?: number;
 }
 

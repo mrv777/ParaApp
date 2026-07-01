@@ -44,7 +44,7 @@ export function TipBanner({
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(200)}
     >
-      <View className={`flex-row items-start px-3 py-2.5 bg-secondary/60 rounded-lg border border-border/50 ${className}`}>
+      <View className={`flex-row items-start px-3 py-2.5 bg-secondary/60 border border-border/50 ${className}`}>
         <Ionicons
           name={icon}
           size={16}

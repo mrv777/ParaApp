@@ -50,28 +50,6 @@ export function isValidIpAddress(ip: string): boolean {
 }
 
 /**
- * Validate an IP address with optional port
- * @param ipWithPort - IP address with optional port (e.g., "192.168.1.1" or "192.168.1.1:3333")
- * @returns true if valid, false otherwise
- */
-export function isValidIpWithPort(ipWithPort: string): boolean {
-  if (!ipWithPort || typeof ipWithPort !== 'string') return false;
-
-  const parts = ipWithPort.split(':');
-  if (parts.length > 2) return false;
-
-  const ip = parts[0];
-  if (!isValidIpAddress(ip)) return false;
-
-  if (parts.length === 2) {
-    const port = parseInt(parts[1], 10);
-    if (isNaN(port) || port < 1 || port > 65535) return false;
-  }
-
-  return true;
-}
-
-/**
  * Validate a stratum URL format
  * @param url - Stratum URL (e.g., "stratum+tcp://pool.example.com")
  * @returns true if valid format, false otherwise
@@ -84,6 +62,31 @@ export function isValidStratumUrl(url: string): boolean {
   const simpleHostRegex = /^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$/;
 
   return stratumRegex.test(url) || simpleHostRegex.test(url);
+}
+
+/**
+ * Validate an Avalon pool URL: `stratum+tcp://host[:port]`.
+ * Port is optional; if present it must be 1-65535. Avalon stores and
+ * expects the full scheme+host+port form (see CANAAN_AVALON_API.md), so
+ * this is kept separate from `isValidStratumUrl` (which validates a
+ * host-only field for AxeOS/Hammer).
+ * @param url - Avalon pool URL
+ * @returns true if valid, false otherwise
+ */
+export function isValidAvalonPoolUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+
+  const m = url.match(
+    /^stratum\+tcp:\/\/([a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]|[a-zA-Z0-9])(?::(\d{1,5}))?$/
+  );
+  if (!m) return false;
+
+  if (m[2] !== undefined) {
+    const port = Number(m[2]);
+    if (port < 1 || port > 65535) return false;
+  }
+
+  return true;
 }
 
 /**

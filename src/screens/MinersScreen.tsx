@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, FlatList, RefreshControl } from 'react-native';
+import { View, FlatList, RefreshControl, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { TipBanner } from '@/components/TipBanner';
 import {
   DiscoveryCard,
   MinerRow,
+  MinerCard,
   EmptyMinersState,
   NetworkBanner,
   HeaderButtons,
@@ -35,8 +36,14 @@ import type { LocalMiner, DiscoveryOptions, MinerWarning } from '@/types';
 
 type Props = MinersStackScreenProps<'MinersMain'>;
 
+// Card grid geometry (matches the design handoff): 16px screen gutters, 10px
+// inter-card gap. Two equal columns fill the remaining width.
+const GRID_H_PADDING = 16;
+const GRID_GAP = 10;
+
 export function MinersScreen({ navigation }: Props) {
   const { t } = useTranslation();
+  const { width: screenWidth } = useWindowDimensions();
   const [refreshing, setRefreshing] = useState(false);
   const [showSortFilter, setShowSortFilter] = useState(false);
   const [showDiscovery, setShowDiscovery] = useState(false);
@@ -47,6 +54,8 @@ export function MinersScreen({ navigation }: Props) {
   const filterBy = useSettingsStore((s) => s.minerFilterBy);
   const setSortBy = useSettingsStore((s) => s.setMinerSortBy);
   const setFilterBy = useSettingsStore((s) => s.setMinerFilterBy);
+  const viewMode = useSettingsStore((s) => s.minerViewMode);
+  const setViewMode = useSettingsStore((s) => s.setMinerViewMode);
   const temperatureUnit = useSettingsStore((s) => s.temperatureUnit);
 
   // Store selectors
@@ -63,6 +72,10 @@ export function MinersScreen({ navigation }: Props) {
   const removeMiner = useMinerStore((s) => s.removeMiner);
   const refreshAllMiners = useMinerStore((s) => s.refreshAllMiners);
   const getWarnings = useMinerStore((s) => s.getWarnings);
+
+  // Card (2-column grid) vs list view
+  const isCard = viewMode === 'card';
+  const cardWidth = (screenWidth - GRID_H_PADDING * 2 - GRID_GAP) / 2;
 
   // Compute online/offline status
   const onlineCount = miners.filter((m) => m.isOnline).length;
@@ -220,6 +233,10 @@ export function MinersScreen({ navigation }: Props) {
     setShowSortFilter(true);
   }, []);
 
+  const handleViewModeToggle = useCallback(() => {
+    setViewMode(viewMode === 'list' ? 'card' : 'list');
+  }, [viewMode, setViewMode]);
+
   const handleDismissBanner = useCallback(() => {
     setBannerDismissed(true);
   }, []);
@@ -228,6 +245,19 @@ export function MinersScreen({ navigation }: Props) {
     ({ item }: { item: LocalMiner }) => {
       const warnings = minerWarnings.get(item.ip);
       const isLoading = loadingMiners.has(item.ip);
+
+      if (isCard) {
+        return (
+          <MinerCard
+            miner={item}
+            warnings={warnings}
+            onPress={() => handleMinerPress(item)}
+            onDelete={() => handleDeleteMiner(item.ip)}
+            isLoading={isLoading}
+            width={cardWidth}
+          />
+        );
+      }
 
       return (
         <MinerRow
@@ -239,7 +269,7 @@ export function MinersScreen({ navigation }: Props) {
         />
       );
     },
-    [handleMinerPress, handleDeleteMiner, minerWarnings, loadingMiners]
+    [handleMinerPress, handleDeleteMiner, minerWarnings, loadingMiners, isCard, cardWidth]
   );
 
   const keyExtractor = useCallback((item: LocalMiner) => item.ip, []);
@@ -283,6 +313,8 @@ export function MinersScreen({ navigation }: Props) {
           <HeaderButtons
             onAddPress={handleAddPress}
             onSortFilterPress={handleSortFilterPress}
+            viewMode={viewMode}
+            onViewModePress={handleViewModeToggle}
           />
         </View>
 
@@ -303,7 +335,11 @@ export function MinersScreen({ navigation }: Props) {
         {/* Miners list header */}
         {filteredMiners.length > 0 && (
           <View className="px-4 pt-4 pb-2">
-            <Text variant="caption" color="muted">
+            <Text
+              variant="caption"
+              className="uppercase"
+              style={{ fontSize: 11, letterSpacing: 1, color: colors.textDim }}
+            >
               {sectionHeader}
             </Text>
           </View>
@@ -325,6 +361,8 @@ export function MinersScreen({ navigation }: Props) {
       handleAddPress,
       handleStartScan,
       handleSortFilterPress,
+      viewMode,
+      handleViewModeToggle,
       showDiscovery,
       discoveryProgress,
       discoveryError,
@@ -355,9 +393,22 @@ export function MinersScreen({ navigation }: Props) {
         )}
 
         <FlatList
+          // Remount when the column count changes — FlatList can't switch
+          // numColumns on an existing instance.
+          key={isCard ? 'grid' : 'list'}
           data={filteredMiners}
           keyExtractor={keyExtractor}
           renderItem={renderMiner}
+          numColumns={isCard ? 2 : 1}
+          columnWrapperStyle={
+            isCard
+              ? {
+                  gap: GRID_GAP,
+                  paddingHorizontal: GRID_H_PADDING,
+                  marginBottom: GRID_GAP,
+                }
+              : undefined
+          }
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={ListEmpty}
           contentContainerStyle={{ paddingBottom: 100 }}

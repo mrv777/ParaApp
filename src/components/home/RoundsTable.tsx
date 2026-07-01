@@ -1,8 +1,8 @@
 /**
- * RoundsTable - Per-round standings for the configured user, adapted for phone
- * widths. Each metric (diff / work / blocks) is one column that stacks the
- * user's rank over the magnitude; the participant total is shown once under the
- * block. Four columns fit without horizontal scrolling.
+ * RoundsTable - Per-round standings for the configured user. A 4-column table
+ * (BLOCK / DIFF / WORK / BLOCKS) where each metric stacks the user's rank over
+ * the round magnitude. Terminal/brutalist styling; scrolls within page flow and
+ * collapses long histories behind a "show more" toggle.
  */
 
 import { useState } from 'react';
@@ -24,7 +24,6 @@ export interface RoundsTableProps {
   className?: string;
 }
 
-const BLOCK_COL = 78; // px; metric columns take the remaining width via flex-1
 // History rows shown before the "Show all" toggle (the current round is always shown).
 const COLLAPSED_HISTORY = 6;
 
@@ -41,34 +40,35 @@ interface Row {
   blocks: string;
 }
 
-/** Column header aligned to its cells. */
-function HeaderCell({ label, width }: { label: string; width?: number }) {
+/** Column header aligned to its cells. `block` = left-aligned wider first column. */
+function HeaderCell({ label, block = false }: { label: string; block?: boolean }) {
   return (
-    <Text
-      variant="caption"
-      color="muted"
-      className={`text-[11px] uppercase px-1 ${width ? 'text-left' : 'flex-1 text-right'}`}
-      style={width ? { width } : undefined}
-      numberOfLines={1}
-    >
-      {label}
-    </Text>
+    <View style={{ flex: block ? 1.3 : 1 }}>
+      <Text
+        variant="caption"
+        className="uppercase"
+        style={{
+          fontSize: 10,
+          letterSpacing: 1,
+          color: colors.textFaint,
+          textAlign: block ? 'left' : 'right',
+        }}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
-/** One metric column: rank (#N) over its magnitude. */
+/** One metric column: rank (#N) over its magnitude, right-aligned. */
 function MetricCell({ rank, value }: { rank: number; value: string }) {
   return (
-    <View className="flex-1 px-1 items-end">
-      <Text variant="mono" className="text-sm" numberOfLines={1}>
+    <View style={{ flex: 1 }} className="items-end">
+      <Text variant="mono" style={{ fontSize: 13, color: colors.textValue }} numberOfLines={1}>
         #{formatNumber(rank)}
       </Text>
-      <Text
-        variant="caption"
-        color="muted"
-        className="text-[11px]"
-        numberOfLines={1}
-      >
+      <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -92,9 +92,11 @@ export function RoundsTable({
   ];
 
   const Header = (
-    <View className="flex-row items-center gap-2 mb-3">
-      <Ionicons name="albums-outline" size={18} color={colors.textMuted} />
-      <Text variant="subtitle" className="text-base">
+    <View
+      className="flex-row items-center"
+      style={{ gap: 7, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10 }}
+    >
+      <Text variant="subtitle" style={{ fontSize: 15, color: colors.textHigh }}>
         {t('home.rounds')}
       </Text>
       <Pressable
@@ -105,20 +107,20 @@ export function RoundsTable({
         hitSlop={8}
         className="active:opacity-60"
       >
-        <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+        <Ionicons name="information-circle-outline" size={14} color={colors.textDim} />
       </Pressable>
     </View>
   );
 
   if (isLoading && !rounds) {
     return (
-      <Card padding="sm" className={className}>
+      <Card padding="none" className={className}>
         {Header}
-        {Array.from({ length: 4 }).map((_, i) => (
-          <View key={i} className="py-2.5">
-            <SkeletonLoader variant="text" width="100%" height={18} />
-          </View>
-        ))}
+        <View style={{ paddingHorizontal: 16, paddingBottom: 14, gap: 12 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonLoader key={i} variant="text" width="100%" height={18} />
+          ))}
+        </View>
       </Card>
     );
   }
@@ -175,40 +177,41 @@ export function RoundsTable({
   };
 
   return (
-    <Card padding="sm" className={className}>
+    <Card padding="none" className={className}>
       {Header}
 
       {/* Column headers */}
-      <View className="flex-row items-center pb-2 border-b border-border">
-        <HeaderCell label={t('home.colBlock')} width={BLOCK_COL} />
+      <View
+        className="flex-row items-center"
+        style={{ paddingHorizontal: 16, paddingBottom: 8 }}
+      >
+        <HeaderCell label={t('home.colBlock')} block />
         <HeaderCell label={t('home.colDiff')} />
         <HeaderCell label={t('home.colWork')} />
         <HeaderCell label={t('home.colBlocks')} />
       </View>
 
       {/* Data rows */}
-      {visibleRows.map((row, index) => {
+      {visibleRows.map((row) => {
         const isCurrent = row.blockHeight === null;
         const content = (
           <View
-            className={`flex-row items-center py-2.5 ${
-              index < visibleRows.length - 1 ? 'border-b border-border/50' : ''
-            }`}
+            className="flex-row items-center border-t border-border-light"
+            style={{ paddingHorizontal: 16, paddingVertical: 11 }}
           >
             {/* Block + participant total (shown once for the round) */}
-            <View style={{ width: BLOCK_COL }} className="px-1">
+            <View style={{ flex: 1.3 }}>
               <Text
                 variant="mono"
-                color={isCurrent ? 'default' : 'muted'}
-                className={`text-xs ${isCurrent ? 'font-semibold' : ''}`}
+                className="font-bold"
+                style={{ fontSize: 13, color: isCurrent ? colors.text : colors.textMuted }}
                 numberOfLines={1}
               >
                 {row.label}
               </Text>
               <Text
-                variant="caption"
-                color="muted"
-                className="text-[11px]"
+                variant="mono"
+                style={{ fontSize: 11, color: colors.textFaint }}
                 numberOfLines={1}
               >
                 {t('home.roundsOf', { total: formatNumber(row.total) })}
@@ -243,9 +246,10 @@ export function RoundsTable({
             haptics.selection();
             setExpanded((e) => !e);
           }}
-          className="pt-3 flex-row items-center justify-center gap-1 active:opacity-60"
+          className="flex-row items-center justify-center border-t border-border-light active:opacity-60"
+          style={{ paddingVertical: 12, gap: 4 }}
         >
-          <Text variant="caption" color="muted">
+          <Text variant="mono" style={{ fontSize: 12, color: colors.textMuted }}>
             {expanded
               ? t('home.roundsShowLess')
               : t('home.roundsShowMore', { n: hiddenCount })}

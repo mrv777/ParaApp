@@ -19,6 +19,37 @@ export interface HashrateChartProps {
   height?: number;
   onDataPointSelect?: (point: PoolHistoricalPoint | null) => void;
   className?: string;
+  /**
+   * 'default' = full interactive chart on its own dark surface (used in the
+   * full-screen modal). 'card' = terminal/brutalist in-card style: transparent
+   * background, 4 faint dashed gridlines, 4 compact y-axis labels (bare scaled
+   * numbers, e.g. 180 / 120 / 60 / 0), white 1.6px line + gradient. No rounded
+   * corners; the surrounding card provides the border/fill.
+   */
+  variant?: 'default' | 'card';
+}
+
+/**
+ * Divisor that scales H/s into the same unit `formatHashrate` would pick for
+ * `maxValue` (e.g. 1e15 for PH/s). Lets the y-axis render bare numbers that
+ * share the unit shown on the hashrate value above the chart.
+ */
+function unitDivisorFor(maxValue: number): number {
+  let divisor = 1;
+  let value = maxValue;
+  while (value >= 1000 && divisor < 1e18) {
+    value /= 1000;
+    divisor *= 1000;
+  }
+  return divisor;
+}
+
+/** Trim a scaled axis value to a short label (e.g. 180, 12.5, 0). */
+function trimAxisNumber(value: number): string {
+  if (value === 0) return '0';
+  if (value >= 100) return Math.round(value).toString();
+  if (value >= 10) return (Math.round(value * 10) / 10).toString();
+  return (Math.round(value * 100) / 100).toString();
 }
 
 /**
@@ -46,7 +77,9 @@ export function HashrateChart({
   height = 200,
   onDataPointSelect,
   className = '',
+  variant = 'default',
 }: HashrateChartProps) {
+  const card = variant === 'card';
   const chartRef = useRef<unknown>(null);
   const chartInstanceRef = useRef<ReturnType<typeof import('echarts/core').init> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 300, height });
@@ -70,19 +103,23 @@ export function HashrateChart({
     ]);
   }, [data, period]);
 
+  // Largest value in view — drives the compact card y-axis unit + labels.
+  const maxValue = useMemo(
+    () => chartData.reduce((m, [, v]) => (v > m ? v : m), 0),
+    [chartData]
+  );
+
   // Generate chart options
   const option = useMemo(() => {
     if (chartData.length === 0) return null;
 
+    const divisor = unitDivisorFor(maxValue);
+
     return {
       backgroundColor: 'transparent',
-      grid: {
-        left: 55,
-        right: 15,
-        top: 15,
-        bottom: 25,
-        containLabel: false,
-      },
+      grid: card
+        ? { left: 34, right: 6, top: 8, bottom: 22, containLabel: false }
+        : { left: 55, right: 15, top: 40, bottom: 44, containLabel: false },
       xAxis: {
         type: 'time' as const,
         axisLine: {
@@ -92,7 +129,7 @@ export function HashrateChart({
           show: false,
         },
         axisLabel: {
-          color: colors.textMuted,
+          color: card ? colors.textFaint : colors.textMuted,
           fontSize: 10,
           hideOverlap: true,
           formatter: (value: number) => formatXAxisLabel(value, period),
@@ -103,6 +140,8 @@ export function HashrateChart({
       },
       yAxis: {
         type: 'value' as const,
+        // Fixed 0-based range with 3 intervals → exactly 4 labels (e.g. 180/120/60/0).
+        ...(card ? { min: 0, splitNumber: 3 } : {}),
         axisLine: {
           show: false,
         },
@@ -110,13 +149,14 @@ export function HashrateChart({
           show: false,
         },
         axisLabel: {
-          color: colors.textMuted,
-          fontSize: 10,
-          formatter: (value: number) => formatHashrate(value),
+          color: card ? colors.textFaint : colors.textMuted,
+          fontSize: card ? 9 : 10,
+          formatter: (value: number) =>
+            card ? trimAxisNumber(value / divisor) : formatHashrate(value),
         },
         splitLine: {
           lineStyle: {
-            color: colors.chartGrid,
+            color: card ? 'rgba(255,255,255,0.06)' : colors.chartGrid,
             type: 'dashed' as const,
           },
         },
@@ -129,7 +169,7 @@ export function HashrateChart({
           symbol: 'none',
           lineStyle: {
             color: colors.chartLine,
-            width: 2,
+            width: card ? 1.6 : 2,
           },
           areaStyle: {
             color: {
@@ -138,10 +178,15 @@ export function HashrateChart({
               y: 0,
               x2: 0,
               y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(237, 237, 237, 0.2)' },
-                { offset: 1, color: 'rgba(237, 237, 237, 0)' },
-              ],
+              colorStops: card
+                ? [
+                    { offset: 0, color: 'rgba(255, 255, 255, 0.14)' },
+                    { offset: 1, color: 'rgba(255, 255, 255, 0)' },
+                  ]
+                : [
+                    { offset: 0, color: 'rgba(237, 237, 237, 0.2)' },
+                    { offset: 1, color: 'rgba(237, 237, 237, 0)' },
+                  ],
             },
           },
         },
@@ -177,7 +222,7 @@ export function HashrateChart({
         },
       },
     };
-  }, [chartData, period]);
+  }, [chartData, period, card, maxValue]);
 
   // Keep option ref in sync for use in chart creation effect
   const optionRef = useRef(option);
@@ -247,14 +292,14 @@ export function HashrateChart({
 
   // Show skeleton when loading or echarts not ready
   if (!isReady || (isLoading && (!data || data.length === 0))) {
-    return <ChartSkeleton height={height} className={className} />;
+    return <ChartSkeleton height={height} className={className} square={card} />;
   }
 
   // Show empty state if no data
   if (!data || data.length === 0) {
     return (
       <View
-        className={`bg-secondary rounded-xl items-center justify-center ${className}`}
+        className={`items-center justify-center ${card ? '' : 'bg-secondary rounded-xl'} ${className}`}
         style={{ height }}
       />
     );
@@ -263,12 +308,12 @@ export function HashrateChart({
   // SvgChart should be loaded by now
   const ChartComponent = getSvgChart();
   if (!ChartComponent) {
-    return <ChartSkeleton height={height} className={className} />;
+    return <ChartSkeleton height={height} className={className} square={card} />;
   }
 
   return (
     <View
-      className={`bg-secondary rounded-xl overflow-hidden ${className}`}
+      className={`overflow-hidden ${card ? '' : 'bg-secondary rounded-xl'} ${className}`}
       style={{ height }}
       onLayout={(e) => {
         const { width: w, height: h } = e.nativeEvent.layout;

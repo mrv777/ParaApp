@@ -20,6 +20,9 @@ const TAB_ICONS: Record<string, TabIconConfig> = {
 };
 
 const ICON_SIZE = 24;
+const TAB_BAR_HEIGHT = 64;
+// Inactive tab icons read as a dim stroke (#555); active is pure white.
+const INACTIVE_ICON = '#555555';
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -27,7 +30,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <View
       className="flex-row bg-background border-t border-border"
-      style={{ paddingBottom: insets.bottom }}
+      style={{ height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom }}
     >
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
@@ -63,12 +66,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             accessibilityRole="tab"
             accessibilityState={{ selected: isFocused }}
             accessibilityLabel={route.name}
-            className="flex-1 items-center justify-center py-3"
+            className="flex-1 items-center justify-center"
           >
             <Ionicons
               name={isFocused ? icons.active : icons.inactive}
               size={ICON_SIZE}
-              color={isFocused ? colors.text : colors.textMuted}
+              color={isFocused ? colors.text : INACTIVE_ICON}
             />
           </Pressable>
         );

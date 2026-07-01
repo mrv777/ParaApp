@@ -15,6 +15,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { Text } from '../Text';
+import { Card } from '../Card';
 import { SwipeToConfirm } from '../SwipeToConfirm';
 import { useMinerStore } from '@/store/minerStore';
 import { haptics } from '@/utils/haptics';
@@ -199,11 +200,14 @@ export function MinerControlsSection({
   }
 
   return (
-    <View className="px-4 mb-4">
-      <Text variant="caption" color="muted" className="mb-2 uppercase">
+    <Card padding="none">
+      <Text
+        variant="subtitle"
+        style={{ fontSize: 15, color: colors.textHigh, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 }}
+      >
         {t('miners.controls')}
       </Text>
-      <View className="bg-secondary rounded-lg p-4 gap-3">
+      <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14, gap: 12 }}>
         {/* Avalon work mode picker */}
         {miner.minerType === 'avalon' && miner.workMode !== undefined && (
           <View className="gap-2">
@@ -227,7 +231,7 @@ export function MinerControlsSection({
                     disabled={
                       isCurrent || pendingMode !== null || isReconnecting
                     }
-                    className={`flex-1 py-3 rounded-lg items-center ${
+                    className={`flex-1 py-3 items-center ${
                       isCurrent
                         ? 'bg-foreground'
                         : 'bg-background border border-border'
@@ -264,7 +268,7 @@ export function MinerControlsSection({
           <Pressable
             onPress={handleIdentify}
             disabled={isIdentifying || isReconnecting}
-            className={`flex-row items-center justify-between py-3 px-4 bg-background rounded-lg ${
+            className={`flex-row items-center justify-between py-3 px-4 bg-background border border-border ${
               isIdentifying || isReconnecting ? 'opacity-50' : 'active:opacity-70'
             }`}
           >
@@ -296,7 +300,7 @@ export function MinerControlsSection({
         {/* Restart Section */}
         {isReconnecting ? (
           // Reconnecting state
-          <View className="flex-row items-center justify-center gap-3 py-4 px-4 bg-background rounded-lg">
+          <View className="flex-row items-center justify-center gap-3 py-4 px-4 bg-background border border-border">
             <ActivityIndicator size="small" color={colors.text} />
             <Text variant="body" color="muted">
               {t('miners.reconnecting')}
@@ -304,7 +308,7 @@ export function MinerControlsSection({
           </View>
         ) : isRestarting ? (
           // Restarting state
-          <View className="flex-row items-center justify-center gap-3 py-4 px-4 bg-background rounded-lg">
+          <View className="flex-row items-center justify-center gap-3 py-4 px-4 bg-background border border-border">
             <ActivityIndicator size="small" color={colors.danger} />
             <Text variant="body" color="muted">
               {t('miners.restarting')}
@@ -323,7 +327,7 @@ export function MinerControlsSection({
 
         {/* Error Banner */}
         {error && (
-          <View className="flex-row items-center justify-between py-3 px-4 bg-danger/10 border border-danger/30 rounded-lg">
+          <View className="flex-row items-center justify-between py-3 px-4 bg-danger/10 border border-danger/30">
             <View className="flex-row items-center gap-2 flex-1">
               <Ionicons
                 name="alert-circle"
@@ -340,6 +344,6 @@ export function MinerControlsSection({
           </View>
         )}
       </View>
-    </View>
+    </Card>
   );
 }
