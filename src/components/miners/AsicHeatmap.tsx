@@ -15,6 +15,7 @@ import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
+import { Card } from '../Card';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import { haptics } from '@/utils/haptics';
@@ -100,19 +101,18 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
   }, []);
 
   return (
-    <View className="px-4 mb-4">
+    <Card padding="none">
       <Pressable
         onPress={handleToggle}
-        className="flex-row items-center justify-between bg-secondary rounded-lg p-3"
-        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        className="flex-row items-center justify-between px-4 py-5 active:opacity-70"
       >
         <View className="flex-row items-center gap-2">
-          <Ionicons name="grid-outline" size={18} color={colors.text} />
-          <Text variant="body" className="font-medium">
+          <Ionicons name="grid-outline" size={16} color={colors.textMuted} />
+          <Text variant="subtitle" style={{ fontSize: 15, color: colors.textHigh }}>
             {t('miners.asicHeatmap')}
           </Text>
           {stats && (
-            <Text variant="caption" color="muted">
+            <Text variant="mono" style={{ fontSize: 11, color: colors.textDim }}>
               {`${stats.count} · ${Math.round(stats.min)}–${Math.round(stats.max)}°C`}
             </Text>
           )}
@@ -120,14 +120,14 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={18}
-          color={colors.textMuted}
+          color={colors.textDim}
         />
       </Pressable>
 
       {expanded && (
-        <View className="mt-3 bg-secondary rounded-lg p-3">
+        <View className="border-t border-border-light" style={{ paddingHorizontal: 14, paddingVertical: 12 }}>
           {!temps || temps.length === 0 ? (
-            <Text variant="caption" color="muted" className="text-center py-4">
+            <Text variant="mono" style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center', paddingVertical: 16 }}>
               {loading
                 ? t('miners.asicHeatmapLoading')
                 : t('miners.asicHeatmapEmpty')}
@@ -194,6 +194,6 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
           )}
         </View>
       )}
-    </View>
+    </Card>
   );
 }

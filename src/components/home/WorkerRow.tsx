@@ -1,6 +1,7 @@
 /**
- * WorkerRow - Simple row for worker display
- * Shows worker name, status, hashrate, best difficulty, last submission, and optional note
+ * WorkerRow - One worker line: status dot + name over a "Best …" sub-line, with
+ * hashrate on the right. Online workers read bright; anything not online takes a
+ * muted red tint. Used in the home preview and the full workers list.
  */
 
 import { View, Pressable } from 'react-native';
@@ -21,47 +22,55 @@ export interface WorkerRowProps {
 
 export function WorkerRow({ worker, note, onPress, className = '' }: WorkerRowProps) {
   const { t } = useTranslation();
+  const isDown = worker.status !== 'online';
   const showLastTime = worker.status === 'offline' || worker.status === 'stale';
 
+  const nameColor = isDown ? colors.dangerTint : colors.textHigh;
+  const hashrateColor = isDown ? colors.textMuted : colors.textValue;
+
   const content = (
-    <View className={`py-2 border-b border-border ${className}`}>
-      {/* Main row */}
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center flex-1 mr-2 gap-2">
-          <WorkerStatusDot status={worker.status} size="sm" />
-          <Text variant="body" className="font-medium flex-1" numberOfLines={1}>
+    <View
+      className={`flex-row items-center justify-between border-t border-border-light ${className}`}
+      style={{ paddingVertical: 11 }}
+    >
+      <View className="flex-row items-center flex-1 mr-2" style={{ gap: 10 }}>
+        <WorkerStatusDot status={worker.status} size="md" />
+        <View className="flex-1">
+          <Text
+            variant="mono"
+            className="font-bold"
+            style={{ fontSize: 14, color: nameColor }}
+            numberOfLines={1}
+          >
             {worker.name}
           </Text>
-        </View>
-        <View className="flex-row items-center gap-2">
-          <Text variant="mono" className="text-sm">
-            {formatHashrate(worker.hashrate)}
-          </Text>
-          {onPress && (
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          )}
+          <View className="flex-row items-center" style={{ gap: 8 }}>
+            <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
+              {t('home.bestLabel')} {formatDifficulty(worker.bestDifficulty)}
+            </Text>
+            {showLastTime && (
+              <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
+                · {formatTimestamp(worker.lastSubmission)}
+              </Text>
+            )}
+            {note ? (
+              <View className="flex-row items-center flex-shrink" style={{ gap: 3 }}>
+                <Ionicons name="document-text-outline" size={11} color={colors.textFaint} />
+                <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
+                  {note}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
       </View>
 
-      {/* Secondary stats row */}
-      <View className="flex-row items-center justify-between mt-1">
-        <View className="flex-row items-center gap-4">
-          <Text variant="caption" color="muted">
-            {t('home.bestLabel')}: {formatDifficulty(worker.bestDifficulty)}
-          </Text>
-          {showLastTime && (
-            <Text variant="caption" color="muted">
-              {t('home.lastLabel')}: {formatTimestamp(worker.lastSubmission)}
-            </Text>
-          )}
-        </View>
-        {note && (
-          <View className="flex-row items-center gap-1 flex-shrink ml-2">
-            <Ionicons name="document-text-outline" size={12} color={colors.textMuted} />
-            <Text variant="caption" color="muted" numberOfLines={1}>
-              {note}
-            </Text>
-          </View>
+      <View className="flex-row items-center" style={{ gap: 6 }}>
+        <Text variant="mono" style={{ fontSize: 13, color: hashrateColor }}>
+          {formatHashrate(worker.hashrate)}
+        </Text>
+        {onPress && (
+          <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
         )}
       </View>
     </View>

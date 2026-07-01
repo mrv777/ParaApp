@@ -79,7 +79,7 @@ export function SkeletonLoader({
 
   return (
     <Animated.View
-      className={`bg-secondary ${defaults.borderRadius} ${className}`}
+      className={`bg-surface-elevated ${defaults.borderRadius} ${className}`}
       style={[finalDimensions, animatedStyle]}
     />
   );

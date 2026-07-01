@@ -4,21 +4,16 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import { View, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
 import {
-  StatItem,
   ErrorBanner,
-  HashrateChart,
-  TimePresetButtons,
   FullScreenChart,
+  PoolHashrateCard,
   PoolStatsGrid,
   LeaderboardCard,
   BlocksList,
-  SkeletonStatItem,
-  Text,
 } from '@/components';
 import { usePoolPolling, usePolling } from '@/hooks';
 import {
@@ -35,17 +30,14 @@ import {
   isCacheStale,
 } from '@/store/poolStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { formatHashrate } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
-import { useTranslation } from '@/i18n';
 import type { MainTabScreenProps } from '@/types/navigation';
 import type { HistoricalPeriod } from '@/types';
 
 type Props = MainTabScreenProps<'Pool'>;
 
 export function PoolScreen(_props: Props) {
-  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
 
@@ -152,7 +144,7 @@ export function PoolScreen(_props: Props) {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 100, gap: 16 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -165,82 +157,43 @@ export function PoolScreen(_props: Props) {
       >
         {/* Error Banner */}
         {error && (
-          <ErrorBanner
-            message={error.message}
-            onRetry={handleRefresh}
-            onDismiss={clearError}
-            className="mx-4 mt-4"
-          />
+          <ErrorBanner message={error.message} onRetry={handleRefresh} onDismiss={clearError} />
         )}
 
-        {/* Main Hashrate Stat */}
-        <View className="px-4 pt-4 pb-2">
-          {showStatsSkeleton ? (
-            <SkeletonStatItem />
-          ) : (
-            <StatItem
-              icon="speedometer-outline"
-              label={t('pool.hashrate')}
-              value={stats?.hashrate ? formatHashrate(stats.hashrate) : '--'}
-            />
-          )}
-        </View>
+        {/* Pool hashrate hero + time range + chart */}
+        <PoolHashrateCard
+          hashrate={stats?.hashrate}
+          period={period}
+          historical={historical ?? []}
+          onPeriodChange={handlePeriodChange}
+          isLoadingHistorical={showChartSkeleton}
+          onExpand={openFullScreen}
+        />
 
-        {/* Chart Section */}
-        <View className="px-4 py-2">
-          <TimePresetButtons
-            selected={period}
-            onSelect={handlePeriodChange}
-            disabled={isLoadingHistorical}
-            className="mb-3"
-          />
+        {/* Pool stats grid */}
+        <PoolStatsGrid
+          stats={stats ?? null}
+          bitcoinPrice={bitcoinPrice ?? null}
+          isLoading={showStatsSkeleton}
+        />
 
-          <Pressable onPress={openFullScreen} className="relative">
-            <HashrateChart
-              data={historical ?? []}
-              period={period}
-              isLoading={showChartSkeleton}
-              height={200}
-            />
-            {/* Expand hint overlay */}
-            <View className="absolute bottom-2 right-2 flex-row items-center bg-background/80 rounded-full px-2 py-1">
-              <Ionicons name="expand-outline" size={14} color={colors.textMuted} />
-              <Text variant="caption" color="muted" className="ml-1 text-xs">
-                {t('pool.chartExpand')}
-              </Text>
-            </View>
-          </Pressable>
-        </View>
+        {/* Leaderboard — self-contained card with a bounded internal scroll */}
+        <LeaderboardCard
+          difficultyEntries={difficultyLeaderboard ?? []}
+          loyaltyEntries={loyaltyLeaderboard ?? []}
+          roundDifficultyEntries={roundDifficultyLeaderboard ?? []}
+          roundLoyaltyEntries={roundLoyaltyLeaderboard ?? []}
+          userAddress={userAddress ?? undefined}
+          totalMembers={stats?.users}
+          isLoading={showLeaderboardsSkeleton}
+        />
 
-        {/* Stats Grid */}
-        <View className="px-4 py-4">
-          <PoolStatsGrid
-            stats={stats ?? null}
-            bitcoinPrice={bitcoinPrice ?? null}
-            isLoading={showStatsSkeleton}
-          />
-        </View>
-
-        {/* Leaderboard */}
-        <View className="px-4 pb-4">
-          <LeaderboardCard
-            difficultyEntries={difficultyLeaderboard ?? []}
-            loyaltyEntries={loyaltyLeaderboard ?? []}
-            roundDifficultyEntries={roundDifficultyLeaderboard ?? []}
-            roundLoyaltyEntries={roundLoyaltyLeaderboard ?? []}
-            userAddress={userAddress ?? undefined}
-            isLoading={showLeaderboardsSkeleton}
-          />
-        </View>
-
-        {/* Recent blocks — highest diff submitted by a pool user per block */}
-        <View className="px-4 pb-4">
-          <BlocksList
-            blocks={blocks ?? []}
-            isLoading={isLoadingBlocks && !blocks}
-            maxItems={10}
-          />
-        </View>
+        {/* Best Shares — highest diff submitted by a pool member per block */}
+        <BlocksList
+          blocks={blocks ?? []}
+          isLoading={isLoadingBlocks && !blocks}
+          maxItems={10}
+        />
       </ScrollView>
 
       {/* Full Screen Chart Modal */}

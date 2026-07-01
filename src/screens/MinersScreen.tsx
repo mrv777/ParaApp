@@ -303,7 +303,11 @@ export function MinersScreen({ navigation }: Props) {
         {/* Miners list header */}
         {filteredMiners.length > 0 && (
           <View className="px-4 pt-4 pb-2">
-            <Text variant="caption" color="muted">
+            <Text
+              variant="caption"
+              className="uppercase"
+              style={{ fontSize: 11, letterSpacing: 1, color: colors.textDim }}
+            >
               {sectionHeader}
             </Text>
           </View>

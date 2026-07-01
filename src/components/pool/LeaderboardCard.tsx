@@ -1,14 +1,24 @@
 /**
- * LeaderboardCard component - Tabbed leaderboard with round toggle and user highlighting
+ * LeaderboardCard - Ranked pool members (terminal/brutalist). A self-contained
+ * square card: one header row (title + Since block / All-time switch), one
+ * segmented control (Top Diff / Blocks Participated), a "Top N · members" hint +
+ * Jump-to-you control, a bounded internally-scrolling list of clean rows (rank +
+ * middle-truncated address + value, no per-row bar), and a pinned, always-
+ * visible "You" footer.
+ *
+ * The row list is a plain bounded ScrollView rather than a FlatList: a
+ * VirtualizedList (FlatList / FlashList / Legend List) nested inside the Pool
+ * screen's outer ScrollView triggers RN's "nested VirtualizedList" warning and
+ * breaks windowing. At <=420 lightweight rows a bounded ScrollView is fine and
+ * keeps the "You" row pinned + Best Shares directly below the card.
  */
 
-import { useState, useCallback } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { View, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
-import { Card } from '../Card';
 import { Text } from '../Text';
-import { SkeletonLoader, SkeletonText } from '../SkeletonLoader';
+import { SkeletonLoader } from '../SkeletonLoader';
 import { truncateAddress, formatDifficulty, formatNumber } from '@/utils/formatting';
 import { addressMatches } from '@/utils/address';
 import { haptics } from '@/utils/haptics';
@@ -17,7 +27,13 @@ import { useSettingsStore, selectRoundMode } from '@/store/settingsStore';
 import type { RoundMode } from '@/store/settingsStore';
 import type { DifficultyLeaderboardEntry, LoyaltyLeaderboardEntry } from '@/types';
 
-type LeaderboardTab = 'difficulty' | 'loyalty';
+type LeaderboardMetric = 'difficulty' | 'loyalty';
+type Entry = DifficultyLeaderboardEntry | LoyaltyLeaderboardEntry;
+
+const ROW_HEIGHT = 42;
+// Bounded viewport (~7 rows) so the list scrolls internally and the "You" footer
+// pins directly beneath it, keeping Best Shares reachable just below the card.
+const LIST_MAX_HEIGHT = ROW_HEIGHT * 7;
 
 export interface LeaderboardCardProps {
   difficultyEntries: DifficultyLeaderboardEntry[];
@@ -25,27 +41,40 @@ export interface LeaderboardCardProps {
   roundDifficultyEntries?: DifficultyLeaderboardEntry[];
   roundLoyaltyEntries?: LoyaltyLeaderboardEntry[];
   userAddress?: string;
+  /** Approximate total member count for the informational "· N members" hint. */
+  totalMembers?: number;
   isLoading?: boolean;
-  maxHeight?: number;
   className?: string;
 }
 
-interface TabButtonProps {
-  label: string;
-  isActive: boolean;
-  onPress: () => void;
+function formatValue(metric: LeaderboardMetric, entry: Entry): string {
+  if (metric === 'difficulty') {
+    return formatDifficulty((entry as DifficultyLeaderboardEntry).diff);
+  }
+  return formatNumber((entry as LoyaltyLeaderboardEntry).total_blocks);
 }
 
-function TabButton({ label, isActive, onPress }: TabButtonProps) {
+/** Text switch item (Since block / All-time). Active = white with underline. */
+function TextSwitch({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <Pressable
-      onPress={onPress}
-      className={`flex-1 py-2 rounded-lg ${isActive ? 'bg-foreground/10' : ''}`}
-    >
+    <Pressable onPress={onPress} hitSlop={6} className="active:opacity-60">
       <Text
-        variant="caption"
-        color={isActive ? 'default' : 'muted'}
-        className="text-center font-medium"
+        variant="mono"
+        style={{
+          fontSize: 11,
+          color: active ? colors.text : colors.textDim,
+          borderBottomWidth: active ? 1 : 0,
+          borderBottomColor: colors.text,
+          paddingBottom: 2,
+        }}
       >
         {label}
       </Text>
@@ -53,30 +82,75 @@ function TabButton({ label, isActive, onPress }: TabButtonProps) {
   );
 }
 
-interface RoundToggleButtonProps {
+/** One segment of the metric control. Active = black text on light fill. */
+function Segment({
+  label,
+  active,
+  onPress,
+}: {
   label: string;
-  isActive: boolean;
+  active: boolean;
   onPress: () => void;
-}
-
-function RoundToggleButton({ label, isActive, onPress }: RoundToggleButtonProps) {
+}) {
   return (
     <Pressable
       onPress={onPress}
-      className={`px-2.5 py-1.5 rounded ${
-        isActive ? 'bg-foreground/15' : ''
-      }`}
+      style={{
+        flex: 1,
+        paddingVertical: 7,
+        backgroundColor: active ? colors.primary : 'transparent',
+      }}
     >
       <Text
-        variant="caption"
-        color={isActive ? 'default' : 'muted'}
-        className="text-xs font-medium"
+        variant="mono"
+        style={{ fontSize: 11, textAlign: 'center', color: active ? '#000000' : colors.textDim }}
+        numberOfLines={1}
       >
         {label}
       </Text>
     </Pressable>
   );
 }
+
+/**
+ * One leaderboard row: rank + middle-truncated address + value. No bar.
+ * Memoized on its primitive props so unrelated parent re-renders (e.g. the ~10s
+ * silent pool-stats poll) don't reconcile all up-to-420 rows.
+ */
+const Row = memo(function Row({
+  rank,
+  label,
+  value,
+  isUser,
+}: {
+  rank: string;
+  label: string;
+  value: string;
+  isUser: boolean;
+}) {
+  return (
+    <View
+      className="flex-row items-center justify-between border-t border-border-light"
+      style={{ height: ROW_HEIGHT, paddingHorizontal: 14 }}
+    >
+      <View className="flex-row items-center" style={{ flex: 1, gap: 12 }}>
+        <Text variant="mono" style={{ fontSize: 12, color: colors.textDim, width: 36 }}>
+          {rank}
+        </Text>
+        <Text
+          variant="mono"
+          style={{ fontSize: 13, color: isUser ? colors.text : colors.textValue, flexShrink: 1 }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </View>
+      <Text variant="mono" className="font-bold text-foreground" style={{ fontSize: 13 }}>
+        {value}
+      </Text>
+    </View>
+  );
+});
 
 export function LeaderboardCard({
   difficultyEntries,
@@ -84,200 +158,207 @@ export function LeaderboardCard({
   roundDifficultyEntries,
   roundLoyaltyEntries,
   userAddress,
+  totalMembers,
   isLoading = false,
-  maxHeight = 400,
   className = '',
 }: LeaderboardCardProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<LeaderboardTab>('difficulty');
+  const [metric, setMetric] = useState<LeaderboardMetric>('difficulty');
   const roundMode = useSettingsStore(selectRoundMode);
   const setRoundModeStore = useSettingsStore((s) => s.setRoundMode);
+  const scrollRef = useRef<ScrollView>(null);
 
-  const handleTabChange = useCallback((tab: LeaderboardTab) => {
+  const handleMetric = useCallback((m: LeaderboardMetric) => {
     haptics.selection();
-    setActiveTab(tab);
+    setMetric(m);
   }, []);
 
-  const handleRoundModeChange = useCallback((mode: RoundMode) => {
-    haptics.selection();
-    setRoundModeStore(mode);
-  }, [setRoundModeStore]);
+  const handleTimeframe = useCallback(
+    (mode: RoundMode) => {
+      haptics.selection();
+      setRoundModeStore(mode);
+    },
+    [setRoundModeStore]
+  );
 
-  // Select entries based on round mode and active tab
-  const entries = (() => {
+  // Resolve the active entry set from timeframe × metric.
+  const entries: Entry[] = useMemo(() => {
     if (roundMode === 'round') {
-      return activeTab === 'difficulty'
-        ? (roundDifficultyEntries ?? [])
-        : (roundLoyaltyEntries ?? []);
+      return metric === 'difficulty'
+        ? roundDifficultyEntries ?? []
+        : roundLoyaltyEntries ?? [];
     }
-    return activeTab === 'difficulty' ? difficultyEntries : loyaltyEntries;
-  })();
+    return metric === 'difficulty' ? difficultyEntries : loyaltyEntries;
+  }, [roundMode, metric, difficultyEntries, loyaltyEntries, roundDifficultyEntries, roundLoyaltyEntries]);
 
-  const diffLabel = t('pool.topDiff');
-  const loyaltyLabel = t('pool.blocksParticipated');
+  const userIndex = useMemo(
+    () =>
+      userAddress ? entries.findIndex((e) => addressMatches(e.address, userAddress)) : -1,
+    [entries, userAddress]
+  );
 
-  // Find user's position in current leaderboard using flexible matching
-  const userIndex = userAddress
-    ? entries.findIndex((e) => addressMatches(e.address, userAddress))
-    : -1;
+  const handleJumpToYou = useCallback(() => {
+    if (userIndex < 0) return;
+    haptics.light();
+    // Center the user's row within the bounded viewport (~3 rows of lead-in).
+    const y = Math.max(0, userIndex * ROW_HEIGHT - LIST_MAX_HEIGHT / 2 + ROW_HEIGHT / 2);
+    scrollRef.current?.scrollTo({ y, animated: true });
+  }, [userIndex]);
 
-  // Show skeleton when loading with no data
-  if (isLoading && (!entries || entries.length === 0)) {
-    return (
-      <Card className={className}>
-        {/* Round mode toggle */}
-        <View className="flex-row gap-1 mb-2">
-          <RoundToggleButton
-            label={t('pool.sinceLastBlock')}
-            isActive={true}
-            onPress={() => {}}
+  const metaText = totalMembers
+    ? t('pool.leaderboardMeta', { shown: entries.length, total: formatNumber(totalMembers) })
+    : t('pool.leaderboardMetaShort', { shown: entries.length });
+
+  // Build the row elements once per data/metric/user change so frequent parent
+  // re-renders (pool-stats polling) don't rebuild the whole list.
+  const rows = useMemo(
+    () =>
+      entries.map((entry, index) => {
+        const isUser = !!userAddress && addressMatches(entry.address, userAddress);
+        return (
+          <Row
+            key={`${entry.id}-${index}`}
+            rank={`#${index + 1}`}
+            label={isUser ? t('common.you') : truncateAddress(entry.address, 6)}
+            value={formatValue(metric, entry)}
+            isUser={isUser}
           />
-          <RoundToggleButton
-            label={t('pool.allTime')}
-            isActive={false}
-            onPress={() => {}}
-          />
-        </View>
-        {/* Tab buttons */}
-        <View className="flex-row gap-2 mb-3">
-          <TabButton
-            label={diffLabel}
-            isActive={activeTab === 'difficulty'}
-            onPress={() => handleTabChange('difficulty')}
-          />
-          <TabButton
-            label={loyaltyLabel}
-            isActive={activeTab === 'loyalty'}
-            onPress={() => handleTabChange('loyalty')}
-          />
-        </View>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <View key={i} className="flex-row items-center py-2 gap-2">
-            <SkeletonLoader variant="text" width={24} height={16} />
-            <View className="flex-1">
-              <SkeletonText lines={1} />
-            </View>
-            <SkeletonLoader variant="text" width={60} height={16} />
-          </View>
-        ))}
-      </Card>
-    );
-  }
-
-  // Format value based on active tab
-  const formatValue = (entry: DifficultyLeaderboardEntry | LoyaltyLeaderboardEntry) => {
-    if (activeTab === 'difficulty') {
-      return formatDifficulty((entry as DifficultyLeaderboardEntry).diff);
-    }
-    return `${formatNumber((entry as LoyaltyLeaderboardEntry).total_blocks)} blocks`;
-  };
-
-  // Get user's formatted value
-  const getUserValue = () => {
-    if (userIndex === -1) return '';
-    return formatValue(entries[userIndex]);
-  };
+        );
+      }),
+    [entries, metric, userAddress, t]
+  );
 
   return (
-    <Card className={className}>
-      {/* Round mode toggle */}
-      <View className="flex-row gap-1 mb-2">
-        <RoundToggleButton
-          label={t('pool.sinceLastBlock')}
-          isActive={roundMode === 'round'}
-          onPress={() => handleRoundModeChange('round')}
-        />
-        <RoundToggleButton
-          label={t('pool.allTime')}
-          isActive={roundMode === 'alltime'}
-          onPress={() => handleRoundModeChange('alltime')}
-        />
-      </View>
-
-      {/* Tab buttons */}
-      <View className="flex-row gap-2 mb-3">
-        <TabButton
-          label={diffLabel}
-          isActive={activeTab === 'difficulty'}
-          onPress={() => handleTabChange('difficulty')}
-        />
-        <TabButton
-          label={loyaltyLabel}
-          isActive={activeTab === 'loyalty'}
-          onPress={() => handleTabChange('loyalty')}
-        />
-      </View>
-
-      {/* Empty state */}
-      {(!entries || entries.length === 0) && (
-        <Text variant="caption" color="muted" className="text-center py-4">
-          {t('pool.noEntries')}
+    <View className={`border border-border ${className}`} style={{ backgroundColor: colors.card }}>
+      {/* Title + timeframe text switch */}
+      <View
+        className="flex-row items-center justify-between"
+        style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10 }}
+      >
+        <Text variant="subtitle" style={{ fontSize: 15, color: colors.textHigh }}>
+          {t('pool.leaderboard')}
         </Text>
-      )}
+        <View className="flex-row items-center" style={{ gap: 12 }}>
+          <TextSwitch
+            label={t('pool.sinceBlock')}
+            active={roundMode === 'round'}
+            onPress={() => handleTimeframe('round')}
+          />
+          <TextSwitch
+            label={t('pool.allTime')}
+            active={roundMode === 'alltime'}
+            onPress={() => handleTimeframe('alltime')}
+          />
+        </View>
+      </View>
 
-      {/* Leaderboard list */}
-      {entries && entries.length > 0 && (
-        <ScrollView style={{ maxHeight }} nestedScrollEnabled>
-          {entries.map((entry, index) => {
-            const isUser = userAddress && addressMatches(entry.address, userAddress);
+      {/* Metric segmented control */}
+      <View
+        className="flex-row border border-border"
+        style={{ marginHorizontal: 14, marginBottom: 8 }}
+      >
+        <Segment
+          label={t('pool.topDiff')}
+          active={metric === 'difficulty'}
+          onPress={() => handleMetric('difficulty')}
+        />
+        <Segment
+          label={t('pool.blocksParticipated')}
+          active={metric === 'loyalty'}
+          onPress={() => handleMetric('loyalty')}
+        />
+      </View>
 
-            return (
-              <View
-                key={`${entry.id}-${index}`}
-                className={`flex-row items-center py-2 ${
-                  index < entries.length - 1 ? 'border-b border-border/50' : ''
-                } ${isUser ? 'bg-foreground/5 -mx-2 px-2 rounded' : ''}`}
-              >
-                <Text
-                  variant="mono"
-                  color="muted"
-                  className="w-10 text-sm"
-                >
-                  #{index + 1}
-                </Text>
-                <View className="flex-1 flex-row items-center gap-1">
-                  <Text variant="caption">
-                    {isUser ? t('common.you') : truncateAddress(entry.address, 6)}
-                  </Text>
-                  {entry.claimed && (
-                    <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
-                  )}
-                </View>
-                <Text variant="mono" className="text-sm">
-                  {formatValue(entry)}
-                </Text>
-              </View>
-            );
-          })}
+      {/* Meta + jump-to-you */}
+      <View
+        className="flex-row items-center justify-between"
+        style={{ paddingHorizontal: 14, paddingBottom: 10 }}
+      >
+        <Text variant="mono" style={{ fontSize: 10, color: colors.textFaint }}>
+          {metaText}
+        </Text>
+        {userIndex >= 0 && (
+          <Pressable
+            onPress={handleJumpToYou}
+            hitSlop={6}
+            className="flex-row items-center active:opacity-60"
+            style={{
+              gap: 5,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.14)',
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+            }}
+          >
+            <Ionicons name="arrow-down" size={11} color={colors.textSecondary} />
+            <Text variant="mono" style={{ fontSize: 10, color: colors.textSecondary }}>
+              {t('pool.jumpToYou')}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Rows (bounded internal scroll) / loading / empty */}
+      {isLoading && entries.length === 0 ? (
+        <View>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <View
+              key={i}
+              className="flex-row items-center justify-between border-t border-border-light"
+              style={{ height: ROW_HEIGHT, paddingHorizontal: 14 }}
+            >
+              <SkeletonLoader variant="text" width={120} height={13} />
+              <SkeletonLoader variant="text" width={48} height={13} />
+            </View>
+          ))}
+        </View>
+      ) : entries.length === 0 ? (
+        <View className="border-t border-border-light" style={{ paddingVertical: 20 }}>
+          <Text variant="caption" color="muted" className="text-center">
+            {t('pool.noEntries')}
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          ref={scrollRef}
+          style={{ maxHeight: LIST_MAX_HEIGHT }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews
+        >
+          {rows}
         </ScrollView>
       )}
 
-      {/* User position pinned section */}
-      {userIndex !== -1 && userAddress && (
-        <View className="mt-2 pt-2 border-t border-border">
-          <View className="flex-row items-center py-2 bg-foreground/5 -mx-2 px-2 rounded">
-            <Text variant="mono" color="muted" className="w-10 text-sm">
-              #{userIndex + 1}
+      {/* Pinned, always-visible "You" footer */}
+      {userAddress && (
+        <View
+          className="flex-row items-center justify-between"
+          style={{
+            height: ROW_HEIGHT,
+            paddingHorizontal: 14,
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(255,255,255,0.22)',
+            backgroundColor: 'rgba(255,255,255,0.04)',
+          }}
+        >
+          <View className="flex-row items-center" style={{ flex: 1, gap: 12 }}>
+            <Text variant="mono" style={{ fontSize: 12, color: colors.textSecondary, width: 36 }}>
+              {userIndex >= 0 ? `#${userIndex + 1}` : '#—'}
             </Text>
-            <Text variant="caption" className="flex-1">
+            <Text variant="mono" className="font-bold text-foreground" style={{ fontSize: 13 }}>
               {t('common.you')}
             </Text>
-            <Text variant="mono" className="text-sm">
-              {getUserValue()}
-            </Text>
           </View>
-        </View>
-      )}
-
-      {/* Empty state hint when no address configured */}
-      {!userAddress && entries && entries.length > 0 && (
-        <View className="mt-2 pt-2 border-t border-border flex-row items-center gap-2">
-          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-          <Text variant="caption" color="muted">
-            {t('pool.addAddressHint')}
+          <Text
+            variant="mono"
+            className="font-bold"
+            style={{ fontSize: 13, color: userIndex >= 0 ? colors.text : colors.textDim }}
+          >
+            {userIndex >= 0 ? formatValue(metric, entries[userIndex]) : t('pool.notRanked')}
           </Text>
         </View>
       )}
-    </Card>
+    </View>
   );
 }

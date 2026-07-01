@@ -146,6 +146,12 @@ const pt = {
     topDiff: 'Top Dif.',
     bestEver: 'Melhor Sempre',
     blocksParticipated: 'Blocos Participados',
+    sinceBlock: 'Desde bloco',
+    bestSharesSubtitle: 'Maior dif. por bloco',
+    leaderboardMeta: 'Top {{shown}} · {{total}} membros',
+    leaderboardMetaShort: 'Top {{shown}}',
+    jumpToYou: 'Ir para você',
+    notRanked: 'Sem classificação',
   },
 
   miners: {
@@ -275,6 +281,7 @@ const pt = {
   settings: {
     title: 'Configurações',
     bitcoinAddress: 'Endereço Bitcoin',
+    valid: 'VÁLIDO',
     addressPlaceholder: 'bc1q... ou 1... ou 3...',
     scanQr: 'Escanear QR',
     temperature: 'Temperatura',

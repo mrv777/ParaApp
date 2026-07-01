@@ -1,9 +1,12 @@
 /**
- * TimePresetButtons component - Horizontal button group for chart time ranges
+ * TimePresetButtons - Brutalist segmented control for chart time ranges.
+ * A single hairline box with square segments; the active segment inverts to a
+ * light fill. Drives the home hashrate chart (1h / 24h / 7d / 30d).
  */
 
-import { View } from 'react-native';
-import { Button } from '../Button';
+import { View, Pressable } from 'react-native';
+import { Text } from '../Text';
+import { colors } from '@/constants/colors';
 import type { HistoricalPeriod } from '@/types';
 
 export interface TimePresetButtonsProps {
@@ -22,19 +25,35 @@ export function TimePresetButtons({
   className = '',
 }: TimePresetButtonsProps) {
   return (
-    <View className={`flex-row gap-2 ${className}`}>
-      {presets.map((preset) => (
-        <Button
-          key={preset}
-          variant={selected === preset ? 'secondary' : 'ghost'}
-          size="sm"
-          onPress={() => onSelect(preset)}
-          disabled={disabled}
-          className="flex-1"
-        >
-          {preset}
-        </Button>
-      ))}
+    <View
+      className={`flex-row border border-border ${disabled ? 'opacity-50' : ''} ${className}`}
+      style={{ gap: 2 }}
+    >
+      {presets.map((preset) => {
+        const active = selected === preset;
+        return (
+          <Pressable
+            key={preset}
+            onPress={() => !disabled && onSelect(preset)}
+            disabled={disabled}
+            style={{
+              paddingVertical: 3,
+              paddingHorizontal: 7,
+              backgroundColor: active ? colors.primary : 'transparent',
+            }}
+          >
+            <Text
+              variant="mono"
+              style={{
+                fontSize: 10,
+                color: active ? '#000000' : colors.textDim,
+              }}
+            >
+              {preset}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

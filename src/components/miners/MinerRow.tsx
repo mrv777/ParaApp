@@ -7,7 +7,6 @@ import { View, Pressable } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
-import { Badge } from '../Badge';
 import {
   formatHashrate,
   formatTemperature,
@@ -54,16 +53,17 @@ export function MinerRow({
   const { t } = useTranslation();
   const displayName = miner.alias || miner.hostname || miner.ip;
 
-  // Determine temperature warning level
-  const getTempColor = (): 'default' | 'warning' | 'danger' => {
-    if (!miner.isOnline) return 'default';
-    const t = getTempThresholdsFor(miner.minerType);
-    if (miner.temp >= t.danger) return 'danger';
-    if (miner.temp >= t.caution) return 'warning';
-    return 'default';
-  };
+  const nameColor = miner.isOnline ? colors.textHigh : colors.dangerTint;
+  const hasModel = miner.deviceModel && miner.deviceModel !== 'Unknown';
 
-  const tempColor = getTempColor();
+  // Determine temperature warning color (from the fine-grained ramp)
+  const tempColor = (() => {
+    if (!miner.isOnline) return colors.textFaint;
+    const th = getTempThresholdsFor(miner.minerType);
+    if (miner.temp >= th.danger) return colors.danger;
+    if (miner.temp >= th.caution) return colors.warning;
+    return colors.textFaint;
+  })();
 
   const handlePress = () => {
     if (onPress) {
@@ -90,7 +90,8 @@ export function MinerRow({
 
   const content = (
     <View
-      className={`px-4 py-3 bg-background flex-row items-center ${className}`}
+      className={`bg-background flex-row items-center ${className}`}
+      style={{ paddingHorizontal: 16, paddingVertical: 12 }}
     >
       {/* Status indicator */}
       <View
@@ -100,84 +101,85 @@ export function MinerRow({
       />
 
       {/* Main content */}
-      <View className="flex-1 mr-3">
-        {/* Name and model */}
-        <View className="flex-row items-center gap-2">
-          <Text variant="body" className="font-medium" numberOfLines={1}>
-            {displayName}
-          </Text>
-          {miner.deviceModel && miner.deviceModel !== 'Unknown' && (
-            <Badge variant="default" size="sm">
+      <View className="flex-1 mr-2">
+        {/* Name */}
+        <Text
+          variant="mono"
+          className="font-bold"
+          style={{ fontSize: 14, color: nameColor }}
+          numberOfLines={1}
+        >
+          {displayName}
+        </Text>
+
+        {/* Meta line: model · ip · diff · temp (or offline/connecting) */}
+        <View className="flex-row items-center" style={{ gap: 8, marginTop: 2 }}>
+          {hasModel && (
+            <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
               {miner.deviceModel}
-            </Badge>
+            </Text>
+          )}
+          <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
+            {miner.ip}
+          </Text>
+          {miner.isOnline ? (
+            <>
+              <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
+                {formatDifficulty(miner.bestDiff)}
+              </Text>
+              <Text variant="mono" style={{ fontSize: 11, color: tempColor }} numberOfLines={1}>
+                {formatTemperature(miner.temp)}
+              </Text>
+            </>
+          ) : (
+            <Text variant="mono" style={{ fontSize: 11, color: colors.textFaint }} numberOfLines={1}>
+              {isLoading ? t('miners.connecting') : t('common.offline')}
+            </Text>
           )}
         </View>
 
-        {/* Warning badges */}
+        {/* Warnings — small colored mono labels (no pills) */}
         {warnings && warnings.length > 0 && (
-          <View className="flex-row gap-1 mt-1">
+          <View className="flex-row items-center flex-wrap" style={{ gap: 8, marginTop: 3 }}>
             {warnings.slice(0, 2).map((w, i) => (
-              <Badge
+              <Text
                 key={i}
-                variant={w.severity === 'danger' ? 'danger' : 'warning'}
-                size="sm"
+                variant="mono"
+                className="uppercase"
+                style={{
+                  fontSize: 9,
+                  letterSpacing: 0.5,
+                  color: w.severity === 'danger' ? colors.danger : colors.warning,
+                }}
+                numberOfLines={1}
               >
                 {t(getWarningKey(w.type))}
-              </Badge>
+              </Text>
             ))}
             {warnings.length > 2 && (
-              <Badge variant="default" size="sm">
+              <Text
+                variant="mono"
+                style={{ fontSize: 9, color: colors.textFaint }}
+                numberOfLines={1}
+              >
                 +{warnings.length - 2}
-              </Badge>
+              </Text>
             )}
-          </View>
-        )}
-
-        {/* Stats row */}
-        {miner.isOnline ? (
-          <View className="flex-row items-center gap-4 mt-1">
-            <Text variant="caption" color="muted">
-              {miner.ip}
-            </Text>
-            <Text variant="caption" color="muted">
-              {formatHashrate(miner.hashRate * 1e9)}
-            </Text>
-            <Text variant="caption" color="muted">
-              {formatDifficulty(miner.bestDiff)}
-            </Text>
-            <Text variant="caption" color={tempColor}>
-              {formatTemperature(miner.temp)}
-            </Text>
-          </View>
-        ) : isLoading ? (
-          <View className="flex-row items-center gap-4 mt-1">
-            <Text variant="caption" color="muted">
-              {miner.ip}
-            </Text>
-            <Text variant="caption" color="muted">
-              {t('miners.connecting')}
-            </Text>
-          </View>
-        ) : (
-          <View className="flex-row items-center gap-4 mt-1">
-            <Text variant="caption" color="muted">
-              {miner.ip}
-            </Text>
-            <Text variant="caption" color="muted">
-              {t('common.offline')}
-            </Text>
           </View>
         )}
       </View>
 
-      {/* Chevron for navigation */}
-      {onPress && (
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.textMuted}
-        />
-      )}
+      {/* Hashrate + chevron */}
+      <View className="flex-row items-center" style={{ gap: 6 }}>
+        {miner.isOnline && (
+          <Text variant="mono" style={{ fontSize: 13, color: colors.textValue }}>
+            {formatHashrate(miner.hashRate * 1e9)}
+          </Text>
+        )}
+        {onPress && (
+          <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
+        )}
+      </View>
     </View>
   );
 
@@ -191,7 +193,7 @@ export function MinerRow({
         <Pressable
           onPress={handlePress}
           disabled={isLoading}
-          className="border-b border-border"
+          className="border-b border-border-light"
           style={({ pressed }) => ({
             opacity: pressed ? 0.7 : isLoading ? 0.5 : 1,
           })}

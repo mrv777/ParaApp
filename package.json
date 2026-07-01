@@ -1,6 +1,6 @@
 {
   "name": "parasite-app",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "license": "GPL-3.0-or-later",
   "main": "index.ts",
   "pnpm": {
@@ -35,6 +35,8 @@
   },
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
+    "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo/ui": "~56.0.17",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",

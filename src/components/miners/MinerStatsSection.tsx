@@ -4,6 +4,8 @@
 
 import { View } from 'react-native';
 import { Text } from '../Text';
+import { StatBox, type StatBoxColor } from '../StatBox';
+import { colors } from '@/constants/colors';
 import type { LocalMiner } from '@/types';
 import type { TemperatureUnit } from '@/utils/formatting';
 import {
@@ -24,29 +26,11 @@ export interface MinerStatsSectionProps {
   temperatureUnit: TemperatureUnit;
 }
 
-interface StatItemProps {
+interface StatEntry {
   label: string;
   value: string;
   subValue?: string;
-  color?: 'default' | 'warning' | 'danger' | 'success';
-}
-
-function StatItem({ label, value, subValue, color = 'default' }: StatItemProps) {
-  return (
-    <View className="flex-1 min-w-[45%] p-3 bg-secondary rounded-lg">
-      <Text variant="caption" color="muted" className="mb-1">
-        {label}
-      </Text>
-      <Text variant="subtitle" color={color} className="font-semibold">
-        {value}
-      </Text>
-      {subValue && (
-        <Text variant="caption" color="muted" className="mt-0.5">
-          {subValue}
-        </Text>
-      )}
-    </View>
-  );
+  color?: StatBoxColor;
 }
 
 function getTemperatureColor(
@@ -84,91 +68,95 @@ export function MinerStatsSection({
 
   const isAvalon = miner.minerType === 'avalon';
 
+  const entries: StatEntry[] = [
+    {
+      label: t('miners.hashrate'),
+      value: formatHashrate(hashrateHs),
+      subValue:
+        expectedHs > 0
+          ? t('miners.expected', { value: formatHashrate(expectedHs) })
+          : undefined,
+    },
+    {
+      label: t('miners.temperature'),
+      value: formatTemperature(miner.temp, temperatureUnit),
+      color: getTemperatureColor(miner.temp, miner.minerType),
+      subValue:
+        isAvalon &&
+        miner.hashboardInletTemp !== undefined &&
+        miner.hashboardOutletTemp !== undefined
+          ? t('miners.airInOut', {
+              in: formatTemperature(miner.hashboardInletTemp, temperatureUnit),
+              out: formatTemperature(miner.hashboardOutletTemp, temperatureUnit),
+            })
+          : undefined,
+    },
+    { label: t('miners.power'), value: formatPower(miner.power) },
+    // Avalon: show work mode instead of voltage
+    isAvalon && miner.workMode !== undefined
+      ? {
+          label: t('miners.workMode'),
+          value:
+            miner.workMode === 0
+              ? t('miners.workModeEco')
+              : miner.workMode === 1
+                ? t('miners.workModeStandard')
+                : t('miners.workModeSuper'),
+          subValue: miner.frequency > 0 ? `${miner.frequency} MHz` : undefined,
+        }
+      : { label: t('miners.voltage'), value: formatVoltage(miner.voltage) },
+    {
+      label: t('miners.shares'),
+      value: formatNumber(miner.sharesAccepted),
+      subValue: t('miners.rejected', { rate: rejectRate }),
+    },
+    { label: t('miners.uptime'), value: formatUptime(miner.uptimeSeconds) },
+    {
+      label: t('miners.bestDiff'),
+      value: formatDifficulty(miner.bestDiff),
+      subValue: t('miners.session', { value: formatDifficulty(miner.bestSessionDiff) }),
+    },
+    // Avalon has 4 individual fans — show duty + per-fan range. AxeOS shows the single fan duty.
+    isAvalon && miner.fanRpms && miner.fanRpms.length > 1
+      ? {
+          label: t('miners.fanSpeed'),
+          value: formatPercent(miner.fanSpeed),
+          subValue: `${miner.fanRpms.length} fans · ${Math.min(...miner.fanRpms)}–${Math.max(...miner.fanRpms)} RPM`,
+        }
+      : { label: t('miners.fanSpeed'), value: formatPercent(miner.fanSpeed) },
+  ];
+
+  if (miner.hwErrors !== undefined) {
+    entries.push({
+      label: t('miners.hwErrors'),
+      value: formatNumber(miner.hwErrors),
+      subValue: t('miners.hwErrorRate', { rate: (miner.hwErrorRate ?? 0).toFixed(1) }),
+      color: getHwErrorColor(miner.hwErrorRate ?? 0),
+    });
+  }
+  if (isAvalon && miner.poolPing !== undefined && miner.poolPing > 0) {
+    entries.push({ label: t('miners.poolPing'), value: `${miner.poolPing} ms` });
+  }
+
   return (
-    <View className="px-4 mb-4">
-      <Text variant="caption" color="muted" className="mb-2 uppercase">
+    <View>
+      <Text
+        variant="subtitle"
+        style={{ fontSize: 15, color: colors.textHigh, marginBottom: 10 }}
+      >
         {t('miners.performance')}
       </Text>
-      <View className="flex-row flex-wrap gap-2">
-        <StatItem
-          label={t('miners.hashrate')}
-          value={formatHashrate(hashrateHs)}
-          subValue={
-            expectedHs > 0
-              ? t('miners.expected', { value: formatHashrate(expectedHs) })
-              : undefined
-          }
-        />
-        <StatItem
-          label={t('miners.temperature')}
-          value={formatTemperature(miner.temp, temperatureUnit)}
-          color={getTemperatureColor(miner.temp, miner.minerType)}
-          subValue={
-            isAvalon &&
-            miner.hashboardInletTemp !== undefined &&
-            miner.hashboardOutletTemp !== undefined
-              ? t('miners.airInOut', {
-                  in: formatTemperature(miner.hashboardInletTemp, temperatureUnit),
-                  out: formatTemperature(miner.hashboardOutletTemp, temperatureUnit),
-                })
-              : undefined
-          }
-        />
-        <StatItem label={t('miners.power')} value={formatPower(miner.power)} />
-        {/* Avalon: show work mode badge instead of voltage */}
-        {isAvalon && miner.workMode !== undefined ? (
-          <StatItem
-            label={t('miners.workMode')}
-            value={
-              miner.workMode === 0
-                ? t('miners.workModeEco')
-                : miner.workMode === 1
-                  ? t('miners.workModeStandard')
-                  : t('miners.workModeSuper')
-            }
-            subValue={miner.frequency > 0 ? `${miner.frequency} MHz` : undefined}
+      <View className="flex-row flex-wrap" style={{ gap: 8, justifyContent: 'space-between' }}>
+        {entries.map((entry, i) => (
+          <StatBox
+            key={i}
+            label={entry.label}
+            value={entry.value}
+            subValue={entry.subValue}
+            valueColor={entry.color}
+            style={{ width: '48.5%' }}
           />
-        ) : (
-          <StatItem
-            label={t('miners.voltage')}
-            value={formatVoltage(miner.voltage)}
-          />
-        )}
-        <StatItem
-          label={t('miners.shares')}
-          value={formatNumber(miner.sharesAccepted)}
-          subValue={t('miners.rejected', { rate: rejectRate })}
-        />
-        <StatItem label={t('miners.uptime')} value={formatUptime(miner.uptimeSeconds)} />
-        <StatItem
-          label={t('miners.bestDiff')}
-          value={formatDifficulty(miner.bestDiff)}
-          subValue={t('miners.session', { value: formatDifficulty(miner.bestSessionDiff) })}
-        />
-        {/* Avalon has 4 individual fans — show duty + per-fan range. AxeOS shows the single fan duty. */}
-        {isAvalon && miner.fanRpms && miner.fanRpms.length > 1 ? (
-          <StatItem
-            label={t('miners.fanSpeed')}
-            value={formatPercent(miner.fanSpeed)}
-            subValue={`${miner.fanRpms.length} fans · ${Math.min(...miner.fanRpms)}–${Math.max(...miner.fanRpms)} RPM`}
-          />
-        ) : (
-          <StatItem label={t('miners.fanSpeed')} value={formatPercent(miner.fanSpeed)} />
-        )}
-        {miner.hwErrors !== undefined && (
-          <StatItem
-            label={t('miners.hwErrors')}
-            value={formatNumber(miner.hwErrors)}
-            subValue={t('miners.hwErrorRate', { rate: (miner.hwErrorRate ?? 0).toFixed(1) })}
-            color={getHwErrorColor(miner.hwErrorRate ?? 0)}
-          />
-        )}
-        {isAvalon && miner.poolPing !== undefined && miner.poolPing > 0 && (
-          <StatItem
-            label={t('miners.poolPing')}
-            value={`${miner.poolPing} ms`}
-          />
-        )}
+        ))}
       </View>
     </View>
   );

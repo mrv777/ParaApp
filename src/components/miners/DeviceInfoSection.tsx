@@ -7,7 +7,7 @@ import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '../Text';
-import { Badge } from '../Badge';
+import { Card } from '../Card';
 import { useTranslation } from '@/i18n';
 import { truncateWorker } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
@@ -23,19 +23,25 @@ interface InfoRowProps {
   value: string;
   /** Allow value to wrap to multiple lines */
   multiline?: boolean;
-  /** Hide bottom border (for last item) */
-  isLast?: boolean;
 }
 
-function InfoRow({ label, value, multiline = false, isLast = false }: InfoRowProps) {
+function InfoRow({ label, value, multiline = false }: InfoRowProps) {
   return (
-    <View className={`flex-row justify-between py-2.5 gap-4 ${isLast ? '' : 'border-b border-border'}`}>
-      <Text variant="body" color="muted" className="flex-shrink-0">
+    <View
+      className="flex-row justify-between items-center border-t border-border-light gap-4"
+      style={{ paddingHorizontal: 16, paddingVertical: 11 }}
+    >
+      <Text
+        variant="mono"
+        className="flex-shrink-0"
+        style={{ fontSize: 12, color: colors.textMuted }}
+      >
         {label}
       </Text>
       <Text
-        variant="body"
-        className="font-medium flex-shrink text-right"
+        variant="mono"
+        className="flex-shrink text-right"
+        style={{ fontSize: 12, color: colors.textValue }}
         numberOfLines={multiline ? undefined : 1}
       >
         {value || '--'}
@@ -74,17 +80,23 @@ function IpAddressRow({ ip }: { ip: string }) {
       accessibilityRole="link"
       accessibilityLabel={`${t('miners.ipAddress')}: ${ip}. ${t('miners.openInBrowser')}`}
       android_ripple={{ color: colors.borderLight }}
-      className="flex-row justify-between items-center py-2.5 gap-4 border-b border-border active:opacity-60"
+      className="flex-row justify-between items-center gap-4 border-t border-border-light active:opacity-60"
+      style={{ paddingHorizontal: 16, paddingVertical: 11 }}
     >
-      <Text variant="body" color="muted" className="flex-shrink-0">
+      <Text variant="mono" className="flex-shrink-0" style={{ fontSize: 12, color: colors.textMuted }}>
         {t('miners.ipAddress')}
       </Text>
       <View className="flex-row items-center gap-1.5 flex-shrink">
-        <Text variant="body" className="font-medium text-right" numberOfLines={1}>
+        <Text
+          variant="mono"
+          className="text-right"
+          style={{ fontSize: 12, color: colors.textValue }}
+          numberOfLines={1}
+        >
           {ip || '--'}
         </Text>
         {!!ip && (
-          <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="open-outline" size={13} color={colors.textMuted} />
         )}
       </View>
     </Pressable>
@@ -98,15 +110,29 @@ function FallbackPoolRow({ miner }: { miner: LocalMiner }) {
     : '--';
 
   return (
-    <View className="flex-row justify-between py-2.5 gap-4">
-      <Text variant="body" color="muted" className="flex-shrink-0">
+    <View
+      className="flex-row justify-between items-center gap-4 border-t border-border-light"
+      style={{ paddingHorizontal: 16, paddingVertical: 11 }}
+    >
+      <Text variant="mono" className="flex-shrink-0" style={{ fontSize: 12, color: colors.textMuted }}>
         {t('miners.fallbackPool')}
       </Text>
       <View className="flex-row items-center gap-2 flex-shrink">
         {miner.isUsingFallbackStratum && (
-          <Badge variant="warning" size="sm">{t('miners.active')}</Badge>
+          <Text
+            variant="mono"
+            className="uppercase"
+            style={{ fontSize: 9, letterSpacing: 0.5, color: colors.warning }}
+          >
+            {t('miners.active')}
+          </Text>
         )}
-        <Text variant="body" className="font-medium text-right" numberOfLines={1}>
+        <Text
+          variant="mono"
+          className="text-right"
+          style={{ fontSize: 12, color: colors.textValue }}
+          numberOfLines={1}
+        >
           {fallbackUrl}
         </Text>
       </View>
@@ -127,46 +153,37 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
   const hasRssi = miner.rssi !== undefined;
 
   return (
-    <View className="px-4 mb-4">
-      <Text variant="caption" color="muted" className="mb-2 uppercase">
+    <Card padding="none">
+      <Text
+        variant="subtitle"
+        style={{ fontSize: 15, color: colors.textHigh, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 }}
+      >
         {t('miners.deviceInfo')}
       </Text>
-      <View className="bg-secondary rounded-lg px-4">
-        <InfoRow label={t('miners.model')} value={miner.deviceModel} />
-        <InfoRow label={t('miners.asic')} value={miner.ASICModel} />
-        {hasAsicCount && (
-          <InfoRow
-            label={t('miners.asicCount')}
-            value={String(miner.asicCount)}
-          />
-        )}
-        <InfoRow label={t('miners.firmware')} value={miner.version} />
-        <IpAddressRow ip={miner.ip} />
-        {hasMac && (
-          <InfoRow
-            label={t('miners.macAddress')}
-            value={miner.macAddress as string}
-          />
-        )}
-        <InfoRow label={t('miners.hostname')} value={miner.hostname} />
-        <InfoRow label={t('miners.pool')} value={poolUrl} />
-        <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
-        {/* Avalons report no WiFi info — skip the row entirely */}
-        {!isAvalon && (
-          <InfoRow
-            label={t('miners.wifi')}
-            value={miner.wifiSSID || ''}
-            isLast={!hasRssi && !hasSerial && !hasFallback}
-          />
-        )}
-        {hasRssi && (
-          <InfoRow label={t('miners.wifiSignal')} value={`${miner.rssi} dBm`} isLast={!hasSerial && !hasFallback} />
-        )}
-        {hasSerial && (
-          <InfoRow label={t('miners.serialNumber')} value={miner.serialNumber as string} isLast={!hasFallback} />
-        )}
-        {hasFallback && <FallbackPoolRow miner={miner} />}
-      </View>
-    </View>
+      <InfoRow label={t('miners.model')} value={miner.deviceModel} />
+      <InfoRow label={t('miners.asic')} value={miner.ASICModel} />
+      {hasAsicCount && (
+        <InfoRow label={t('miners.asicCount')} value={String(miner.asicCount)} />
+      )}
+      <InfoRow label={t('miners.firmware')} value={miner.version} />
+      <IpAddressRow ip={miner.ip} />
+      {hasMac && (
+        <InfoRow label={t('miners.macAddress')} value={miner.macAddress as string} />
+      )}
+      <InfoRow label={t('miners.hostname')} value={miner.hostname} />
+      <InfoRow label={t('miners.pool')} value={poolUrl} />
+      <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
+      {/* Avalons report no WiFi info — skip the row entirely */}
+      {!isAvalon && (
+        <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} />
+      )}
+      {hasRssi && (
+        <InfoRow label={t('miners.wifiSignal')} value={`${miner.rssi} dBm`} />
+      )}
+      {hasSerial && (
+        <InfoRow label={t('miners.serialNumber')} value={miner.serialNumber as string} />
+      )}
+      {hasFallback && <FallbackPoolRow miner={miner} />}
+    </Card>
   );
 }
