@@ -13,12 +13,10 @@ import type {
   NotificationPreferences,
 } from './types';
 import {
-  getUniqueAddresses,
   getUserState,
   upsertUserState,
   getPoolState,
   updatePoolState,
-  getActiveTokensByAddress,
   getAllActiveSubscriptions,
   getPreferences,
   markTokenInactive,
@@ -157,13 +155,25 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     allMessages.push(...blockResult.messages);
     for (const token of blockResult.widgetTokens) eventWidgetTokens.add(token);
 
-    // 2. Process each user for worker/difficulty changes
-    const addresses = await getUniqueAddresses(env.DB);
-    console.log(`Processing ${addresses.length} unique addresses`);
+    // 2. Process each user for worker/difficulty changes.
+    //    Load every active subscription in ONE scan and group by address in
+    //    memory, then reuse those rows as each address's tokens. The previous
+    //    approach did a DISTINCT scan plus a per-address token lookup, and that
+    //    per-address query mis-planned onto the low-cardinality `active` index —
+    //    re-reading every active row for every address (O(addresses × subs)),
+    //    which dominated D1 row-reads. Grouping makes it a single O(subs) scan.
+    const activeSubscriptions = await getAllActiveSubscriptions(env.DB);
+    const subsByAddress = new Map<string, PushSubscription[]>();
+    for (const sub of activeSubscriptions) {
+      const list = subsByAddress.get(sub.btc_address);
+      if (list) list.push(sub);
+      else subsByAddress.set(sub.btc_address, [sub]);
+    }
+    console.log(`Processing ${subsByAddress.size} unique addresses`);
 
-    for (const address of addresses) {
+    for (const [address, tokens] of subsByAddress) {
       try {
-        const userResult = await processUser(env, address);
+        const userResult = await processUser(env, address, tokens);
         allMessages.push(...userResult.messages);
         for (const token of userResult.widgetTokens) eventWidgetTokens.add(token);
       } catch (error) {
@@ -304,10 +314,15 @@ async function checkPoolBlock(
  */
 async function processUser(
   env: Env,
-  address: string
+  address: string,
+  tokens: PushSubscription[]
 ): Promise<{ messages: ExpoPushMessage[]; widgetTokens: string[] }> {
   const messages: ExpoPushMessage[] = [];
   const widgetTokens: string[] = [];
+
+  if (tokens.length === 0) {
+    return { messages, widgetTokens }; // No active tokens for this user
+  }
 
   // Fetch user data from Parasite Pool
   const userResult = await getUser(env.PARASITE_API_URL, address);
@@ -325,16 +340,12 @@ async function processUser(
     fetchedAt
   );
 
-  // Get stored state and preferences
-  const [userState, prefs, tokens] = await Promise.all([
+  // Get stored state and preferences (tokens were grouped from the single
+  // active-subscription scan in runCronJob, so no per-address token query here).
+  const [userState, prefs] = await Promise.all([
     getUserState(env.DB, address),
     getPreferences(env.DB, address),
-    getActiveTokensByAddress(env.DB, address),
   ]);
-
-  if (tokens.length === 0) {
-    return { messages, widgetTokens }; // No active tokens for this user
-  }
 
   const workersEnabled = prefs ? prefs.notify_workers === 1 : true;
   const bestDiffEnabled = prefs ? prefs.notify_best_diff === 1 : true;

@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS widget_user_snapshots (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_subscriptions_address ON push_subscriptions(btc_address);
+-- Composite (btc_address, active) serves by-address active-subscription lookups
+-- without falling back to the low-cardinality `active` index (see migration
+-- 0003). It also covers plain btc_address lookups via its leading column.
+CREATE INDEX IF NOT EXISTS idx_subscriptions_addr_active ON push_subscriptions(btc_address, active);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_active ON push_subscriptions(active);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_widget_updates ON push_subscriptions(widget_updates_enabled, last_widget_push_at);
