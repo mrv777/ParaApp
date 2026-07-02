@@ -65,3 +65,9 @@ yarn-error.*
 
 # Cloudflare Workers
 .wrangler/
+server/.dev.vars
+
+# Community-chat planning docs — kept locally as working references during the
+# build; not committed to this public repo (see CHAT_BUILD_PLAN.md decision).
+CHAT_SPEC.md
+CHAT_BUILD_PLAN.md
