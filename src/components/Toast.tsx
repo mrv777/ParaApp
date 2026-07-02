@@ -5,7 +5,7 @@
  * motif — rather than a colored edge.
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import ToastLib, { type ToastConfig } from 'react-native-toast-message';
 import { colors } from '@/constants/colors';
 
@@ -13,13 +13,15 @@ function ThemedToast({
   text1,
   text2,
   tint,
+  onPress,
 }: {
   text1?: string;
   text2?: string;
   tint: string;
+  onPress?: () => void;
 }) {
   return (
-    <View style={styles.wrap}>
+    <Pressable style={styles.wrap} onPress={onPress} disabled={!onPress}>
       <View style={[styles.tick, { backgroundColor: tint }]} />
       <View style={styles.textCol}>
         {text1 ? (
@@ -33,19 +35,34 @@ function ThemedToast({
           </Text>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 const toastConfig: ToastConfig = {
   info: (props) => (
-    <ThemedToast text1={props.text1} text2={props.text2} tint={colors.primary} />
+    <ThemedToast
+      text1={props.text1}
+      text2={props.text2}
+      tint={colors.primary}
+      onPress={props.onPress}
+    />
   ),
   success: (props) => (
-    <ThemedToast text1={props.text1} text2={props.text2} tint={colors.success} />
+    <ThemedToast
+      text1={props.text1}
+      text2={props.text2}
+      tint={colors.success}
+      onPress={props.onPress}
+    />
   ),
   error: (props) => (
-    <ThemedToast text1={props.text1} text2={props.text2} tint={colors.danger} />
+    <ThemedToast
+      text1={props.text1}
+      text2={props.text2}
+      tint={colors.danger}
+      onPress={props.onPress}
+    />
   ),
 };
 

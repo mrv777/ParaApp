@@ -12,7 +12,7 @@
  * a parent reference yet, so `replyTo` is currently never populated.
  */
 
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text as RNText,
@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
@@ -33,7 +33,7 @@ import { NicknameSheet } from '@/components/chat/NicknameSheet';
 import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
 import { EulaSheet } from '@/components/chat/EulaSheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
-import { reportChatMessage, blockChatAddress, acceptChatEula } from '@/api/chat';
+import { reportChatMessage, blockChatSender, acceptChatEula } from '@/api/chat';
 import { isError } from '@/api/client';
 import type { ApiResult } from '@/types';
 import {
@@ -60,6 +60,7 @@ import { useTranslation } from '@/i18n';
 import {
   MAX_MESSAGE_LENGTH,
   CHAT_EULA_VERSION,
+  truncateChatAddress,
   type ChatMessage,
   type ReactionEmoji,
 } from '@/constants/chat';
@@ -90,8 +91,10 @@ const TEXT_TIME = '#5a5a5c';
 const TEXT_REPLY_PREVIEW = '#7a7a7d';
 const CHIP_BG = '#f4f4f5';
 
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
+// App language, not device locale — keeps times consistent with the day
+// dividers, which already format via i18n.language.
+function formatTime(ts: number, locale: string): string {
+  return new Date(ts).toLocaleTimeString(locale, {
     hour: 'numeric',
     minute: '2-digit',
   });
@@ -138,6 +141,7 @@ const MessageRow = memo(function MessageRow({
   onLongPress,
   onToggleReaction,
 }: RowProps) {
+  const { i18n } = useTranslation();
   const handle = isOwn ? youLabel : message.nickname || truncateAddress(message.address);
   const body = useMemo(() => sanitizeDisplayBody(message.body), [message.body]);
 
@@ -173,7 +177,7 @@ const MessageRow = memo(function MessageRow({
             </RNText>
           ) : null}
           <View style={{ flex: 1 }} />
-          <RNText style={styles.time}>{formatTime(message.ts)}</RNText>
+          <RNText style={styles.time}>{formatTime(message.ts, i18n.language)}</RNText>
         </View>
 
         {/* Reply quote (only when the message references a parent). */}
@@ -212,6 +216,14 @@ const MessageRow = memo(function MessageRow({
 });
 
 const Separator = () => <View style={styles.separator} />;
+
+// Rendered when the feed has no messages (fresh room / fresh identity).
+const EmptyFeed = ({ title, hint }: { title: string; hint: string }) => (
+  <View style={styles.emptyWrap}>
+    <RNText style={styles.emptyTitle}>{title}</RNText>
+    <RNText style={styles.emptyHint}>{hint}</RNText>
+  </View>
+);
 
 // Shown at the top of the feed while an older page is being fetched.
 const LoadingOlder = () => (
@@ -302,8 +314,19 @@ export function ChatScreen({ navigation }: Props) {
   const connectionState = useChatStore(selectChatConnectionState);
   const announcement = useChatStore(selectChatAnnouncement);
   const removeMessagesFrom = useChatStore((s) => s.removeMessagesFrom);
+  const markSeen = useChatStore((s) => s.markSeen);
+
+  // Keep the tab-bar unread dot cleared while the user is actually looking at
+  // the feed; messages that land while another tab is focused stay unread.
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (isFocused) markSeen();
+  }, [isFocused, messages, markSeen]);
 
   const address = useSettingsStore(selectBitcoinAddress);
+  // Server payloads carry only truncated sender keys, so "is this mine?"
+  // compares against the truncated form of our own address.
+  const selfKey = address ? truncateChatAddress(address) : null;
   const hasAddress = useSettingsStore(selectHasAddress);
   const eulaVersion = useSettingsStore(selectChatEulaVersion);
   const setChatEulaVersion = useSettingsStore((s) => s.setChatEulaVersion);
@@ -311,15 +334,38 @@ export function ChatScreen({ navigation }: Props) {
   const [input, setInput] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const [actionMessage, setActionMessage] = useState<ChatMessage | null>(null);
+  // The long-press snapshot goes stale if a reaction lands while the sheet is
+  // open (its quick-react `mine` state would send the wrong op) — resolve the
+  // live copy from the store; fall back to the snapshot if it was deleted.
+  const liveActionMessage = useMemo(() => {
+    if (!actionMessage) return null;
+    return messages.find((m) => m.id === actionMessage.id) ?? actionMessage;
+  }, [actionMessage, messages]);
   const [nicknameOpen, setNicknameOpen] = useState(false);
   const [eulaOpen, setEulaOpen] = useState(false);
   const [pendingSend, setPendingSend] = useState<string | null>(null);
 
   const hasDraft = input.trim().length > 0;
 
+  // Last body handed to the socket. The input clears as soon as ws.send()
+  // succeeds, but the server may still reject it (rate limit, filter) via a
+  // later `error` event — restore the text then so the user's draft isn't lost.
+  const lastSentRef = useRef<string | null>(null);
+
   // Surface server errors (rate limited, blocked, etc.) as a toast.
   useEffect(() => {
     if (!lastError) return;
+    if (
+      (lastError === 'rate_limited' ||
+        lastError === 'blocked_content' ||
+        lastError === 'bad_body') &&
+      lastSentRef.current
+    ) {
+      const rejected = lastSentRef.current;
+      lastSentRef.current = null;
+      // Don't clobber anything the user has typed since.
+      setInput((current) => (current.trim() ? current : rejected));
+    }
     haptics.warning();
     Toast.show({
       type: 'error',
@@ -333,6 +379,7 @@ export function ChatScreen({ navigation }: Props) {
   const doSend = useCallback(
     (body: string) => {
       if (sendMessage(body)) {
+        lastSentRef.current = body;
         setInput('');
         setInputHeight(MIN_INPUT_HEIGHT); // shrink back after sending
         haptics.light();
@@ -420,7 +467,7 @@ export function ChatScreen({ navigation }: Props) {
       setActionMessage(null);
       if (!token) return;
       const res = await runTokenAction(token, refreshToken, (tk) =>
-        blockChatAddress(tk, message.address)
+        blockChatSender(tk, message.id)
       );
       if (actionSucceeded(res)) {
         // Only prune + reload the DO block list once the server confirms — so the
@@ -441,7 +488,7 @@ export function ChatScreen({ navigation }: Props) {
     ({ item }: LegendListRenderItemProps<ChatMessage>) => (
       <MessageRow
         message={item}
-        isOwn={!!address && item.address === address}
+        isOwn={!!selfKey && item.address === selfKey}
         youLabel={t('common.you')}
         canReact={canPost}
         dateLabel={dividerById.get(item.id) ?? null}
@@ -449,7 +496,7 @@ export function ChatScreen({ navigation }: Props) {
         onToggleReaction={handleToggleReaction}
       />
     ),
-    [address, t, canPost, dividerById, handleLongPress, handleToggleReaction]
+    [selfKey, t, canPost, dividerById, handleLongPress, handleToggleReaction]
   );
 
   const online_ =
@@ -517,6 +564,9 @@ export function ChatScreen({ navigation }: Props) {
           onStartReached={loadOlder}
           onStartReachedThreshold={0.2}
           ListHeaderComponent={loadingOlder ? <LoadingOlder /> : null}
+          ListEmptyComponent={
+            <EmptyFeed title={t('chat.empty')} hint={t('chat.emptyHint')} />
+          }
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
         />
@@ -606,8 +656,8 @@ export function ChatScreen({ navigation }: Props) {
       />
 
       <MessageActionsSheet
-        message={actionMessage}
-        isOwn={!!address && actionMessage?.address === address}
+        message={liveActionMessage}
+        isOwn={!!selfKey && liveActionMessage?.address === selfKey}
         onClose={() => setActionMessage(null)}
         onReact={handleToggleReaction}
         onReport={handleReport}
@@ -673,6 +723,9 @@ const styles = StyleSheet.create({
   feed: { flex: 1, minHeight: 0 },
   feedContent: { paddingVertical: 8 },
   loadingOlder: { paddingVertical: 12, alignItems: 'center' },
+  emptyWrap: { alignItems: 'center', paddingVertical: 48, gap: 6 },
+  emptyTitle: { fontFamily: MONO, fontSize: 14, color: TEXT_MUTED },
+  emptyHint: { fontFamily: MONO, fontSize: 12, color: TEXT_TIME },
   separator: { height: 1, backgroundColor: HAIRLINE },
 
   // Day divider: centered mono label between hairline rules.

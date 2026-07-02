@@ -4,13 +4,18 @@
  * duration). One instance, id "global".
  *
  * Reachable only via the worker's /chat/ws route, which validates the session
- * token and appends `?address=` (empty for anonymous read-only viewers). The DO
- * trusts that param because it is never exposed publicly.
+ * token and forwards the address in the `X-Chat-Address` header (empty for
+ * anonymous read-only viewers). The DO trusts that header because the worker
+ * always overwrites it and the DO is not reachable any other way.
  */
 
 import type { Env } from '../types';
 import type { ClientEvent, ServerEvent, ChatErrorCode } from './protocol';
-import { MAX_MESSAGE_LENGTH, isReactionEmoji } from './protocol';
+import {
+  MAX_MESSAGE_LENGTH,
+  isReactionEmoji,
+  truncateChatAddress,
+} from './protocol';
 import { stripInvisible } from './sanitize';
 import {
   insertChatMessage,
@@ -117,6 +122,10 @@ export class ChatRoom {
     } catch {
       return this.sendError(ws, 'bad_json');
     }
+    // JSON.parse accepts scalars ("null", "42") that would crash on .type.
+    if (typeof event !== 'object' || event === null) {
+      return this.sendError(ws, 'bad_json');
+    }
 
     switch (event.type) {
       case 'msg':
@@ -148,8 +157,9 @@ export class ChatRoom {
     rawBody: string
   ): Promise<void> {
     if (!address) return this.sendError(ws, 'not_authenticated');
-    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
+    // In-memory rate check first: a spammer shouldn't cost a D1 read per attempt.
     if (!this.allowSend(address)) return this.sendError(ws, 'rate_limited');
+    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
 
     const body = normalizeBody(rawBody ?? '');
     if (!body || body.length > MAX_MESSAGE_LENGTH) {
@@ -167,9 +177,17 @@ export class ChatRoom {
     const { nickname, official } = await getProfile(this.env.DB, address);
 
     // Per-connection block filtering: a blocked sender's messages never reach
-    // the blocker.
+    // the blocker. Payload carries only the truncated public sender key.
     this.broadcastMessage(
-      { type: 'msg', id, ts, address, nickname, official, body },
+      {
+        type: 'msg',
+        id,
+        ts,
+        address: truncateChatAddress(address),
+        nickname,
+        official,
+        body,
+      },
       address
     );
   }
@@ -189,8 +207,8 @@ export class ChatRoom {
     if (op !== 'add' && op !== 'remove') {
       return this.sendError(ws, 'unknown_type');
     }
-    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
     if (!this.allowReact(address)) return this.sendError(ws, 'rate_limited');
+    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
 
     const changed =
       op === 'add'
@@ -200,7 +218,19 @@ export class ChatRoom {
     if (!changed) return;
 
     const count = await getReactionCount(this.env.DB, messageId, emoji);
-    this.broadcast({ type: 'react', messageId, emoji, count, actor: address, op });
+    // Same block filtering as messages: a blocker never learns the blocked
+    // actor exists (their copy of the message is gone anyway).
+    this.broadcastMessage(
+      {
+        type: 'react',
+        messageId,
+        emoji,
+        count,
+        actor: truncateChatAddress(address),
+        op,
+      },
+      address
+    );
   }
 
   private allowSend(address: string): boolean {

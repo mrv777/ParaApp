@@ -13,6 +13,19 @@ export const MAX_MESSAGE_LENGTH = 500;
 /** Max characters in a nickname. */
 export const MAX_NICKNAME_LENGTH = 24;
 
+/**
+ * Public form of a sender address in outbound payloads (messages, react
+ * actors). Full addresses stay server-side: sessions are mintable for any
+ * address with pool activity (no ownership proof), so exposing full addresses
+ * would let anyone post as any visible sender — including admin-assigned
+ * official handles. The truncated form matches what the UI displays anyway
+ * and still keys identicons / mine-detection client-side.
+ */
+export function truncateChatAddress(address: string): string {
+  if (address.length <= 15) return address;
+  return `${address.slice(0, 6)}…${address.slice(-6)}`;
+}
+
 export interface ReactionSummary {
   emoji: ReactionEmoji;
   count: number;
@@ -24,6 +37,7 @@ export interface ReactionSummary {
 export interface ChatMessage {
   id: string;
   ts: number; // ms epoch
+  /** Truncated public sender key (see truncateChatAddress) — never the full address. */
   address: string;
   nickname: string | null;
   /** True when the nickname is an admin-assigned (locked) official handle. */

@@ -36,6 +36,17 @@ export const CHAT_LEGAL_URLS = {
   privacy: 'https://mrv777.com/paraapp/privacy.html',
 } as const;
 
+/**
+ * Public form of a sender address in server payloads (mirrors
+ * truncateChatAddress in server protocol.ts). The server never sends full
+ * addresses — apply this to the user's own address before comparing against
+ * `message.address` / react `actor`.
+ */
+export function truncateChatAddress(address: string): string {
+  if (address.length <= 15) return address;
+  return `${address.slice(0, 6)}…${address.slice(-6)}`;
+}
+
 export interface ReactionSummary {
   emoji: ReactionEmoji;
   count: number;
@@ -59,6 +70,7 @@ export interface ChatReplyQuote {
 export interface ChatMessage {
   id: string;
   ts: number; // ms epoch
+  /** Truncated public sender key (see truncateChatAddress) — never the full address. */
   address: string;
   nickname: string | null;
   /** True when the nickname is an admin-assigned (locked) official handle. */

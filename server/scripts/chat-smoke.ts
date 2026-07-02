@@ -140,10 +140,11 @@ interface HistoryMessage {
 
 async function getHistory(
   http: string,
-  address?: string
+  token?: string
 ): Promise<HistoryMessage[]> {
   const params = new URLSearchParams({ limit: '50' });
-  if (address) params.set('address', address);
+  // Session token (not a bare address) unlocks block filtering + `mine` flags.
+  if (token) params.set('token', token);
   const res = await fetch(`${http}/chat/history?${params.toString()}`);
   const body = (await res.json()) as { data?: { messages?: HistoryMessage[] } };
   return body.data?.messages ?? [];
@@ -280,7 +281,7 @@ async function main(): Promise<void> {
         check('invalid emoji rejected', !!badEmoji);
 
         // History reflects the reaction with `mine` for the reactor.
-        const history3 = await getHistory(args.http, args.addrA);
+        const history3 = await getHistory(args.http, session.token);
         const reacted = history3.find((m) => m.id === messageId);
         check(
           'history returns reaction summary with mine=true',
@@ -410,13 +411,14 @@ async function main(): Promise<void> {
         skip('report accepted (200)', 'no message id');
       }
 
-      // Block (Phase 5, server-enforced): self-block, reconnect to reload the
-      // block list, then verify the sender's own new socket is filtered out
-      // while a non-blocker still receives the message.
-      if (session.token) {
+      // Block (Phase 5, server-enforced): self-block via one of our own message
+      // ids (blocking is keyed by messageId — clients never see full addresses),
+      // reconnect to reload the block list, then verify the sender's own new
+      // socket is filtered out while a non-blocker still receives the message.
+      if (session.token && messageId) {
         const blk = await jsonPost(args.http, '/chat/block', {
           token: session.token,
-          targetAddress: args.addrA,
+          messageId,
         });
         check('block accepted (200)', blk.status === 200, `status=${blk.status}`);
 
@@ -436,7 +438,7 @@ async function main(): Promise<void> {
         );
         check('blocker does not receive blocked-sender messages', !selfGot);
 
-        const histBlocked = await getHistory(args.http, args.addrA);
+        const histBlocked = await getHistory(args.http, session.token);
         check(
           'history excludes blocked-sender messages',
           !histBlocked.some((m) => m.body === blockedBody)
@@ -445,7 +447,7 @@ async function main(): Promise<void> {
         await jsonPost(
           args.http,
           '/chat/block',
-          { token: session.token, targetAddress: args.addrA },
+          { token: session.token, messageId },
           'DELETE'
         );
         blockedClient.close();

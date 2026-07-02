@@ -93,11 +93,18 @@ CREATE TABLE IF NOT EXISTS chat_reactions (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_reactions_message ON chat_reactions(message_id);
 
+-- norm/official added by migration 0007: norm is the canonical nickname key
+-- (confusable-folded) backing global uniqueness; official marks admin-assigned
+-- locked handles. Legacy rows keep norm = NULL (excluded from the index).
 CREATE TABLE IF NOT EXISTS chat_profiles (
   address TEXT PRIMARY KEY,
   nickname TEXT,
-  updated_at INTEGER DEFAULT (unixepoch())
+  updated_at INTEGER DEFAULT (unixepoch()),
+  norm TEXT,
+  official INTEGER DEFAULT 0
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_profiles_norm
+  ON chat_profiles(norm) WHERE norm IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS chat_blocks (
   blocker TEXT NOT NULL,
@@ -115,6 +122,9 @@ CREATE TABLE IF NOT EXISTS chat_reports (
   resolved INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_chat_reports_resolved ON chat_reports(resolved, created_at);
+-- One report per (message, reporter); INSERT OR IGNORE makes re-reports no-ops
+-- (migration 0008).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_reports_unique ON chat_reports(message_id, reporter);
 
 CREATE TABLE IF NOT EXISTS chat_bans (
   address TEXT PRIMARY KEY,

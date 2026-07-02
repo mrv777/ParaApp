@@ -29,6 +29,7 @@ import {
   addReport,
   addBlock,
   removeBlock,
+  getMessageSender,
   recordEulaAcceptance,
   softDeleteMessage,
   banAddress,
@@ -336,16 +337,27 @@ app.post('/chat/session', async (c) => {
   }
 });
 
-// Open-read history with an exclusive millisecond `before` cursor.
+// Open-read history with an exclusive millisecond `before` cursor. Block
+// filtering + `mine` flags key off the caller's session token — a bare
+// address param is forgeable and would let anyone enumerate block lists.
 app.get('/chat/history', async (c) => {
   try {
     const before = c.req.query('before');
+    const beforeId = c.req.query('beforeId');
     const limit = c.req.query('limit');
-    const address = c.req.query('address'); // optional: flags the caller's own reactions
+    const token = c.req.query('token');
+    let address: string | undefined;
+    if (token) {
+      const verified = await verifySessionToken(token, c.env.SESSION_SECRET);
+      // Expired/invalid token → serve the open unfiltered read rather than
+      // failing the backfill; live WS delivery still filters blocks.
+      if (verified) address = verified.address;
+    }
     const messages = await getRecentMessages(c.env.DB, {
       before: before ? Number(before) : undefined,
+      beforeId: beforeId || undefined,
       limit: limit ? Number(limit) : 50,
-      address: address || undefined,
+      address,
     });
     // Only send the announcement on the first page (no `before` cursor).
     const announcement = before ? undefined : await getAnnouncement(c.env.DB);
@@ -424,12 +436,21 @@ app.put('/chat/nickname', async (c) => {
         return c.json({ success: false, error: 'Nickname already taken' }, 409);
       }
     }
-    await setNickname(
-      c.env.DB,
-      verified.address,
-      trimmed.length ? trimmed : null,
-      { norm, official: false }
-    );
+    try {
+      await setNickname(
+        c.env.DB,
+        verified.address,
+        trimmed.length ? trimmed : null,
+        { norm, official: false }
+      );
+    } catch (error) {
+      // Concurrent claim: both passed the pre-check, the unique index on norm
+      // caught the loser — report "taken", not a 500.
+      if (String(error).includes('UNIQUE')) {
+        return c.json({ success: false, error: 'Nickname already taken' }, 409);
+      }
+      throw error;
+    }
     return c.json({ success: true, data: { nickname: trimmed || null } });
   } catch (error) {
     console.error('chat/nickname error:', error);
@@ -484,7 +505,11 @@ app.post('/chat/block', async (c) => {
     if (!verified) {
       return c.json({ success: false, error: 'Invalid or expired token' }, 401);
     }
-    await addBlock(c.env.DB, verified.address, result.data.targetAddress);
+    const sender = await getMessageSender(c.env.DB, result.data.messageId);
+    if (!sender) {
+      return c.json({ success: false, error: 'Message not found' }, 404);
+    }
+    await addBlock(c.env.DB, verified.address, sender);
     return c.json({ success: true });
   } catch (error) {
     console.error('chat/block error:', error);
@@ -505,7 +530,11 @@ app.delete('/chat/block', async (c) => {
     if (!verified) {
       return c.json({ success: false, error: 'Invalid or expired token' }, 401);
     }
-    await removeBlock(c.env.DB, verified.address, result.data.targetAddress);
+    const sender = await getMessageSender(c.env.DB, result.data.messageId);
+    if (!sender) {
+      return c.json({ success: false, error: 'Message not found' }, 404);
+    }
+    await removeBlock(c.env.DB, verified.address, sender);
     return c.json({ success: true });
   } catch (error) {
     console.error('chat/block delete error:', error);
@@ -538,8 +567,13 @@ app.post('/chat/eula', async (c) => {
 
 // Current announcement banner (open read).
 app.get('/chat/announcement', async (c) => {
-  const announcement = await getAnnouncement(c.env.DB);
-  return c.json({ success: true, data: { announcement } });
+  try {
+    const announcement = await getAnnouncement(c.env.DB);
+    return c.json({ success: true, data: { announcement } });
+  } catch (error) {
+    console.error('chat/announcement error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
 });
 
 // Push an announcement change to all live sockets via the DO.
@@ -580,7 +614,14 @@ app.use('/chat/admin/*', async (c, next) => {
   if (!secret || !timingSafeEqual(secret, c.env.ADMIN_SECRET ?? '')) {
     return c.json({ success: false, error: 'Unauthorized' }, 401);
   }
-  await next();
+  // One shared error boundary so every admin handler returns the same JSON
+  // error shape the admin page expects (matches the public chat routes).
+  try {
+    await next();
+  } catch (error) {
+    console.error('chat/admin error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
 });
 
 app.get('/chat/admin/reports', async (c) => {

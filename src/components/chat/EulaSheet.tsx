@@ -22,7 +22,10 @@ export function EulaSheet({ visible, onAccept, onClose }: EulaSheetProps) {
   const { t } = useTranslation();
 
   const link = (label: string, url: string) => (
-    <Pressable onPress={() => Linking.openURL(url)} accessibilityRole="link">
+    <Pressable
+      onPress={() => Linking.openURL(url).catch(() => {})}
+      accessibilityRole="link"
+    >
       <Text variant="caption" className="py-1" style={{ color: colors.info }}>
         {label} ↗
       </Text>

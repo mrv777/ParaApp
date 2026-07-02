@@ -29,8 +29,15 @@ export const preferencesSchema = z.object({
   notificationsEnabled: z.boolean().optional(),
 });
 
+// Strict charset (base58/bech32 are alphanumeric), not just length: the address
+// is both the chat identity key (bans, blocks, rate limits) and a path segment
+// sent to the pool API. Without this, `realAddr#x` / `realAddr?x=1` resolve the
+// real user upstream (fragment/query stripped by fetch) yet count as distinct
+// chat identities — unlimited ban evasion.
+const chatAddressSchema = z.string().regex(/^[a-zA-Z0-9]{26,62}$/);
+
 export const chatSessionSchema = z.object({
-  btcAddress: z.string().min(26).max(62),
+  btcAddress: chatAddressSchema,
 });
 
 export const chatNicknameSchema = z.object({
@@ -47,9 +54,12 @@ export const chatReportSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+// Block by messageId, not address: payloads only ever carry truncated sender
+// keys, so the client cannot (and must not) know full addresses. The server
+// resolves the message's sender itself.
 export const chatBlockSchema = z.object({
   token: z.string().min(1),
-  targetAddress: z.string().min(26).max(62),
+  messageId: z.string().uuid(),
 });
 
 export const chatEulaSchema = z.object({
@@ -58,12 +68,12 @@ export const chatEulaSchema = z.object({
 });
 
 export const chatAdminBanSchema = z.object({
-  address: z.string().min(26).max(62),
+  address: chatAddressSchema,
   reason: z.string().max(500).optional(),
 });
 
 export const chatAdminNicknameSchema = z.object({
-  address: z.string().min(26).max(62),
+  address: chatAddressSchema,
   // Empty string clears the handle (falls back to truncated address).
   nickname: z.string().max(MAX_NICKNAME_LENGTH),
   // Assigned handles are locked (official) by default; pass false for a plain,

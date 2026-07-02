@@ -12,11 +12,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isError } from '@/api/client';
 import { fetchChatSession, fetchChatHistory } from '@/api/chat';
-import { useChatStore, selectOldestTs, MAX_MESSAGES } from '@/store/chatStore';
+import { useChatStore, MAX_MESSAGES } from '@/store/chatStore';
 import { useSettingsStore, selectBitcoinAddress } from '@/store/settingsStore';
 import { useAppState } from './useAppState';
 import {
   CHAT_WS_URL,
+  truncateChatAddress,
   type ServerEvent,
   type ChatErrorCode,
   type ReactionEmoji,
@@ -177,11 +178,25 @@ export function useChatSocket(): UseChatSocketReturn {
   const backfillHistory = useCallback(async () => {
     const result = await fetchChatHistory({
       limit: 50,
-      address: address ?? undefined,
+      token: tokenRef.current ?? undefined,
     });
     if (!isError(result) && result.data.data) {
       if (result.data.data.messages) {
-        addMessages(result.data.data.messages);
+        const fetched = result.data.data.messages;
+        // Gap guard: if more than a page arrived while away, the newest-50
+        // backfill doesn't overlap the buffer — merging would render a
+        // seamless-looking hole that loadOlder (which pages back from the
+        // buffer's oldest message) can never fill. No overlap → start fresh.
+        const stored = useChatStore.getState().messages;
+        if (stored.length > 0 && fetched.length > 0) {
+          const oldestFetched = fetched.reduce(
+            (min, m) => Math.min(min, m.ts),
+            Infinity
+          );
+          const newestStored = stored[stored.length - 1].ts;
+          if (oldestFetched > newestStored) resetMessages();
+        }
+        addMessages(fetched);
         // A full page implies older messages may exist; a short page = we've
         // already got the beginning. Reset paging state for the fresh session.
         const more = result.data.data.messages.length >= 50;
@@ -192,7 +207,7 @@ export function useChatSocket(): UseChatSocketReturn {
         setAnnouncement(result.data.data.announcement);
       }
     }
-  }, [addMessages, setAnnouncement, address]);
+  }, [addMessages, resetMessages, setAnnouncement]);
 
   /**
    * Page one screen further back on scroll-to-top. Guarded against concurrent
@@ -202,16 +217,17 @@ export function useChatSocket(): UseChatSocketReturn {
   const loadOlder = useCallback(async () => {
     if (loadingOlderRef.current || !hasMoreRef.current) return;
     const state = useChatStore.getState();
-    const oldest = selectOldestTs(state);
-    if (oldest === undefined) return; // nothing loaded yet
+    const oldest = state.messages[0]; // oldest-first buffer
+    if (!oldest) return; // nothing loaded yet
     if (state.messages.length >= MAX_MESSAGES) return; // buffer full = max depth
     loadingOlderRef.current = true;
     setLoadingOlder(true);
     try {
       const result = await fetchChatHistory({
-        before: oldest,
+        before: oldest.ts,
+        beforeId: oldest.id, // tie-break same-ms messages at the boundary
         limit: 50,
-        address: address ?? undefined,
+        token: tokenRef.current ?? undefined,
       });
       if (!isError(result) && result.data.data?.messages) {
         const older = result.data.data.messages;
@@ -225,7 +241,7 @@ export function useChatSocket(): UseChatSocketReturn {
       loadingOlderRef.current = false;
       setLoadingOlder(false);
     }
-  }, [address, addMessages]);
+  }, [addMessages]);
 
   /**
    * Fetch a fresh posting token for the current address (read-only → null).
@@ -326,8 +342,12 @@ export function useChatSocket(): UseChatSocketReturn {
           break;
         case 'react': {
           // `mine` flips only when this device is the actor; others' reactions
-          // leave our flag untouched (undefined).
-          const mine = msg.actor === address ? msg.op === 'add' : undefined;
+          // leave our flag untouched (undefined). Actors arrive as truncated
+          // public keys, so compare against our own truncated form.
+          const mine =
+            address && msg.actor === truncateChatAddress(address)
+              ? msg.op === 'add'
+              : undefined;
           applyReaction(msg.messageId, msg.emoji, msg.count, mine);
           break;
         }
@@ -367,7 +387,11 @@ export function useChatSocket(): UseChatSocketReturn {
     scheduleReconnect,
   ]);
 
-  connectRef.current = () => void connect();
+  // Keep the ref pointing at the latest connect. Declared before the
+  // lifecycle effect below so it has run by the time that effect connects.
+  useEffect(() => {
+    connectRef.current = () => void connect();
+  }, [connect]);
 
   // Foreground → connect; background → disconnect. Re-run when the address
   // changes so posting picks up the new identity's token.
@@ -450,11 +474,19 @@ export function useChatSocket(): UseChatSocketReturn {
     if (!shouldConnectRef.current) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
+      // A transient session-mint failure leaves a healthy read-only socket
+      // with no token and gateDenied false — the composer shows "verifying"
+      // forever because nothing re-mints. Reconnect to retry the mint (posting
+      // rights are granted at WS upgrade, so a token alone wouldn't help).
+      if (address && !tokenRef.current && !gateDenied) {
+        connectRef.current();
+        return;
+      }
       void backfillHistory(); // live socket → just reconcile recent history
     } else {
       connectRef.current(); // dead/connecting → (re)establish; backfills on open
     }
-  }, [backfillHistory]);
+  }, [backfillHistory, address, gateDenied]);
 
   return {
     sendMessage,

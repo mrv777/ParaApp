@@ -4,6 +4,7 @@
  * message, plus Report / Block for other people's messages.
  */
 
+import { useRef } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -42,16 +43,21 @@ export function MessageActionsSheet({
   onBlock,
 }: MessageActionsSheetProps) {
   const { t } = useTranslation();
-  if (!message) return null;
+  // Keep rendering the last message while `message` goes null so the Sheet can
+  // play its slide-out animation instead of unmounting instantly.
+  const lastMessageRef = useRef<ChatMessage | null>(null);
+  if (message) lastMessageRef.current = message;
+  const shown = message ?? lastMessageRef.current;
+  if (!shown) return null;
 
   const sender = isOwn
     ? t('common.you')
-    : message.nickname || truncateAddress(message.address);
+    : shown.nickname || truncateAddress(shown.address);
   const mineFor = (emoji: ReactionEmoji): boolean =>
-    !!message.reactions?.find((r) => r.emoji === emoji)?.mine;
+    !!shown.reactions?.find((r) => r.emoji === emoji)?.mine;
 
   const handleCopy = async () => {
-    await Clipboard.setStringAsync(message.body);
+    await Clipboard.setStringAsync(shown.body);
     haptics.success();
     Toast.show({ type: 'success', text1: t('chat.copied') });
     onClose();
@@ -66,14 +72,14 @@ export function MessageActionsSheet({
             {sender}
           </Text>
           <Text variant="caption" color="muted">
-            {formatTimestamp(message.ts)}
+            {formatTimestamp(shown.ts)}
           </Text>
         </View>
 
         {/* Message preview (up to 2 lines) */}
         <View style={styles.preview}>
           <Text variant="body" numberOfLines={2} style={{ color: colors.textValue }}>
-            {message.body}
+            {shown.body}
           </Text>
         </View>
 
@@ -84,7 +90,7 @@ export function MessageActionsSheet({
             return (
               <Pressable
                 key={emoji}
-                onPress={() => onReact(message.id, emoji, mine)}
+                onPress={() => onReact(shown.id, emoji, mine)}
                 accessibilityRole="button"
                 style={[
                   styles.reactCell,
@@ -119,13 +125,13 @@ export function MessageActionsSheet({
               icon="flag-outline"
               label={t('chat.report')}
               color={colors.warning}
-              onPress={() => onReport(message)}
+              onPress={() => onReport(shown)}
             />
             <ActionRow
               icon="ban-outline"
               label={t('chat.block')}
               color={colors.danger}
-              onPress={() => onBlock(message)}
+              onPress={() => onBlock(shown)}
             />
           </>
         ) : null}

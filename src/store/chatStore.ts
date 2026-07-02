@@ -28,6 +28,11 @@ interface ChatState {
   online: number;
   connectionState: ChatConnectionState;
   announcement: string | null; // admin banner shown at the top (null = none)
+  /**
+   * Newest message ts the user has actually looked at (Chat tab focused).
+   * Drives the tab-bar unread dot. Session-only, like the feed itself.
+   */
+  lastSeenTs: number;
 }
 
 interface ChatActions {
@@ -51,14 +56,25 @@ interface ChatActions {
   setOnline: (online: number) => void;
   setConnectionState: (state: ChatConnectionState) => void;
   setAnnouncement: (announcement: string | null) => void;
+  /** Mark everything currently loaded as seen (call while the Chat tab is focused). */
+  markSeen: () => void;
   reset: () => void;
 }
+
+/**
+ * Ids removed via live `delete` events. A history fetch already in flight when
+ * the delete arrived would otherwise re-merge the message and resurrect it.
+ * Session-only, bounded by MAX_MESSAGES-scale traffic; cleared on reset().
+ */
+const deletedIds = new Set<string>();
+const MAX_DELETED_IDS = 500;
 
 const initialState: ChatState = {
   messages: EMPTY_MESSAGES,
   online: 0,
   connectionState: 'disconnected',
   announcement: null,
+  lastSeenTs: 0,
 };
 
 export const useChatStore = create<ChatState & ChatActions>()((set) => ({
@@ -68,7 +84,17 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
     set((state) => {
       if (incoming.length === 0) return state;
       const byId = new Map(state.messages.map((m) => [m.id, m]));
-      for (const message of incoming) byId.set(message.id, message);
+      for (const message of incoming) {
+        if (deletedIds.has(message.id)) continue; // deleted mid-fetch
+        const existing = byId.get(message.id);
+        // A copy without reaction data (live redelivery, or a backfill racing
+        // a just-applied react event) must not wipe reactions we already have.
+        if (existing?.reactions && message.reactions === undefined) {
+          byId.set(message.id, { ...message, reactions: existing.reactions });
+        } else {
+          byId.set(message.id, message);
+        }
+      }
       const merged = Array.from(byId.values())
         .sort((a, b) => a.ts - b.ts)
         .slice(-MAX_MESSAGES); // oldest-first, keep the most recent N
@@ -111,6 +137,8 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
 
   removeMessage: (id) =>
     set((state) => {
+      if (deletedIds.size >= MAX_DELETED_IDS) deletedIds.clear();
+      deletedIds.add(id); // block re-merge by an in-flight history fetch
       const filtered = state.messages.filter((m) => m.id !== id);
       return filtered.length === state.messages.length
         ? state
@@ -123,7 +151,18 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
 
   setAnnouncement: (announcement) => set({ announcement }),
 
-  reset: () => set({ ...initialState }),
+  markSeen: () =>
+    set((state) => {
+      const newest = state.messages.length
+        ? state.messages[state.messages.length - 1].ts
+        : 0;
+      return newest > state.lastSeenTs ? { lastSeenTs: newest } : state;
+    }),
+
+  reset: () => {
+    deletedIds.clear();
+    set({ ...initialState });
+  },
 }));
 
 // Selectors
@@ -132,6 +171,7 @@ export const selectChatOnline = (state: ChatState) => state.online;
 export const selectChatConnectionState = (state: ChatState) =>
   state.connectionState;
 export const selectChatAnnouncement = (state: ChatState) => state.announcement;
-/** Oldest ts loaded — exclusive cursor for paging further back. */
-export const selectOldestTs = (state: ChatState): number | undefined =>
-  state.messages.length ? state.messages[0].ts : undefined;
+/** True when messages newer than the last focused view exist (tab-bar dot). */
+export const selectHasUnread = (state: ChatState): boolean =>
+  state.messages.length > 0 &&
+  state.messages[state.messages.length - 1].ts > state.lastSeenTs;

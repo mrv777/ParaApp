@@ -53,13 +53,17 @@ export function NicknameSheet({
     setSaving(false);
     if (isError(result) || !result.data.success) {
       haptics.warning();
-      // Map the server's status to a specific reason where we have one.
+      // Map the server's status to a specific reason where we have one. A 403
+      // is ambiguous (banned vs admin-locked handle): if this editor isn't
+      // showing a locked handle, the address is banned.
       const status = isError(result) ? result.error.status : undefined;
       const text1 =
         status === 409
           ? t('chat.nicknameTaken')
           : status === 403
-            ? t('chat.nicknameLocked')
+            ? locked
+              ? t('chat.nicknameLocked')
+              : t('chat.errors.banned')
             : t('chat.nicknameError');
       Toast.show({ type: 'error', text1 });
       return;

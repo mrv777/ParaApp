@@ -8,7 +8,7 @@
  */
 
 import type { ChatMessage, ReactionSummary } from './protocol';
-import { isReactionEmoji } from './protocol';
+import { isReactionEmoji, truncateChatAddress } from './protocol';
 
 interface HistoryRow {
   id: string;
@@ -33,11 +33,13 @@ export async function insertChatMessage(
 
 /**
  * Most-recent-first page of non-deleted messages. `before` is an exclusive
- * millisecond cursor (pass the oldest `ts` you already have to page back).
+ * millisecond cursor (pass the oldest `ts` you already have to page back);
+ * `beforeId` tie-breaks messages sharing that millisecond so none are skipped
+ * at a page boundary (ordering is created_at DESC, id DESC).
  */
 export async function getRecentMessages(
   db: D1Database,
-  opts: { before?: number; limit: number; address?: string }
+  opts: { before?: number; beforeId?: string; limit: number; address?: string }
 ): Promise<ChatMessage[]> {
   const limit = Math.min(Math.max(Math.floor(opts.limit) || 50, 1), 100);
 
@@ -46,8 +48,13 @@ export async function getRecentMessages(
   const conditions = ['m.deleted = 0'];
   const binds: unknown[] = [];
   if (opts.before) {
-    conditions.push('m.created_at < ?');
-    binds.push(opts.before);
+    if (opts.beforeId) {
+      conditions.push('(m.created_at < ? OR (m.created_at = ? AND m.id < ?))');
+      binds.push(opts.before, opts.before, opts.beforeId);
+    } else {
+      conditions.push('m.created_at < ?');
+      binds.push(opts.before);
+    }
   }
   if (opts.address) {
     conditions.push(
@@ -63,7 +70,7 @@ export async function getRecentMessages(
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
        WHERE ${conditions.join(' AND ')}
-       ORDER BY m.created_at DESC
+       ORDER BY m.created_at DESC, m.id DESC
        LIMIT ?`
     )
     .bind(...binds)
@@ -71,7 +78,9 @@ export async function getRecentMessages(
   const messages: ChatMessage[] = results.map((row) => ({
     id: row.id,
     ts: row.created_at,
-    address: row.address,
+    // Public payloads carry only the truncated sender key — full addresses
+    // must not leave the server (see truncateChatAddress in protocol.ts).
+    address: truncateChatAddress(row.address),
     nickname: row.nickname ?? null,
     official: row.official === 1,
     body: row.body,
@@ -147,9 +156,12 @@ export async function getReactionCount(
   return row?.count ?? 0;
 }
 
+// D1 caps bound parameters at 100 per query; each chunk binds `address` + ids.
+const REACTION_QUERY_CHUNK = 99;
+
 /**
  * Aggregate reactions for a set of messages. `address` flags which the caller
- * reacted to (pass '' to skip). One grouped query for the whole page.
+ * reacted to (pass '' to skip). One grouped query per chunk of 99 ids.
  */
 export async function getReactionsForMessages(
   db: D1Database,
@@ -159,23 +171,26 @@ export async function getReactionsForMessages(
   const byMessage = new Map<string, ReactionSummary[]>();
   if (messageIds.length === 0) return byMessage;
 
-  const placeholders = messageIds.map(() => '?').join(',');
-  const { results } = await db
-    .prepare(
-      `SELECT message_id, emoji, COUNT(*) AS count,
-         MAX(CASE WHEN address = ? THEN 1 ELSE 0 END) AS mine
-       FROM chat_reactions
-       WHERE message_id IN (${placeholders})
-       GROUP BY message_id, emoji`
-    )
-    .bind(address, ...messageIds)
-    .all<{ message_id: string; emoji: string; count: number; mine: number }>();
+  for (let i = 0; i < messageIds.length; i += REACTION_QUERY_CHUNK) {
+    const chunk = messageIds.slice(i, i + REACTION_QUERY_CHUNK);
+    const placeholders = chunk.map(() => '?').join(',');
+    const { results } = await db
+      .prepare(
+        `SELECT message_id, emoji, COUNT(*) AS count,
+           MAX(CASE WHEN address = ? THEN 1 ELSE 0 END) AS mine
+         FROM chat_reactions
+         WHERE message_id IN (${placeholders})
+         GROUP BY message_id, emoji`
+      )
+      .bind(address, ...chunk)
+      .all<{ message_id: string; emoji: string; count: number; mine: number }>();
 
-  for (const row of results) {
-    if (!isReactionEmoji(row.emoji)) continue; // ignore any legacy/off-set rows
-    const list = byMessage.get(row.message_id) ?? [];
-    list.push({ emoji: row.emoji, count: row.count, mine: row.mine === 1 });
-    byMessage.set(row.message_id, list);
+    for (const row of results) {
+      if (!isReactionEmoji(row.emoji)) continue; // ignore any legacy/off-set rows
+      const list = byMessage.get(row.message_id) ?? [];
+      list.push({ emoji: row.emoji, count: row.count, mine: row.mine === 1 });
+      byMessage.set(row.message_id, list);
+    }
   }
   return byMessage;
 }
@@ -234,13 +249,6 @@ export async function getProfile(
     .bind(address)
     .first<{ nickname: string | null; official: number | null }>();
   return { nickname: row?.nickname ?? null, official: row?.official === 1 };
-}
-
-export async function getNickname(
-  db: D1Database,
-  address: string
-): Promise<string | null> {
-  return (await getProfile(db, address)).nickname;
 }
 
 /** The address currently holding a given norm key, or null. Used to enforce
@@ -336,19 +344,43 @@ export async function removeBlock(
  * Queue a report. Returns false (no insert) when the target message doesn't
  * exist or is already soft-deleted — same orphan-row guard as addReaction.
  */
+/**
+ * Full sender address of a message (blocking works by messageId because
+ * clients only ever see truncated addresses). Soft-deleted messages still
+ * resolve — blocking the sender of a just-moderated message is legitimate.
+ */
+export async function getMessageSender(
+  db: D1Database,
+  messageId: string
+): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT address FROM chat_messages WHERE id = ?')
+    .bind(messageId)
+    .first<{ address: string }>();
+  return row?.address ?? null;
+}
+
 export async function addReport(
   db: D1Database,
   report: { id: string; messageId: string; reporter: string; reason: string }
 ): Promise<boolean> {
+  // OR IGNORE + idx_chat_reports_unique: one row per (message, reporter), so
+  // repeat reports can't flood the admin queue. A duplicate is idempotent
+  // success — only a missing/deleted message is a failure.
   const result = await db
     .prepare(
-      `INSERT INTO chat_reports (id, message_id, reporter, reason)
+      `INSERT OR IGNORE INTO chat_reports (id, message_id, reporter, reason)
        SELECT ?1, ?2, ?3, ?4
        WHERE EXISTS (SELECT 1 FROM chat_messages WHERE id = ?2 AND deleted = 0)`
     )
     .bind(report.id, report.messageId, report.reporter, report.reason)
     .run();
-  return (result.meta?.changes ?? 0) === 1;
+  if ((result.meta?.changes ?? 0) === 1) return true;
+  const dup = await db
+    .prepare('SELECT 1 FROM chat_reports WHERE message_id = ? AND reporter = ?')
+    .bind(report.messageId, report.reporter)
+    .first();
+  return dup !== null;
 }
 
 /** Current admin announcement banner text (null = none). */

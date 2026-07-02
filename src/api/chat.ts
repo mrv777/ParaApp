@@ -42,18 +42,22 @@ export async function fetchChatSession(
 }
 
 /**
- * Most-recent-first page. `before` is an exclusive ms cursor for paging back.
- * `address` flags the caller's own reactions (`mine`) in the summaries.
+ * Most-recent-first page. `before`/`beforeId` form an exclusive (ts, id)
+ * cursor for paging back — the id tie-breaks same-millisecond messages.
+ * `token` (the posting session token) enables the caller's block filtering and
+ * `mine` reaction flags — the server won't accept a bare address for those.
  */
 export async function fetchChatHistory(opts?: {
   before?: number;
+  beforeId?: string;
   limit?: number;
-  address?: string;
+  token?: string;
 }): Promise<ApiResult<ChatHistoryResponse>> {
   const params = new URLSearchParams();
   if (opts?.before) params.set('before', String(opts.before));
+  if (opts?.beforeId) params.set('beforeId', opts.beforeId);
   params.set('limit', String(opts?.limit ?? 50));
-  if (opts?.address) params.set('address', opts.address);
+  if (opts?.token) params.set('token', opts.token);
   return fetchWithTimeout<ChatHistoryResponse>(
     `${CHAT_HTTP_BASE}/chat/history?${params.toString()}`,
     { retries: 1 }
@@ -93,25 +97,29 @@ export async function reportChatMessage(
   );
 }
 
-export async function blockChatAddress(
+/**
+ * Block the sender of a message. Keyed by messageId because payloads only
+ * carry truncated sender keys — the server resolves the full address itself.
+ */
+export async function blockChatSender(
   token: string,
-  targetAddress: string
+  messageId: string
 ): Promise<ApiResult<ChatOkResponse>> {
   return postJson<ChatOkResponse>(
     `${CHAT_HTTP_BASE}/chat/block`,
-    { token, targetAddress },
+    { token, messageId },
     { retries: 0 }
   );
 }
 
-export async function unblockChatAddress(
+export async function unblockChatSender(
   token: string,
-  targetAddress: string
+  messageId: string
 ): Promise<ApiResult<ChatOkResponse>> {
   return fetchWithTimeout<ChatOkResponse>(`${CHAT_HTTP_BASE}/chat/block`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, targetAddress }),
+    body: JSON.stringify({ token, messageId }),
     retries: 0,
   });
 }
