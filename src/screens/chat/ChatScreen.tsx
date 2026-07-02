@@ -614,11 +614,14 @@ export function ChatScreen({ navigation }: Props) {
               accessibilityLabel={t('chat.send')}
               hitSlop={8}
             >
-              <Ionicons
-                name="paper-plane"
-                size={24}
-                color={hasDraft ? colors.success : TEXT_REPLY_HANDLE}
-              />
+              <RNText
+                style={[
+                  styles.sendGlyph,
+                  { color: hasDraft ? colors.success : TEXT_REPLY_HANDLE },
+                ]}
+              >
+                {'↵'}
+              </RNText>
             </Pressable>
           </View>
         ) : !hasAddress ? (
@@ -836,6 +839,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   caret: { fontFamily: MONO, fontSize: 15, color: '#ffffff' },
+  sendGlyph: { fontFamily: MONO, fontSize: 20, lineHeight: 24 },
   composerInput: {
     flex: 1,
     fontFamily: MONO,
