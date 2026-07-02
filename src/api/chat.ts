@@ -35,14 +35,19 @@ export async function fetchChatSession(
   );
 }
 
-/** Most-recent-first page. `before` is an exclusive ms cursor for paging back. */
+/**
+ * Most-recent-first page. `before` is an exclusive ms cursor for paging back.
+ * `address` flags the caller's own reactions (`mine`) in the summaries.
+ */
 export async function fetchChatHistory(opts?: {
   before?: number;
   limit?: number;
+  address?: string;
 }): Promise<ApiResult<ChatHistoryResponse>> {
   const params = new URLSearchParams();
   if (opts?.before) params.set('before', String(opts.before));
   params.set('limit', String(opts?.limit ?? 50));
+  if (opts?.address) params.set('address', opts.address);
   return fetchWithTimeout<ChatHistoryResponse>(
     `${CHAT_HTTP_BASE}/chat/history?${params.toString()}`,
     { retries: 1 }

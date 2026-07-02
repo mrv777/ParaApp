@@ -130,12 +130,25 @@ async function postSession(
   return { status: res.status, token: body.data?.token };
 }
 
-async function getHistory(http: string): Promise<{ id: string; body: string }[]> {
-  const res = await fetch(`${http}/chat/history?limit=50`);
-  const body = (await res.json()) as {
-    data?: { messages?: { id: string; body: string }[] };
-  };
+interface HistoryMessage {
+  id: string;
+  body: string;
+  reactions?: { emoji: string; count: number; mine?: boolean }[];
+}
+
+async function getHistory(
+  http: string,
+  address?: string
+): Promise<HistoryMessage[]> {
+  const params = new URLSearchParams({ limit: '50' });
+  if (address) params.set('address', address);
+  const res = await fetch(`${http}/chat/history?${params.toString()}`);
+  const body = (await res.json()) as { data?: { messages?: HistoryMessage[] } };
   return body.data?.messages ?? [];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function main(): Promise<void> {
@@ -200,6 +213,8 @@ async function main(): Promise<void> {
 
       const broadcast = await b.waitFor((e) => e.type === 'msg' && e.body === body);
       check('authed message broadcasts to other client', !!broadcast);
+      const messageId =
+        broadcast && broadcast.type === 'msg' ? broadcast.id : null;
 
       const history2 = await getHistory(args.http);
       check('message persisted to history', history2.some((m) => m.body === body));
@@ -211,6 +226,60 @@ async function main(): Promise<void> {
         (e) => e.type === 'error' && e.code === 'rate_limited'
       );
       check('rapid posts are rate-limited', !!rateLimited);
+
+      // Reactions (Phase 3).
+      if (messageId) {
+        authed.send({ type: 'react', messageId, emoji: '🔥', op: 'add' });
+        const reactAdd = await b.waitFor(
+          (e) =>
+            e.type === 'react' &&
+            e.messageId === messageId &&
+            e.emoji === '🔥' &&
+            e.op === 'add'
+        );
+        check(
+          'reaction add broadcasts with count',
+          reactAdd?.type === 'react' && reactAdd.count === 1,
+          reactAdd?.type === 'react' ? `count=${reactAdd.count}` : 'no react event'
+        );
+
+        // Bad emoji rejected (validated before the rate limit, so no gap needed).
+        authed.send({ type: 'react', messageId, emoji: '😀', op: 'add' });
+        const badEmoji = await authed.waitFor(
+          (e) => e.type === 'error' && e.code === 'bad_emoji'
+        );
+        check('invalid emoji rejected', !!badEmoji);
+
+        // History reflects the reaction with `mine` for the reactor.
+        const history3 = await getHistory(args.http, args.addrA);
+        const reacted = history3.find((m) => m.id === messageId);
+        check(
+          'history returns reaction summary with mine=true',
+          !!reacted?.reactions?.some(
+            (r) => r.emoji === '🔥' && r.count === 1 && r.mine === true
+          )
+        );
+
+        // Toggle off → count returns to 0.
+        await sleep(300); // respect reaction min-gap
+        authed.send({ type: 'react', messageId, emoji: '🔥', op: 'remove' });
+        const reactRemove = await b.waitFor(
+          (e) =>
+            e.type === 'react' &&
+            e.messageId === messageId &&
+            e.emoji === '🔥' &&
+            e.op === 'remove'
+        );
+        check(
+          'reaction remove broadcasts count=0',
+          reactRemove?.type === 'react' && reactRemove.count === 0
+        );
+      } else {
+        skip('reaction add broadcasts with count', 'no message id');
+        skip('invalid emoji rejected', 'no message id');
+        skip('history returns reaction summary with mine=true', 'no message id');
+        skip('reaction remove broadcasts count=0', 'no message id');
+      }
 
       authed.close();
     }

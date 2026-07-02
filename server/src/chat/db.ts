@@ -7,7 +7,8 @@
  * cron must therefore prune with a millisecond threshold.
  */
 
-import type { ChatMessage } from './protocol';
+import type { ChatMessage, ReactionSummary } from './protocol';
+import { isReactionEmoji } from './protocol';
 
 interface HistoryRow {
   id: string;
@@ -35,7 +36,7 @@ export async function insertChatMessage(
  */
 export async function getRecentMessages(
   db: D1Database,
-  opts: { before?: number; limit: number }
+  opts: { before?: number; limit: number; address?: string }
 ): Promise<ChatMessage[]> {
   const limit = Math.min(Math.max(Math.floor(opts.limit) || 50, 1), 100);
 
@@ -62,13 +63,108 @@ export async function getRecentMessages(
         .bind(limit);
 
   const { results } = await query.all<HistoryRow>();
-  return results.map((row) => ({
+  const messages: ChatMessage[] = results.map((row) => ({
     id: row.id,
     ts: row.created_at,
     address: row.address,
     nickname: row.nickname ?? null,
     body: row.body,
   }));
+
+  // Attach reaction summaries (with `mine` when an address is supplied).
+  const reactions = await getReactionsForMessages(
+    db,
+    messages.map((m) => m.id),
+    opts.address ?? ''
+  );
+  for (const message of messages) {
+    const summary = reactions.get(message.id);
+    if (summary && summary.length) message.reactions = summary;
+  }
+  return messages;
+}
+
+// ============================================================================
+// Reactions (Phase 3)
+// ============================================================================
+
+/** Returns true only if the reaction was newly added (idempotent). */
+export async function addReaction(
+  db: D1Database,
+  messageId: string,
+  address: string,
+  emoji: string
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      'INSERT OR IGNORE INTO chat_reactions (message_id, address, emoji) VALUES (?, ?, ?)'
+    )
+    .bind(messageId, address, emoji)
+    .run();
+  return (result.meta?.changes ?? 0) === 1;
+}
+
+/** Returns true only if a reaction was actually removed. */
+export async function removeReaction(
+  db: D1Database,
+  messageId: string,
+  address: string,
+  emoji: string
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      'DELETE FROM chat_reactions WHERE message_id = ? AND address = ? AND emoji = ?'
+    )
+    .bind(messageId, address, emoji)
+    .run();
+  return (result.meta?.changes ?? 0) === 1;
+}
+
+export async function getReactionCount(
+  db: D1Database,
+  messageId: string,
+  emoji: string
+): Promise<number> {
+  const row = await db
+    .prepare(
+      'SELECT COUNT(*) AS count FROM chat_reactions WHERE message_id = ? AND emoji = ?'
+    )
+    .bind(messageId, emoji)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
+/**
+ * Aggregate reactions for a set of messages. `address` flags which the caller
+ * reacted to (pass '' to skip). One grouped query for the whole page.
+ */
+export async function getReactionsForMessages(
+  db: D1Database,
+  messageIds: string[],
+  address: string
+): Promise<Map<string, ReactionSummary[]>> {
+  const byMessage = new Map<string, ReactionSummary[]>();
+  if (messageIds.length === 0) return byMessage;
+
+  const placeholders = messageIds.map(() => '?').join(',');
+  const { results } = await db
+    .prepare(
+      `SELECT message_id, emoji, COUNT(*) AS count,
+         MAX(CASE WHEN address = ? THEN 1 ELSE 0 END) AS mine
+       FROM chat_reactions
+       WHERE message_id IN (${placeholders})
+       GROUP BY message_id, emoji`
+    )
+    .bind(address, ...messageIds)
+    .all<{ message_id: string; emoji: string; count: number; mine: number }>();
+
+  for (const row of results) {
+    if (!isReactionEmoji(row.emoji)) continue; // ignore any legacy/off-set rows
+    const list = byMessage.get(row.message_id) ?? [];
+    list.push({ emoji: row.emoji, count: row.count, mine: row.mine === 1 });
+    byMessage.set(row.message_id, list);
+  }
+  return byMessage;
 }
 
 export async function isBanned(

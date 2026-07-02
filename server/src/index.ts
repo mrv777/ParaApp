@@ -307,9 +307,11 @@ app.get('/chat/history', async (c) => {
   try {
     const before = c.req.query('before');
     const limit = c.req.query('limit');
+    const address = c.req.query('address'); // optional: flags the caller's own reactions
     const messages = await getRecentMessages(c.env.DB, {
       before: before ? Number(before) : undefined,
       limit: limit ? Number(limit) : 50,
+      address: address || undefined,
     });
     return c.json({ success: true, data: { messages } });
   } catch (error) {

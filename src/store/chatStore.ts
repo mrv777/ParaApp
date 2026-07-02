@@ -7,7 +7,7 @@
  */
 
 import { create } from 'zustand';
-import type { ChatMessage } from '@/constants/chat';
+import type { ChatMessage, ReactionEmoji } from '@/constants/chat';
 
 export type ChatConnectionState =
   | 'connecting'
@@ -25,6 +25,17 @@ interface ChatState {
 interface ChatActions {
   /** Merge messages (live, history, or older page) by id, keeping newest-first. */
   addMessages: (incoming: ChatMessage[]) => void;
+  /**
+   * Apply a live reaction update to a message. `count` is the authoritative new
+   * count for that emoji (0 removes the chip). `mine` is set only when this
+   * device is the actor (undefined leaves the existing flag untouched).
+   */
+  applyReaction: (
+    messageId: string,
+    emoji: ReactionEmoji,
+    count: number,
+    mine?: boolean
+  ) => void;
   setOnline: (online: number) => void;
   setConnectionState: (state: ChatConnectionState) => void;
   reset: () => void;
@@ -46,6 +57,32 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
       for (const message of incoming) byId.set(message.id, message);
       const merged = Array.from(byId.values()).sort((a, b) => b.ts - a.ts);
       return { messages: merged };
+    }),
+
+  applyReaction: (messageId, emoji, count, mine) =>
+    set((state) => {
+      const idx = state.messages.findIndex((m) => m.id === messageId);
+      if (idx === -1) return state; // message not loaded (yet)
+      const message = state.messages[idx];
+      const reactions = (message.reactions ?? []).filter(
+        (r) => r.emoji !== emoji
+      );
+      if (count > 0) {
+        const previous = message.reactions?.find((r) => r.emoji === emoji);
+        reactions.push({
+          emoji,
+          count,
+          mine: mine ?? previous?.mine ?? false,
+        });
+      }
+      // Keep a stable emoji order for steady chip layout.
+      reactions.sort((a, b) => a.emoji.localeCompare(b.emoji));
+      const nextMessages = state.messages.slice();
+      nextMessages[idx] = {
+        ...message,
+        reactions: reactions.length ? reactions : undefined,
+      };
+      return { messages: nextMessages };
     }),
 
   setOnline: (online) => set({ online }),

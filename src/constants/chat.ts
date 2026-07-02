@@ -26,6 +26,8 @@ export const MAX_NICKNAME_LENGTH = 24;
 export interface ReactionSummary {
   emoji: ReactionEmoji;
   count: number;
+  /** True when the current user is one of the reactors. */
+  mine?: boolean;
 }
 
 export interface ChatMessage {

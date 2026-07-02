@@ -15,7 +15,12 @@ import { fetchChatSession, fetchChatHistory } from '@/api/chat';
 import { useChatStore } from '@/store/chatStore';
 import { useSettingsStore, selectBitcoinAddress } from '@/store/settingsStore';
 import { useAppState } from './useAppState';
-import { CHAT_WS_URL, type ServerEvent, type ChatErrorCode } from '@/constants/chat';
+import {
+  CHAT_WS_URL,
+  type ServerEvent,
+  type ChatErrorCode,
+  type ReactionEmoji,
+} from '@/constants/chat';
 
 const MAX_RECONNECT_DELAY = 30_000;
 const BASE_RECONNECT_DELAY = 1_000;
@@ -44,6 +49,12 @@ function detachAndClose(ws: WebSocket | null): void {
 export interface UseChatSocketReturn {
   /** Send a chat message; returns false if not connected or not authenticated. */
   sendMessage: (body: string) => boolean;
+  /** Toggle a fixed-set reaction on a message; returns false if not connected/authed. */
+  sendReaction: (
+    messageId: string,
+    emoji: ReactionEmoji,
+    op: 'add' | 'remove'
+  ) => boolean;
   /** True when a posting token has been obtained for the current address. */
   canPost: boolean;
   /** True when an address is set but failed the activity gate (or is banned). */
@@ -59,6 +70,7 @@ export function useChatSocket(): UseChatSocketReturn {
   const { isActive } = useAppState();
 
   const addMessages = useChatStore((s) => s.addMessages);
+  const applyReaction = useChatStore((s) => s.applyReaction);
   const setOnline = useChatStore((s) => s.setOnline);
   const setConnectionState = useChatStore((s) => s.setConnectionState);
 
@@ -118,11 +130,14 @@ export function useChatSocket(): UseChatSocketReturn {
   }, []);
 
   const backfillHistory = useCallback(async () => {
-    const result = await fetchChatHistory({ limit: 50 });
+    const result = await fetchChatHistory({
+      limit: 50,
+      address: address ?? undefined,
+    });
     if (!isError(result) && result.data.data?.messages) {
       addMessages(result.data.data.messages);
     }
-  }, [addMessages]);
+  }, [addMessages, address]);
 
   const connect = useCallback(async () => {
     if (!shouldConnectRef.current) return;
@@ -199,9 +214,13 @@ export function useChatSocket(): UseChatSocketReturn {
         case 'error':
           setLastError(msg.code);
           break;
-        case 'react':
-          // Handled in Phase 3.
+        case 'react': {
+          // `mine` flips only when this device is the actor; others' reactions
+          // leave our flag untouched (undefined).
+          const mine = msg.actor === address ? msg.op === 'add' : undefined;
+          applyReaction(msg.messageId, msg.emoji, msg.count, mine);
           break;
+        }
       }
     };
 
@@ -227,6 +246,7 @@ export function useChatSocket(): UseChatSocketReturn {
   }, [
     address,
     addMessages,
+    applyReaction,
     setOnline,
     setConnectionState,
     startHeartbeat,
@@ -274,7 +294,30 @@ export function useChatSocket(): UseChatSocketReturn {
     }
   }, []);
 
+  const sendReaction = useCallback(
+    (messageId: string, emoji: ReactionEmoji, op: 'add' | 'remove'): boolean => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !tokenRef.current) {
+        return false;
+      }
+      try {
+        ws.send(JSON.stringify({ type: 'react', messageId, emoji, op }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
   const clearError = useCallback(() => setLastError(null), []);
 
-  return { sendMessage, canPost, gateDenied, lastError, clearError };
+  return {
+    sendMessage,
+    sendReaction,
+    canPost,
+    gateDenied,
+    lastError,
+    clearError,
+  };
 }

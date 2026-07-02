@@ -10,8 +10,14 @@
 
 import type { Env } from '../types';
 import type { ClientEvent, ServerEvent, ChatErrorCode } from './protocol';
-import { MAX_MESSAGE_LENGTH } from './protocol';
-import { insertChatMessage, isBanned } from './db';
+import { MAX_MESSAGE_LENGTH, isReactionEmoji } from './protocol';
+import {
+  insertChatMessage,
+  isBanned,
+  addReaction,
+  removeReaction,
+  getReactionCount,
+} from './db';
 
 interface SocketAttachment {
   /** Empty string = anonymous read-only viewer (may not post). */
@@ -22,12 +28,16 @@ interface SocketAttachment {
 const MIN_GAP_MS = 1500;
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 10;
+// Reactions are cheaper: 250ms min gap, 40 / 60s per address.
+const REACT_MIN_GAP_MS = 250;
+const REACT_MAX_PER_WINDOW = 40;
 
 export class ChatRoom {
   private readonly state: DurableObjectState;
   private readonly env: Env;
-  /** In-memory recent-send timestamps per address (best-effort; resets on hibernation). */
+  /** In-memory recent-action timestamps per address (best-effort; resets on hibernation). */
   private readonly sendLog = new Map<string, number[]>();
+  private readonly reactLog = new Map<string, number[]>();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -73,8 +83,13 @@ export class ChatRoom {
       case 'msg':
         return this.handleMessage(ws, address, event.body);
       case 'react':
-        // Reactions land in Phase 3.
-        return this.sendError(ws, 'not_supported');
+        return this.handleReaction(
+          ws,
+          address,
+          event.messageId,
+          event.emoji,
+          event.op
+        );
       default:
         return this.sendError(ws, 'unknown_type');
     }
@@ -117,22 +132,67 @@ export class ChatRoom {
     });
   }
 
-  /** Token-bucket-ish check: enforces both the min gap and the per-minute cap. */
+  private async handleReaction(
+    ws: WebSocket,
+    address: string,
+    messageId: string,
+    emoji: string,
+    op: 'add' | 'remove'
+  ): Promise<void> {
+    if (!address) return this.sendError(ws, 'not_authenticated');
+    if (typeof messageId !== 'string' || !messageId) {
+      return this.sendError(ws, 'bad_body');
+    }
+    if (!isReactionEmoji(emoji)) return this.sendError(ws, 'bad_emoji');
+    if (op !== 'add' && op !== 'remove') {
+      return this.sendError(ws, 'unknown_type');
+    }
+    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
+    if (!this.allowReact(address)) return this.sendError(ws, 'rate_limited');
+
+    const changed =
+      op === 'add'
+        ? await addReaction(this.env.DB, messageId, address, emoji)
+        : await removeReaction(this.env.DB, messageId, address, emoji);
+    // No-op (already reacted / wasn't reacted): don't broadcast a stale count.
+    if (!changed) return;
+
+    const count = await getReactionCount(this.env.DB, messageId, emoji);
+    this.broadcast({ type: 'react', messageId, emoji, count, actor: address, op });
+  }
+
   private allowSend(address: string): boolean {
-    const now = Date.now();
-    const recent = (this.sendLog.get(address) ?? []).filter(
-      (t) => now - t < WINDOW_MS
+    return this.rateAllow(this.sendLog, address, MIN_GAP_MS, MAX_PER_WINDOW);
+  }
+
+  private allowReact(address: string): boolean {
+    return this.rateAllow(
+      this.reactLog,
+      address,
+      REACT_MIN_GAP_MS,
+      REACT_MAX_PER_WINDOW
     );
-    if (recent.length >= MAX_PER_WINDOW) {
-      this.sendLog.set(address, recent);
+  }
+
+  /** Sliding-window limiter: enforces both a min gap and a per-minute cap. */
+  private rateAllow(
+    log: Map<string, number[]>,
+    address: string,
+    minGapMs: number,
+    maxPerWindow: number
+  ): boolean {
+    const now = Date.now();
+    const recent = (log.get(address) ?? []).filter((t) => now - t < WINDOW_MS);
+    if (recent.length >= maxPerWindow) {
+      log.set(address, recent);
       return false;
     }
-    if (recent.length && now - recent[recent.length - 1] < MIN_GAP_MS) {
-      this.sendLog.set(address, recent);
+    if (recent.length && now - recent[recent.length - 1] < minGapMs) {
+      log.set(address, recent);
       return false;
     }
     recent.push(now);
-    this.sendLog.set(address, recent);
+    log.set(address, recent);
     return true;
   }
 

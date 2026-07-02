@@ -16,6 +16,8 @@ export const MAX_NICKNAME_LENGTH = 24;
 export interface ReactionSummary {
   emoji: ReactionEmoji;
   count: number;
+  /** True when the requesting address is one of the reactors (history only). */
+  mine?: boolean;
 }
 
 /** A message as returned by history/broadcast (reactions present once Phase 3 lands). */
