@@ -46,6 +46,7 @@ import {
   upsertSubscription,
   deleteSubscription,
   upsertPreferences,
+  ensurePreferences,
   getPreferences,
   verifyTokenOwnership,
   MaxDevicesExceededError,
@@ -155,7 +156,10 @@ app.post('/register', async (c) => {
     });
 
     if (preferences) {
-      await upsertPreferences(c.env.DB, btcAddress, preferences);
+      // Registration must not overwrite a user's prefs (they're account-wide and
+      // may have been set OFF on another device). Seed a row only if missing;
+      // explicit changes go through PATCH /preferences.
+      await ensurePreferences(c.env.DB, btcAddress, preferences);
     }
 
     // Return current preferences for cross-device sync
