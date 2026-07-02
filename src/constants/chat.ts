@@ -27,13 +27,13 @@ export const MAX_NICKNAME_LENGTH = 24;
 export const CHAT_EULA_VERSION = '1';
 
 /**
- * Legal pages hosted on mrv777.com. TODO: replace with the final published URLs
- * once the pages are live (see CHAT_BUILD_PLAN.md — user-owned).
+ * Legal pages hosted on mrv777.com under /paraapp/ (source in the repo's local
+ * `legal/paraapp/` folder; upload those files to publish). Live once uploaded.
  */
 export const CHAT_LEGAL_URLS = {
-  guidelines: 'https://mrv777.com/chat-guidelines.html',
-  eula: 'https://mrv777.com/eula.html',
-  privacy: 'https://mrv777.com/policy.html',
+  guidelines: 'https://mrv777.com/paraapp/chat-guidelines.html',
+  eula: 'https://mrv777.com/paraapp/eula.html',
+  privacy: 'https://mrv777.com/paraapp/privacy.html',
 } as const;
 
 export interface ReactionSummary {
