@@ -57,6 +57,8 @@ export interface UseChatSocketReturn {
   ) => boolean;
   /** True when a posting token has been obtained for the current address. */
   canPost: boolean;
+  /** Current posting token (for REST actions like nickname); null if none. */
+  token: string | null;
   /** True when an address is set but failed the activity gate (or is banned). */
   gateDenied: boolean;
   /** Last server error code (e.g. rate_limited, blocked_content), if any. */
@@ -75,6 +77,7 @@ export function useChatSocket(): UseChatSocketReturn {
   const setConnectionState = useChatStore((s) => s.setConnectionState);
 
   const [canPost, setCanPost] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
   const [gateDenied, setGateDenied] = useState(false);
   const [lastError, setLastError] = useState<ChatErrorCode | null>(null);
 
@@ -163,6 +166,7 @@ export function useChatSocket(): UseChatSocketReturn {
     }
     if (!shouldConnectRef.current) return; // backgrounded during the await
     tokenRef.current = token;
+    setToken(token);
     setCanPost(!!token);
 
     const url = token
@@ -316,6 +320,7 @@ export function useChatSocket(): UseChatSocketReturn {
     sendMessage,
     sendReaction,
     canPost,
+    token,
     gateDenied,
     lastError,
     clearError,

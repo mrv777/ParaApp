@@ -17,6 +17,7 @@ import {
   addReaction,
   removeReaction,
   getReactionCount,
+  getNickname,
 } from './db';
 
 interface SocketAttachment {
@@ -121,15 +122,9 @@ export class ChatRoom {
     const id = crypto.randomUUID();
     const ts = Date.now();
     await insertChatMessage(this.env.DB, { id, address, body, createdAt: ts });
+    const nickname = await getNickname(this.env.DB, address);
 
-    this.broadcast({
-      type: 'msg',
-      id,
-      ts,
-      address,
-      nickname: null, // populated once profiles land (Phase 4)
-      body,
-    });
+    this.broadcast({ type: 'msg', id, ts, address, nickname, body });
   }
 
   private async handleReaction(

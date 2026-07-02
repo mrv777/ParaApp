@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_NICKNAME_LENGTH } from './chat/protocol';
 
 export const registerSchema = z.object({
   pushToken: z.string().min(1).startsWith('ExponentPushToken['),
@@ -30,6 +31,12 @@ export const preferencesSchema = z.object({
 
 export const chatSessionSchema = z.object({
   btcAddress: z.string().min(26).max(62),
+});
+
+export const chatNicknameSchema = z.object({
+  token: z.string().min(1),
+  // Empty string clears the nickname (falls back to truncated address).
+  nickname: z.string().max(MAX_NICKNAME_LENGTH),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

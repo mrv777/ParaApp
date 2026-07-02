@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 import { Text } from '@/components/Text';
+import { NicknameSheet } from '@/components/chat/NicknameSheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import {
   useChatStore,
@@ -149,8 +150,15 @@ type Props = MainTabScreenProps<'Chat'>;
 
 export function ChatScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const { sendMessage, sendReaction, canPost, gateDenied, lastError, clearError } =
-    useChatSocket();
+  const {
+    sendMessage,
+    sendReaction,
+    canPost,
+    token,
+    gateDenied,
+    lastError,
+    clearError,
+  } = useChatSocket();
 
   const messages = useChatStore(selectChatMessages);
   const online = useChatStore(selectChatOnline);
@@ -161,6 +169,7 @@ export function ChatScreen({ navigation }: Props) {
 
   const [input, setInput] = useState('');
   const [reactingTo, setReactingTo] = useState<string | null>(null);
+  const [nicknameOpen, setNicknameOpen] = useState(false);
 
   // Surface server errors (rate limited, blocked, etc.) as a toast.
   useEffect(() => {
@@ -238,6 +247,20 @@ export function ChatScreen({ navigation }: Props) {
                 ? t('chat.connecting')
                 : t('chat.disconnected')}
           </Text>
+          {canPost ? (
+            <Pressable
+              onPress={() => setNicknameOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.nickname')}
+              className="ml-3 p-1"
+            >
+              <Ionicons
+                name="person-circle-outline"
+                size={22}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -269,23 +292,16 @@ export function ChatScreen({ navigation }: Props) {
           }
         />
 
-        {/* Composer / read-only prompt */}
-        {hasAddress ? (
+        {/* Composer, or a read-only bar explaining why posting is unavailable. */}
+        {canPost ? (
           <View className="flex-row items-end px-3 py-2 border-t border-border">
             <TextInput
               className="flex-1 text-foreground px-3 py-2"
               style={{ fontFamily: 'SpaceGrotesk_400Regular', maxHeight: 120 }}
-              placeholder={
-                canPost
-                  ? t('chat.composerPlaceholder')
-                  : gateDenied
-                    ? t('chat.composerNoActivity')
-                    : t('chat.composerVerifying')
-              }
+              placeholder={t('chat.composerPlaceholder')}
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}
-              editable={canPost}
               multiline
               maxLength={MAX_MESSAGE_LENGTH}
               onSubmitEditing={handleSend}
@@ -294,7 +310,7 @@ export function ChatScreen({ navigation }: Props) {
             />
             <Pressable
               onPress={handleSend}
-              disabled={!canPost || input.trim().length === 0}
+              disabled={input.trim().length === 0}
               accessibilityRole="button"
               accessibilityLabel={t('chat.send')}
               className="items-center justify-center p-2"
@@ -302,19 +318,24 @@ export function ChatScreen({ navigation }: Props) {
               <Ionicons
                 name="send"
                 size={22}
-                color={
-                  canPost && input.trim().length > 0
-                    ? colors.text
-                    : colors.textDisabled
-                }
+                color={input.trim().length > 0 ? colors.text : colors.textDisabled}
               />
             </Pressable>
           </View>
-        ) : (
+        ) : !hasAddress ? (
+          // No address → prompt to add one.
           <View className="flex-row items-center justify-between px-4 py-3 border-t border-border">
-            <Text variant="caption" color="muted" className="flex-1 mr-3">
-              {t('chat.composerReadOnly')}
-            </Text>
+            <View className="flex-row items-center flex-1 mr-3">
+              <Ionicons
+                name="lock-closed-outline"
+                size={16}
+                color={colors.textMuted}
+                style={{ marginRight: 8 }}
+              />
+              <Text variant="caption" color="muted" className="flex-1">
+                {t('chat.composerReadOnly')}
+              </Text>
+            </View>
             <Pressable
               onPress={() => navigation.navigate('Settings')}
               accessibilityRole="button"
@@ -325,8 +346,29 @@ export function ChatScreen({ navigation }: Props) {
               </Text>
             </Pressable>
           </View>
+        ) : (
+          // Address set but not (yet) eligible: gate denied vs still verifying.
+          <View className="flex-row items-center px-4 py-3 border-t border-border">
+            <Ionicons
+              name={gateDenied ? 'lock-closed-outline' : 'ellipsis-horizontal'}
+              size={16}
+              color={colors.textMuted}
+              style={{ marginRight: 8 }}
+            />
+            <Text variant="caption" color="muted" className="flex-1">
+              {gateDenied
+                ? t('chat.postingLocked')
+                : t('chat.composerVerifying')}
+            </Text>
+          </View>
         )}
       </KeyboardAvoidingView>
+
+      <NicknameSheet
+        visible={nicknameOpen}
+        onClose={() => setNicknameOpen(false)}
+        token={token}
+      />
     </SafeAreaView>
   );
 }

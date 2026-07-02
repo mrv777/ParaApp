@@ -177,3 +177,43 @@ export async function isBanned(
     .first();
   return row !== null;
 }
+
+// ============================================================================
+// Profiles / nicknames (Phase 4)
+// ============================================================================
+
+export async function getNickname(
+  db: D1Database,
+  address: string
+): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT nickname FROM chat_profiles WHERE address = ?')
+    .bind(address)
+    .first<{ nickname: string | null }>();
+  return row?.nickname ?? null;
+}
+
+/** Upsert a nickname, or clear it (fall back to truncated address) when null. */
+export async function setNickname(
+  db: D1Database,
+  address: string,
+  nickname: string | null
+): Promise<void> {
+  if (nickname === null) {
+    await db
+      .prepare('DELETE FROM chat_profiles WHERE address = ?')
+      .bind(address)
+      .run();
+    return;
+  }
+  await db
+    .prepare(
+      `INSERT INTO chat_profiles (address, nickname, updated_at)
+       VALUES (?, ?, unixepoch())
+       ON CONFLICT(address) DO UPDATE SET
+         nickname = excluded.nickname,
+         updated_at = unixepoch()`
+    )
+    .bind(address, nickname)
+    .run();
+}

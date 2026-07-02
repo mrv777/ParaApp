@@ -6,13 +6,14 @@ import {
   unregisterSchema,
   preferencesSchema,
   chatSessionSchema,
+  chatNicknameSchema,
 } from './validation';
 import {
   passesActivityGate,
   issueSessionToken,
   verifySessionToken,
 } from './chat/identity';
-import { getRecentMessages, isBanned } from './chat/db';
+import { getRecentMessages, isBanned, setNickname } from './chat/db';
 import {
   upsertSubscription,
   deleteSubscription,
@@ -346,6 +347,35 @@ app.get('/chat/ws', async (c) => {
   headers.set('X-Chat-Address', address);
   const stub = c.env.CHAT_ROOM.get(c.env.CHAT_ROOM.idFromName('global'));
   return stub.fetch(new Request(c.req.url, { method: 'GET', headers }));
+});
+
+// Set or clear a moderated nickname (falls back to truncated address).
+app.put('/chat/nickname', async (c) => {
+  try {
+    const body = await c.req.json();
+    const result = chatNicknameSchema.safeParse(body);
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    if (await isBanned(c.env.DB, verified.address)) {
+      return c.json({ success: false, error: 'This address is banned from chat' }, 403);
+    }
+
+    const trimmed = result.data.nickname.trim();
+    // Phase 5 adds profanity moderation of the nickname here.
+    await setNickname(c.env.DB, verified.address, trimmed.length ? trimmed : null);
+    return c.json({ success: true, data: { nickname: trimmed || null } });
+  } catch (error) {
+    console.error('chat/nickname error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
 });
 
 export { ChatRoom } from './chat/room';

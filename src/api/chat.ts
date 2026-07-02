@@ -20,6 +20,12 @@ interface ChatHistoryResponse {
   error?: unknown;
 }
 
+interface ChatNicknameResponse {
+  success: boolean;
+  data?: { nickname: string | null };
+  error?: unknown;
+}
+
 /**
  * Exchange a pool address for a short-lived posting token. Returns a 403 (via
  * ApiError.status) when the address fails the activity gate or is banned; no
@@ -51,5 +57,21 @@ export async function fetchChatHistory(opts?: {
   return fetchWithTimeout<ChatHistoryResponse>(
     `${CHAT_HTTP_BASE}/chat/history?${params.toString()}`,
     { retries: 1 }
+  );
+}
+
+/** Set (or clear, with an empty string) the caller's moderated nickname. */
+export async function putChatNickname(
+  token: string,
+  nickname: string
+): Promise<ApiResult<ChatNicknameResponse>> {
+  return fetchWithTimeout<ChatNicknameResponse>(
+    `${CHAT_HTTP_BASE}/chat/nickname`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, nickname }),
+      retries: 0,
+    }
   );
 }

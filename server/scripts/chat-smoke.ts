@@ -151,6 +151,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function putNickname(
+  http: string,
+  token: string,
+  nickname: string
+): Promise<{ status: number }> {
+  const res = await fetch(`${http}/chat/nickname`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token, nickname }),
+  });
+  return { status: res.status };
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   console.log(`chat-smoke → http=${args.http} ws=${args.ws}`);
@@ -279,6 +292,32 @@ async function main(): Promise<void> {
         skip('invalid emoji rejected', 'no message id');
         skip('history returns reaction summary with mine=true', 'no message id');
         skip('reaction remove broadcasts count=0', 'no message id');
+      }
+
+      // Nickname (Phase 4): set → new messages carry it → clear.
+      if (session.token) {
+        const nick = `Smoke${Date.now() % 10000}`;
+        const nickRes = await putNickname(args.http, session.token, nick);
+        check('nickname set (200)', nickRes.status === 200, `status=${nickRes.status}`);
+
+        await sleep(1600); // respect the 1.5s message min-gap
+        const body2 = `smoke nick ${Date.now()}`;
+        authed.send({ type: 'msg', body: body2 });
+        const nickBroadcast = await b.waitFor(
+          (e) => e.type === 'msg' && e.body === body2
+        );
+        check(
+          'message carries nickname',
+          nickBroadcast?.type === 'msg' && nickBroadcast.nickname === nick,
+          nickBroadcast?.type === 'msg'
+            ? `nickname=${nickBroadcast.nickname}`
+            : 'no broadcast'
+        );
+
+        await putNickname(args.http, session.token, ''); // clear
+      } else {
+        skip('nickname set (200)', 'no token');
+        skip('message carries nickname', 'no token');
       }
 
       authed.close();
