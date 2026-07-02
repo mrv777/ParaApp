@@ -173,6 +173,7 @@ const pt = {
     online: 'Online',
     offline: 'Offline',
     connecting: 'Conectando...',
+    standby: 'Em espera',
     viewAsCards: 'Ver como cartões',
     viewAsList: 'Ver como lista',
     hashrate: 'Hashrate',

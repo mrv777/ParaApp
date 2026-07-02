@@ -31,7 +31,10 @@ export const hasMinerWarnings = (miner: LocalMiner): boolean => {
   if (!miner.isOnline) return true;
   if (miner.temp >= getTempThresholdsFor(miner.minerType).caution) return true;
   if (miner.overheatMode || miner.powerFault) return true;
-  if (miner.hashRate < miner.expectedHashrate * 0.8) return true;
+  // Skip the low-hashrate check in standby: the miner is intentionally
+  // paused and `hashRate` is a decaying lifetime average, not a fault.
+  if (!miner.isStandby && miner.hashRate < miner.expectedHashrate * 0.8)
+    return true;
   return false;
 };
 
@@ -579,8 +582,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           });
         }
 
-        // Low hashrate (below 80% of expected)
-        if (miner.hashRate < miner.expectedHashrate * 0.8) {
+        // Low hashrate (below 80% of expected) — not a fault in standby,
+        // where hashRate is a decaying lifetime average of a paused miner.
+        if (!miner.isStandby && miner.hashRate < miner.expectedHashrate * 0.8) {
           warnings.push({
             type: 'low_hashrate',
             severity: 'caution',

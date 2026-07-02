@@ -173,6 +173,7 @@ const es = {
     online: 'Conectado',
     offline: 'Desconectado',
     connecting: 'Conectando...',
+    standby: 'En espera',
     viewAsCards: 'Ver como tarjetas',
     viewAsList: 'Ver como lista',
     hashrate: 'Hashrate',

@@ -175,6 +175,7 @@ const fr = {
     online: 'En ligne',
     offline: 'Hors ligne',
     connecting: 'Connexion...',
+    standby: 'Veille',
     viewAsCards: 'Afficher en cartes',
     viewAsList: 'Afficher en liste',
     hashrate: 'Hashrate',

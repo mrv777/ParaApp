@@ -150,6 +150,10 @@ export interface LocalMiner {
   workMode?: AvalonWorkMode;
   /** Working level — sub-step within mode, semantics vary per model (Avalon) */
   workLevel?: number;
+  /** Avalon run-state is Idle/standby (soft-off). Undefined for non-Avalon / actively hashing. */
+  isStandby?: boolean;
+  /** Instantaneous hashrate GH/s (Avalon GHSspd); 0 in standby. Undefined for non-Avalon. */
+  realtimeHashrate?: number;
   /** Hashboard inlet temperature (Avalon HBITemp) */
   hashboardInletTemp?: number;
   /** Hashboard outlet temperature (Avalon HBOTemp) */

@@ -176,6 +176,7 @@ const en = {
     online: 'Online',
     offline: 'Offline',
     connecting: 'Connecting...',
+    standby: 'Standby',
     viewAsCards: 'View as cards',
     viewAsList: 'View as list',
     hashrate: 'Hashrate',

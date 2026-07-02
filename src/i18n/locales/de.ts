@@ -173,6 +173,7 @@ const de = {
     online: 'Online',
     offline: 'Offline',
     connecting: 'Verbinden...',
+    standby: 'Standby',
     viewAsCards: 'Als Karten anzeigen',
     viewAsList: 'Als Liste anzeigen',
     hashrate: 'Hashrate',

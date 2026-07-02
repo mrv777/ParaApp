@@ -120,7 +120,12 @@ export interface AvalonMmStats {
   FanMcuVer?: string;
   CPU?: string;
   DNA?: string;
+  /** Numeric run state — 2 = Idle/standby (matches web `sys_status`) */
   STATE?: number;
+  /** Human-readable run state, e.g. "Work: In Idle, Hash Board: 1" */
+  SYSTEMSTATU?: string;
+  /** Soft-off counter — nonzero after a `softoff`; diagnostic only */
+  SoftOFF?: number;
   MEMFREE?: number;
   Elapsed?: number;
   LW?: number;
@@ -660,6 +665,24 @@ export async function isAvalon(ip: string): Promise<boolean> {
 }
 
 /**
+ * Whether the miner is in standby (soft-off / idle) rather than actively
+ * hashing. In this state the ASICs are powered down, so `TMax`/`GHSspd`
+ * read 0 and the fans stop — but `MHS av` keeps reporting a decaying
+ * lifetime average, so hashrate alone can't tell us the miner is paused.
+ *
+ * The authoritative signal is the firmware run-state: `SYSTEMSTATU`
+ * ("Work: In Idle, …") or `STATE === 2` (web `sys_status` 2 = Idle).
+ * We intentionally do NOT gate on `GHSspd === 0` — it can dip to 0
+ * transiently during a normal work cycle and would misfire.
+ */
+export function isAvalonStandby(mm: AvalonMmStats): boolean {
+  if (typeof mm.SYSTEMSTATU === 'string' && /idle/i.test(mm.SYSTEMSTATU)) {
+    return true;
+  }
+  return mm.STATE === 2;
+}
+
+/**
  * Detect whether a string looks like an Avalon model identifier.
  * The web UI's `hwtype` substring check covers the same cases.
  */
@@ -744,6 +767,23 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
           ? mm.MPO
           : 0;
 
+  // In standby the ASICs are powered down, so `TMax`/`TAvg` report 0 even
+  // though the board is still warm. Fall back to a real board-level
+  // temperature (outlet → inlet → ambient → hottest ASIC) so the UI never
+  // shows a bogus 0°C. Applied whenever TMax is not a usable positive
+  // reading; actively-hashing miners report TMax > 0 and are unchanged.
+  const asicTempMax = Array.isArray(stats.hb?.PVT_T0)
+    ? Math.max(
+        0,
+        ...stats.hb.PVT_T0.filter((v) => typeof v === 'number' && v > 0)
+      )
+    : 0;
+  const tempFallback =
+    (typeof mm.HBOTemp === 'number' && mm.HBOTemp > 0 ? mm.HBOTemp : 0) ||
+    (typeof mm.HBITemp === 'number' && mm.HBITemp > 0 ? mm.HBITemp : 0) ||
+    (typeof mm.ITemp === 'number' && mm.ITemp > 0 ? mm.ITemp : 0) ||
+    asicTempMax;
+
   return {
     ip,
     alias,
@@ -754,7 +794,7 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     expectedHashrate: expectedHashrateGh,
     hashRate: hashRateGh,
     power,
-    temp: typeof mm.TMax === 'number' ? mm.TMax : 0,
+    temp: typeof mm.TMax === 'number' && mm.TMax > 0 ? mm.TMax : tempFallback,
     voltage: ataVoltage,
     frequency: typeof mm.Freq === 'number' ? Math.round(mm.Freq) : 0,
     fanSpeed: typeof mm.FanR === 'number' ? mm.FanR : 0,
@@ -771,6 +811,8 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     uptimeSeconds: summary.Elapsed ?? 0,
     lastSeen: Date.now(),
     isOnline: true,
+    isStandby: isAvalonStandby(mm) || undefined,
+    realtimeHashrate: typeof mm.GHSspd === 'number' ? mm.GHSspd : undefined,
     workMode: typeof mm.WORKMODE === 'number' ? mm.WORKMODE : undefined,
     workLevel: typeof mm.WORKLEVEL === 'number' ? mm.WORKLEVEL : undefined,
     hashboardInletTemp: typeof mm.HBITemp === 'number' ? mm.HBITemp : undefined,
