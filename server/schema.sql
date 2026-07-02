@@ -127,3 +127,10 @@ CREATE TABLE IF NOT EXISTS chat_eula_accept (
   version TEXT NOT NULL,
   accepted_at INTEGER DEFAULT (unixepoch())
 );
+
+CREATE TABLE IF NOT EXISTS chat_announcement (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  body TEXT,
+  updated_at INTEGER DEFAULT (unixepoch())
+);
+INSERT OR IGNORE INTO chat_announcement (id, body) VALUES (1, NULL);

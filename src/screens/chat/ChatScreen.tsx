@@ -33,6 +33,7 @@ import {
   selectChatMessages,
   selectChatOnline,
   selectChatConnectionState,
+  selectChatAnnouncement,
   type ChatConnectionState,
 } from '@/store/chatStore';
 import {
@@ -151,6 +152,7 @@ export function ChatScreen({ navigation }: Props) {
   const messages = useChatStore(selectChatMessages);
   const online = useChatStore(selectChatOnline);
   const connectionState = useChatStore(selectChatConnectionState);
+  const announcement = useChatStore(selectChatAnnouncement);
   const removeMessagesFrom = useChatStore((s) => s.removeMessagesFrom);
 
   const address = useSettingsStore(selectBitcoinAddress);
@@ -301,6 +303,24 @@ export function ChatScreen({ navigation }: Props) {
           ) : null}
         </View>
       </View>
+
+      {/* Admin announcement banner */}
+      {announcement ? (
+        <View
+          className="flex-row items-center px-4 py-2 border-b border-border"
+          style={{ backgroundColor: colors.surfaceElevated }}
+        >
+          <Ionicons
+            name="megaphone-outline"
+            size={16}
+            color={colors.warning}
+            style={{ marginRight: 8 }}
+          />
+          <Text variant="caption" color="default" className="flex-1">
+            {announcement}
+          </Text>
+        </View>
+      ) : null}
 
       <KeyboardAvoidingView
         className="flex-1"

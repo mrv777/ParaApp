@@ -20,6 +20,7 @@ interface ChatState {
   messages: ChatMessage[]; // newest-first (index 0 = newest), matches inverted FlatList
   online: number;
   connectionState: ChatConnectionState;
+  announcement: string | null; // admin banner shown at the top (null = none)
 }
 
 interface ChatActions {
@@ -40,6 +41,7 @@ interface ChatActions {
   removeMessagesFrom: (address: string) => void;
   setOnline: (online: number) => void;
   setConnectionState: (state: ChatConnectionState) => void;
+  setAnnouncement: (announcement: string | null) => void;
   reset: () => void;
 }
 
@@ -47,6 +49,7 @@ const initialState: ChatState = {
   messages: EMPTY_MESSAGES,
   online: 0,
   connectionState: 'disconnected',
+  announcement: null,
 };
 
 export const useChatStore = create<ChatState & ChatActions>()((set) => ({
@@ -99,6 +102,8 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
 
   setConnectionState: (connectionState) => set({ connectionState }),
 
+  setAnnouncement: (announcement) => set({ announcement }),
+
   reset: () => set({ ...initialState }),
 }));
 
@@ -107,6 +112,7 @@ export const selectChatMessages = (state: ChatState) => state.messages;
 export const selectChatOnline = (state: ChatState) => state.online;
 export const selectChatConnectionState = (state: ChatState) =>
   state.connectionState;
+export const selectChatAnnouncement = (state: ChatState) => state.announcement;
 /** Oldest ts loaded — exclusive cursor for paging further back. */
 export const selectOldestTs = (state: ChatState): number | undefined =>
   state.messages.length

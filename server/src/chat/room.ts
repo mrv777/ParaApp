@@ -54,6 +54,15 @@ export class ChatRoom {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // Internal, worker-only hook: broadcast an announcement change to all live
+    // sockets. Reachable only via the worker (already ADMIN_SECRET-guarded).
+    const url = new URL(request.url);
+    if (url.pathname === '/internal/announcement' && request.method === 'POST') {
+      const { body } = (await request.json()) as { body: string | null };
+      this.broadcast({ type: 'announcement', body });
+      return new Response(null, { status: 204 });
+    }
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected websocket', { status: 426 });
     }

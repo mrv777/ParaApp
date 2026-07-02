@@ -16,7 +16,7 @@ interface ChatSessionResponse {
 
 interface ChatHistoryResponse {
   success: boolean;
-  data?: { messages: ChatMessage[] };
+  data?: { messages: ChatMessage[]; announcement?: string | null };
   error?: unknown;
 }
 

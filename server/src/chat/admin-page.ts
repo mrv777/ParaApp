@@ -30,12 +30,21 @@ export function adminPageHtml(): string {
 </style>
 </head>
 <body>
-<h1>Chat Admin — Reports</h1>
+<h1>Chat Admin</h1>
 <div>
   <input id="secret" type="password" placeholder="ADMIN_SECRET" />
-  <button onclick="load()">Load reports</button>
+  <button onclick="load()">Load</button>
   <span id="status" class="muted"></span>
 </div>
+
+<h2 style="font-size:15px;margin:18px 0 6px">Announcement banner</h2>
+<textarea id="ann" rows="2" placeholder="Shown at the top of chat for everyone (max 280 chars)" style="width:100%;max-width:520px;background:#0a0a0b;color:#fff;border:1px solid rgba(255,255,255,.2);padding:8px" maxlength="280"></textarea>
+<div class="row">
+  <button onclick="saveAnn()">Save announcement</button>
+  <button class="danger" onclick="clearAnn()">Clear</button>
+</div>
+
+<h2 style="font-size:15px;margin:18px 0 6px">Reports</h2>
 <div id="reports"></div>
 <script>
   const secret = () => document.getElementById('secret').value;
@@ -49,6 +58,11 @@ export function adminPageHtml(): string {
   }
   async function load() {
     setStatus('loading…');
+    // Prefill the current announcement (open-read endpoint).
+    try {
+      const a = await fetch('/chat/announcement');
+      if (a.ok) { const j = await a.json(); document.getElementById('ann').value = (j.data && j.data.announcement) || ''; }
+    } catch (e) { /* ignore */ }
     const res = await api('/chat/admin/reports');
     if (!res.ok) { setStatus('error ' + res.status); return; }
     const { data } = await res.json();
@@ -67,6 +81,17 @@ export function adminPageHtml(): string {
           <button onclick="resolve('\${esc(r.id)}')">Dismiss</button>
         </div>
       </div>\`).join('') || '<p class="muted">No open reports.</p>';
+  }
+  async function saveAnn() {
+    const body = document.getElementById('ann').value.trim();
+    if (!body) { setStatus('announcement empty — use Clear to remove'); return; }
+    const res = await api('/chat/admin/announcement', { method: 'POST', body: JSON.stringify({ body }) });
+    setStatus(res.ok ? 'announcement saved' : 'save failed ' + res.status);
+  }
+  async function clearAnn() {
+    const res = await api('/chat/admin/announcement', { method: 'DELETE' });
+    if (res.ok) { document.getElementById('ann').value = ''; setStatus('announcement cleared'); }
+    else setStatus('clear failed ' + res.status);
   }
   async function delMsg(id, reportId) {
     if (!confirm('Delete this message?')) return;

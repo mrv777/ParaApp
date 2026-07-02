@@ -79,6 +79,7 @@ export type ServerEvent =
       op: 'add' | 'remove';
     }
   | { type: 'presence'; online: number }
+  | { type: 'announcement'; body: string | null }
   | { type: 'history'; messages: ChatMessage[] }
   | { type: 'error'; code: ChatErrorCode };
 

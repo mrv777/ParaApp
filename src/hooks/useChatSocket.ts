@@ -77,6 +77,7 @@ export function useChatSocket(): UseChatSocketReturn {
   const applyReaction = useChatStore((s) => s.applyReaction);
   const setOnline = useChatStore((s) => s.setOnline);
   const setConnectionState = useChatStore((s) => s.setConnectionState);
+  const setAnnouncement = useChatStore((s) => s.setAnnouncement);
 
   const [canPost, setCanPost] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -139,10 +140,13 @@ export function useChatSocket(): UseChatSocketReturn {
       limit: 50,
       address: address ?? undefined,
     });
-    if (!isError(result) && result.data.data?.messages) {
-      addMessages(result.data.data.messages);
+    if (!isError(result) && result.data.data) {
+      if (result.data.data.messages) addMessages(result.data.data.messages);
+      if (result.data.data.announcement !== undefined) {
+        setAnnouncement(result.data.data.announcement);
+      }
     }
-  }, [addMessages, address]);
+  }, [addMessages, setAnnouncement, address]);
 
   const connect = useCallback(async () => {
     if (!shouldConnectRef.current) return;
@@ -217,6 +221,9 @@ export function useChatSocket(): UseChatSocketReturn {
         case 'presence':
           setOnline(msg.online);
           break;
+        case 'announcement':
+          setAnnouncement(msg.body);
+          break;
         case 'error':
           setLastError(msg.code);
           break;
@@ -255,6 +262,7 @@ export function useChatSocket(): UseChatSocketReturn {
     applyReaction,
     setOnline,
     setConnectionState,
+    setAnnouncement,
     startHeartbeat,
     backfillHistory,
     scheduleReconnect,

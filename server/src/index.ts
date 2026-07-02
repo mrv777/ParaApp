@@ -11,6 +11,7 @@ import {
   chatBlockSchema,
   chatEulaSchema,
   chatAdminBanSchema,
+  chatAnnouncementSchema,
 } from './validation';
 import {
   passesActivityGate,
@@ -29,8 +30,11 @@ import {
   banAddress,
   getOpenReports,
   resolveReport,
+  getAnnouncement,
+  setAnnouncement,
 } from './chat/db';
 import { isClean } from './chat/moderation';
+import { isReservedNickname } from './chat/reserved-nicknames';
 import { adminPageHtml } from './chat/admin-page';
 import {
   upsertSubscription,
@@ -332,7 +336,9 @@ app.get('/chat/history', async (c) => {
       limit: limit ? Number(limit) : 50,
       address: address || undefined,
     });
-    return c.json({ success: true, data: { messages } });
+    // Only send the announcement on the first page (no `before` cursor).
+    const announcement = before ? undefined : await getAnnouncement(c.env.DB);
+    return c.json({ success: true, data: { messages, announcement } });
   } catch (error) {
     console.error('chat/history error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -387,7 +393,7 @@ app.put('/chat/nickname', async (c) => {
     }
 
     const trimmed = result.data.nickname.trim();
-    if (trimmed && !isClean(trimmed)) {
+    if (trimmed && (!isClean(trimmed) || isReservedNickname(trimmed))) {
       return c.json({ success: false, error: 'Nickname not allowed' }, 400);
     }
     await setNickname(c.env.DB, verified.address, trimmed.length ? trimmed : null);
@@ -490,6 +496,27 @@ app.post('/chat/eula', async (c) => {
   }
 });
 
+// Current announcement banner (open read).
+app.get('/chat/announcement', async (c) => {
+  const announcement = await getAnnouncement(c.env.DB);
+  return c.json({ success: true, data: { announcement } });
+});
+
+// Push an announcement change to all live sockets via the DO.
+async function broadcastAnnouncement(
+  env: Env,
+  body: string | null
+): Promise<void> {
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/announcement', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ body }),
+    })
+  );
+}
+
 // ---- Admin (guarded) --------------------------------------------------------
 
 // The admin PAGE is public HTML; it prompts for the secret and calls the guarded
@@ -526,6 +553,22 @@ app.post('/chat/admin/ban', async (c) => {
 app.post('/chat/admin/reports/:id/resolve', async (c) => {
   const resolved = await resolveReport(c.env.DB, c.req.param('id'));
   return c.json({ success: true, data: { resolved } });
+});
+
+app.post('/chat/admin/announcement', async (c) => {
+  const result = chatAnnouncementSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  await setAnnouncement(c.env.DB, result.data.body);
+  await broadcastAnnouncement(c.env, result.data.body);
+  return c.json({ success: true });
+});
+
+app.delete('/chat/admin/announcement', async (c) => {
+  await setAnnouncement(c.env.DB, null);
+  await broadcastAnnouncement(c.env, null);
+  return c.json({ success: true });
 });
 
 export { ChatRoom } from './chat/room';

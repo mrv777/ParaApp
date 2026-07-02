@@ -316,6 +316,14 @@ async function main(): Promise<void> {
         const nickRes = await putNickname(args.http, session.token, nick);
         check('nickname set (200)', nickRes.status === 200, `status=${nickRes.status}`);
 
+        // Reserved/impersonation nicknames rejected (normalized match).
+        const reserved = await putNickname(args.http, session.token, 'Adm1n');
+        check(
+          'reserved nickname rejected (400)',
+          reserved.status === 400,
+          `status=${reserved.status}`
+        );
+
         await sleep(1600); // respect the 1.5s message min-gap
         const body2 = `smoke nick ${Date.now()}`;
         authed.send({ type: 'msg', body: body2 });
@@ -419,9 +427,48 @@ async function main(): Promise<void> {
         } else {
           skip('admin soft-delete message (200)', 'no message id');
         }
+
+        // Announcement banner: set → broadcast + history; clear → broadcast null.
+        const annText = `smoke announce ${Date.now()}`;
+        const setAnn = await fetch(`${args.http}/chat/admin/announcement`, {
+          method: 'POST',
+          headers: {
+            'X-Admin-Secret': args.adminSecret,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ body: annText }),
+        });
+        check('announcement set (200)', setAnn.status === 200);
+
+        const annBroadcast = await b.waitFor(
+          (e) => e.type === 'announcement' && e.body === annText
+        );
+        check('announcement broadcasts to clients', !!annBroadcast);
+
+        const histRes = await fetch(`${args.http}/chat/history?limit=1`);
+        const histJson = (await histRes.json()) as {
+          data?: { announcement?: string | null };
+        };
+        check(
+          'history includes announcement',
+          histJson.data?.announcement === annText
+        );
+
+        await fetch(`${args.http}/chat/admin/announcement`, {
+          method: 'DELETE',
+          headers: { 'X-Admin-Secret': args.adminSecret },
+        });
+        const annCleared = await b.waitFor(
+          (e) => e.type === 'announcement' && e.body === null
+        );
+        check('announcement clear broadcasts null', !!annCleared);
       } else {
         skip('admin reports load with secret (200)', 'pass --admin-secret');
         skip('admin soft-delete message (200)', 'pass --admin-secret');
+        skip('announcement set (200)', 'pass --admin-secret');
+        skip('announcement broadcasts to clients', 'pass --admin-secret');
+        skip('history includes announcement', 'pass --admin-secret');
+        skip('announcement clear broadcasts null', 'pass --admin-secret');
       }
 
       authed.close();

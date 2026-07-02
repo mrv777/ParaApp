@@ -274,6 +274,29 @@ export async function addReport(
     .run();
 }
 
+/** Current admin announcement banner text (null = none). */
+export async function getAnnouncement(db: D1Database): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT body FROM chat_announcement WHERE id = 1')
+    .first<{ body: string | null }>();
+  return row?.body ?? null;
+}
+
+/** Set or clear (null) the announcement banner. */
+export async function setAnnouncement(
+  db: D1Database,
+  body: string | null
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO chat_announcement (id, body, updated_at)
+       VALUES (1, ?, unixepoch())
+       ON CONFLICT(id) DO UPDATE SET body = excluded.body, updated_at = unixepoch()`
+    )
+    .bind(body)
+    .run();
+}
+
 export async function recordEulaAcceptance(
   db: D1Database,
   address: string,

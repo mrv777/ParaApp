@@ -60,6 +60,10 @@ export const chatAdminBanSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+export const chatAnnouncementSchema = z.object({
+  body: z.string().min(1).max(280),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type UnregisterInput = z.infer<typeof unregisterSchema>;
 export type PreferencesInput = z.infer<typeof preferencesSchema>;
