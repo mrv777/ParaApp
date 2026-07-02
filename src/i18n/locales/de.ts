@@ -347,6 +347,17 @@ const de = {
     nicknamePlaceholder: 'Dein Spitzname',
     nicknameSaved: 'Spitzname gespeichert',
     nicknameError: 'Spitzname konnte nicht gespeichert werden',
+    report: 'Melden',
+    block: 'Blockieren',
+    reported: 'Nachricht gemeldet',
+    blocked: 'Nutzer blockiert',
+    eulaTitle: 'Community-Richtlinien',
+    eulaBody:
+      'Sei respektvoll. Belästigung, Hassrede und Spam sind nicht erlaubt und können zu einer Sperre führen. Mit dem Posten stimmst du den folgenden Richtlinien und Bedingungen zu.',
+    eulaGuidelines: 'Community-Richtlinien',
+    eulaTerms: 'Bedingungen (EULA)',
+    eulaPrivacy: 'Datenschutz',
+    eulaAccept: 'Zustimmen & posten',
     errors: {
       generic: 'Nachricht konnte nicht gesendet werden',
       rate_limited: 'Etwas langsamer',

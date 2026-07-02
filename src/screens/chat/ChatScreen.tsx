@@ -20,7 +20,14 @@ import Toast from 'react-native-toast-message';
 
 import { Text } from '@/components/Text';
 import { NicknameSheet } from '@/components/chat/NicknameSheet';
+import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
+import { EulaSheet } from '@/components/chat/EulaSheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
+import {
+  reportChatMessage,
+  blockChatAddress,
+  acceptChatEula,
+} from '@/api/chat';
 import {
   useChatStore,
   selectChatMessages,
@@ -32,6 +39,7 @@ import {
   useSettingsStore,
   selectBitcoinAddress,
   selectHasAddress,
+  selectChatEulaVersion,
 } from '@/store/settingsStore';
 import { colors } from '@/constants/colors';
 import { truncateAddress } from '@/utils/formatting';
@@ -39,7 +47,7 @@ import { haptics } from '@/utils/haptics';
 import { useTranslation } from '@/i18n';
 import {
   MAX_MESSAGE_LENGTH,
-  REACTION_EMOJIS,
+  CHAT_EULA_VERSION,
   type ChatMessage,
   type ReactionEmoji,
 } from '@/constants/chat';
@@ -63,8 +71,7 @@ interface BubbleProps {
   isOwn: boolean;
   youLabel: string;
   canReact: boolean;
-  reacting: boolean;
-  onLongPress: (id: string) => void;
+  onLongPress: (message: ChatMessage) => void;
   onToggleReaction: (id: string, emoji: ReactionEmoji, mine: boolean) => void;
 }
 
@@ -73,7 +80,6 @@ const MessageBubble = memo(function MessageBubble({
   isOwn,
   youLabel,
   canReact,
-  reacting,
   onLongPress,
   onToggleReaction,
 }: BubbleProps) {
@@ -82,7 +88,7 @@ const MessageBubble = memo(function MessageBubble({
     : message.nickname || truncateAddress(message.address);
   return (
     <Pressable
-      onLongPress={() => canReact && onLongPress(message.id)}
+      onLongPress={() => canReact && onLongPress(message)}
       delayLongPress={300}
     >
       <View className="px-4 py-2">
@@ -102,7 +108,7 @@ const MessageBubble = memo(function MessageBubble({
           {message.body}
         </Text>
 
-        {/* Existing reaction chips (tap to toggle). */}
+        {/* Reaction chips (tap to toggle). */}
         {message.reactions && message.reactions.length > 0 ? (
           <View className="flex-row flex-wrap mt-1.5">
             {message.reactions.map((r) => (
@@ -122,25 +128,6 @@ const MessageBubble = memo(function MessageBubble({
             ))}
           </View>
         ) : null}
-
-        {/* Quick-react bar (long-press). */}
-        {reacting ? (
-          <View className="flex-row mt-2">
-            {REACTION_EMOJIS.map((emoji) => {
-              const mine = !!message.reactions?.find((r) => r.emoji === emoji)
-                ?.mine;
-              return (
-                <Pressable
-                  key={emoji}
-                  onPress={() => onToggleReaction(message.id, emoji, mine)}
-                  className="mr-2 px-3 py-1 border border-border"
-                >
-                  <Text variant="body">{emoji}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
       </View>
     </Pressable>
   );
@@ -158,18 +145,24 @@ export function ChatScreen({ navigation }: Props) {
     gateDenied,
     lastError,
     clearError,
+    reconnect,
   } = useChatSocket();
 
   const messages = useChatStore(selectChatMessages);
   const online = useChatStore(selectChatOnline);
   const connectionState = useChatStore(selectChatConnectionState);
+  const removeMessagesFrom = useChatStore((s) => s.removeMessagesFrom);
 
   const address = useSettingsStore(selectBitcoinAddress);
   const hasAddress = useSettingsStore(selectHasAddress);
+  const eulaVersion = useSettingsStore(selectChatEulaVersion);
+  const setChatEulaVersion = useSettingsStore((s) => s.setChatEulaVersion);
 
   const [input, setInput] = useState('');
-  const [reactingTo, setReactingTo] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<ChatMessage | null>(null);
   const [nicknameOpen, setNicknameOpen] = useState(false);
+  const [eulaOpen, setEulaOpen] = useState(false);
+  const [pendingSend, setPendingSend] = useState<string | null>(null);
 
   // Surface server errors (rate limited, blocked, etc.) as a toast.
   useEffect(() => {
@@ -184,20 +177,42 @@ export function ChatScreen({ navigation }: Props) {
     clearError();
   }, [lastError, t, clearError]);
 
+  const doSend = useCallback(
+    (body: string) => {
+      if (sendMessage(body)) {
+        setInput('');
+        haptics.light();
+      } else {
+        haptics.warning();
+      }
+    },
+    [sendMessage]
+  );
+
   const handleSend = useCallback(() => {
     const body = input.trim();
     if (!body) return;
-    if (sendMessage(body)) {
-      setInput('');
-      haptics.light();
-    } else {
-      haptics.warning();
+    // First post requires accepting the current community guidelines / EULA.
+    if (eulaVersion !== CHAT_EULA_VERSION) {
+      setPendingSend(body);
+      setEulaOpen(true);
+      return;
     }
-  }, [input, sendMessage]);
+    doSend(body);
+  }, [input, eulaVersion, doSend]);
 
-  const handleLongPress = useCallback((id: string) => {
+  const handleAcceptEula = useCallback(() => {
+    setChatEulaVersion(CHAT_EULA_VERSION);
+    if (token) void acceptChatEula(token, CHAT_EULA_VERSION);
+    setEulaOpen(false);
+    const body = pendingSend;
+    setPendingSend(null);
+    if (body) doSend(body);
+  }, [setChatEulaVersion, token, pendingSend, doSend]);
+
+  const handleLongPress = useCallback((message: ChatMessage) => {
     haptics.medium();
-    setReactingTo((current) => (current === id ? null : id));
+    setActionMessage(message);
   }, []);
 
   const handleToggleReaction = useCallback(
@@ -205,9 +220,33 @@ export function ChatScreen({ navigation }: Props) {
       const ok = sendReaction(id, emoji, mine ? 'remove' : 'add');
       if (ok) haptics.selection();
       else haptics.warning();
-      setReactingTo(null);
+      setActionMessage(null);
     },
     [sendReaction]
+  );
+
+  const handleReport = useCallback(
+    (message: ChatMessage) => {
+      setActionMessage(null);
+      if (!token) return;
+      void reportChatMessage(token, message.id, '');
+      haptics.success();
+      Toast.show({ type: 'success', text1: t('chat.reported') });
+    },
+    [token, t]
+  );
+
+  const handleBlock = useCallback(
+    (message: ChatMessage) => {
+      setActionMessage(null);
+      if (!token) return;
+      void blockChatAddress(token, message.address);
+      removeMessagesFrom(message.address); // optimistic
+      reconnect(); // reload the DO block list so live delivery is filtered too
+      haptics.success();
+      Toast.show({ type: 'success', text1: t('chat.blocked') });
+    },
+    [token, removeMessagesFrom, reconnect, t]
   );
 
   const renderItem = useCallback<ListRenderItem<ChatMessage>>(
@@ -217,12 +256,11 @@ export function ChatScreen({ navigation }: Props) {
         isOwn={!!address && item.address === address}
         youLabel={t('common.you')}
         canReact={canPost}
-        reacting={reactingTo === item.id}
         onLongPress={handleLongPress}
         onToggleReaction={handleToggleReaction}
       />
     ),
-    [address, t, canPost, reactingTo, handleLongPress, handleToggleReaction]
+    [address, t, canPost, handleLongPress, handleToggleReaction]
   );
 
   return (
@@ -273,7 +311,7 @@ export function ChatScreen({ navigation }: Props) {
           inverted
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          extraData={`${reactingTo}|${canPost}`}
+          extraData={canPost}
           contentContainerStyle={
             messages.length === 0
               ? { flex: 1, justifyContent: 'center' }
@@ -368,6 +406,24 @@ export function ChatScreen({ navigation }: Props) {
         visible={nicknameOpen}
         onClose={() => setNicknameOpen(false)}
         token={token}
+      />
+
+      <MessageActionsSheet
+        message={actionMessage}
+        isOwn={!!address && actionMessage?.address === address}
+        onClose={() => setActionMessage(null)}
+        onReact={handleToggleReaction}
+        onReport={handleReport}
+        onBlock={handleBlock}
+      />
+
+      <EulaSheet
+        visible={eulaOpen}
+        onAccept={handleAcceptEula}
+        onClose={() => {
+          setEulaOpen(false);
+          setPendingSend(null);
+        }}
       />
     </SafeAreaView>
   );

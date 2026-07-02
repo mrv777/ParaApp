@@ -23,6 +23,19 @@ export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
 export const MAX_MESSAGE_LENGTH = 500;
 export const MAX_NICKNAME_LENGTH = 24;
 
+/** Bump when the community guidelines / EULA change to re-prompt acceptance. */
+export const CHAT_EULA_VERSION = '1';
+
+/**
+ * Legal pages hosted on mrv777.com. TODO: replace with the final published URLs
+ * once the pages are live (see CHAT_BUILD_PLAN.md — user-owned).
+ */
+export const CHAT_LEGAL_URLS = {
+  guidelines: 'https://mrv777.com/chat-guidelines.html',
+  eula: 'https://mrv777.com/eula.html',
+  privacy: 'https://mrv777.com/policy.html',
+} as const;
+
 export interface ReactionSummary {
   emoji: ReactionEmoji;
   count: number;

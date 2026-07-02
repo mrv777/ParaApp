@@ -36,6 +36,8 @@ interface ChatActions {
     count: number,
     mine?: boolean
   ) => void;
+  /** Optimistically drop a blocked address's messages (server enforces on reconnect). */
+  removeMessagesFrom: (address: string) => void;
   setOnline: (online: number) => void;
   setConnectionState: (state: ChatConnectionState) => void;
   reset: () => void;
@@ -83,6 +85,14 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
         reactions: reactions.length ? reactions : undefined,
       };
       return { messages: nextMessages };
+    }),
+
+  removeMessagesFrom: (address) =>
+    set((state) => {
+      const filtered = state.messages.filter((m) => m.address !== address);
+      return filtered.length === state.messages.length
+        ? state
+        : { messages: filtered };
     }),
 
   setOnline: (online) => set({ online }),

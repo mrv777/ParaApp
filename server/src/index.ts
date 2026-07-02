@@ -7,13 +7,31 @@ import {
   preferencesSchema,
   chatSessionSchema,
   chatNicknameSchema,
+  chatReportSchema,
+  chatBlockSchema,
+  chatEulaSchema,
+  chatAdminBanSchema,
 } from './validation';
 import {
   passesActivityGate,
   issueSessionToken,
   verifySessionToken,
 } from './chat/identity';
-import { getRecentMessages, isBanned, setNickname } from './chat/db';
+import {
+  getRecentMessages,
+  isBanned,
+  setNickname,
+  addReport,
+  addBlock,
+  removeBlock,
+  recordEulaAcceptance,
+  softDeleteMessage,
+  banAddress,
+  getOpenReports,
+  resolveReport,
+} from './chat/db';
+import { isClean } from './chat/moderation';
+import { adminPageHtml } from './chat/admin-page';
 import {
   upsertSubscription,
   deleteSubscription,
@@ -369,13 +387,145 @@ app.put('/chat/nickname', async (c) => {
     }
 
     const trimmed = result.data.nickname.trim();
-    // Phase 5 adds profanity moderation of the nickname here.
+    if (trimmed && !isClean(trimmed)) {
+      return c.json({ success: false, error: 'Nickname not allowed' }, 400);
+    }
     await setNickname(c.env.DB, verified.address, trimmed.length ? trimmed : null);
     return c.json({ success: true, data: { nickname: trimmed || null } });
   } catch (error) {
     console.error('chat/nickname error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
+});
+
+// Report a message → queued in chat_reports for admin triage.
+app.post('/chat/report', async (c) => {
+  try {
+    const result = chatReportSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    await addReport(c.env.DB, {
+      id: crypto.randomUUID(),
+      messageId: result.data.messageId,
+      reporter: verified.address,
+      reason: result.data.reason ?? '',
+    });
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/report error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Block / unblock an address (server-enforced in history + live delivery).
+app.post('/chat/block', async (c) => {
+  try {
+    const result = chatBlockSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    await addBlock(c.env.DB, verified.address, result.data.targetAddress);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/block error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+app.delete('/chat/block', async (c) => {
+  try {
+    const result = chatBlockSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    await removeBlock(c.env.DB, verified.address, result.data.targetAddress);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/block delete error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Record one-time EULA / community-guidelines acceptance.
+app.post('/chat/eula', async (c) => {
+  try {
+    const result = chatEulaSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    await recordEulaAcceptance(c.env.DB, verified.address, result.data.version);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/eula error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// ---- Admin (guarded) --------------------------------------------------------
+
+// The admin PAGE is public HTML; it prompts for the secret and calls the guarded
+// API below with it. The API (/chat/admin/*) requires the ADMIN_SECRET header.
+app.get('/chat/admin', (c) => c.html(adminPageHtml()));
+
+app.use('/chat/admin/*', async (c, next) => {
+  const secret = c.req.header('X-Admin-Secret');
+  if (!secret || secret !== c.env.ADMIN_SECRET) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  await next();
+});
+
+app.get('/chat/admin/reports', async (c) => {
+  const reports = await getOpenReports(c.env.DB);
+  return c.json({ success: true, data: { reports } });
+});
+
+app.delete('/chat/admin/message/:id', async (c) => {
+  const deleted = await softDeleteMessage(c.env.DB, c.req.param('id'));
+  return c.json({ success: true, data: { deleted } });
+});
+
+app.post('/chat/admin/ban', async (c) => {
+  const result = chatAdminBanSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  await banAddress(c.env.DB, result.data.address, result.data.reason ?? '');
+  return c.json({ success: true });
+});
+
+app.post('/chat/admin/reports/:id/resolve', async (c) => {
+  const resolved = await resolveReport(c.env.DB, c.req.param('id'));
+  return c.json({ success: true, data: { resolved } });
 });
 
 export { ChatRoom } from './chat/room';

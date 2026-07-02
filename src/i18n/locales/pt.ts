@@ -347,6 +347,17 @@ const pt = {
     nicknamePlaceholder: 'Seu apelido',
     nicknameSaved: 'Apelido salvo',
     nicknameError: 'Não foi possível salvar o apelido',
+    report: 'Denunciar',
+    block: 'Bloquear',
+    reported: 'Mensagem denunciada',
+    blocked: 'Usuário bloqueado',
+    eulaTitle: 'Diretrizes da comunidade',
+    eulaBody:
+      'Seja respeitoso. Assédio, discurso de ódio e spam não são permitidos e podem resultar em banimento. Ao publicar, você concorda com as diretrizes e os termos abaixo.',
+    eulaGuidelines: 'Diretrizes da comunidade',
+    eulaTerms: 'Termos (EULA)',
+    eulaPrivacy: 'Privacidade',
+    eulaAccept: 'Concordar e publicar',
     errors: {
       generic: 'Não foi possível enviar a mensagem',
       rate_limited: 'Vá com calma',

@@ -20,6 +20,7 @@ interface Args {
   http: string;
   ws: string;
   addrA?: string;
+  adminSecret?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -31,6 +32,7 @@ function parseArgs(argv: string[]): Args {
     http: get('--http') ?? 'http://localhost:8787',
     ws: get('--ws') ?? 'ws://localhost:8787',
     addrA: get('--addr-a'),
+    adminSecret: get('--admin-secret'),
   };
 }
 
@@ -160,6 +162,20 @@ async function putNickname(
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ token, nickname }),
+  });
+  return { status: res.status };
+}
+
+async function jsonPost(
+  http: string,
+  path: string,
+  body: unknown,
+  method = 'POST'
+): Promise<{ status: number }> {
+  const res = await fetch(`${http}${path}`, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
   });
   return { status: res.status };
 }
@@ -318,6 +334,94 @@ async function main(): Promise<void> {
       } else {
         skip('nickname set (200)', 'no token');
         skip('message carries nickname', 'no token');
+      }
+
+      // Moderation (Phase 5): profane message rejected inline.
+      await sleep(1600); // respect message min-gap
+      authed.send({ type: 'msg', body: 'fuck this test' });
+      const modErr = await authed.waitFor(
+        (e) => e.type === 'error' && e.code === 'blocked_content'
+      );
+      check('profane message blocked (blocked_content)', !!modErr);
+
+      // Report (Phase 5): queues without error.
+      if (session.token && messageId) {
+        const rep = await jsonPost(args.http, '/chat/report', {
+          token: session.token,
+          messageId,
+          reason: 'smoke',
+        });
+        check('report accepted (200)', rep.status === 200, `status=${rep.status}`);
+      } else {
+        skip('report accepted (200)', 'no message id');
+      }
+
+      // Block (Phase 5, server-enforced): self-block, reconnect to reload the
+      // block list, then verify the sender's own new socket is filtered out
+      // while a non-blocker still receives the message.
+      if (session.token) {
+        const blk = await jsonPost(args.http, '/chat/block', {
+          token: session.token,
+          targetAddress: args.addrA,
+        });
+        check('block accepted (200)', blk.status === 200, `status=${blk.status}`);
+
+        const blockedClient = await Client.connect(args.ws, session.token);
+        await sleep(1600);
+        const blockedBody = `smoke blocked ${Date.now()}`;
+        blockedClient.send({ type: 'msg', body: blockedBody });
+
+        const otherGot = await b.waitFor(
+          (e) => e.type === 'msg' && e.body === blockedBody
+        );
+        check('blocked sender still reaches non-blockers', !!otherGot);
+
+        const selfGot = await blockedClient.waitFor(
+          (e) => e.type === 'msg' && e.body === blockedBody,
+          1500
+        );
+        check('blocker does not receive blocked-sender messages', !selfGot);
+
+        const histBlocked = await getHistory(args.http, args.addrA);
+        check(
+          'history excludes blocked-sender messages',
+          !histBlocked.some((m) => m.body === blockedBody)
+        );
+
+        await jsonPost(
+          args.http,
+          '/chat/block',
+          { token: session.token, targetAddress: args.addrA },
+          'DELETE'
+        );
+        blockedClient.close();
+      } else {
+        skip('block accepted (200)', 'no token');
+        skip('blocked sender still reaches non-blockers', 'no token');
+        skip('blocker does not receive blocked-sender messages', 'no token');
+        skip('history excludes blocked-sender messages', 'no token');
+      }
+
+      // Admin (Phase 5): guard + a couple of actions (dev secret only).
+      const noAuth = await fetch(`${args.http}/chat/admin/reports`);
+      check('admin API rejects missing secret (401)', noAuth.status === 401);
+      if (args.adminSecret) {
+        const withAuth = await fetch(`${args.http}/chat/admin/reports`, {
+          headers: { 'X-Admin-Secret': args.adminSecret },
+        });
+        check('admin reports load with secret (200)', withAuth.status === 200);
+        if (messageId) {
+          const del = await fetch(
+            `${args.http}/chat/admin/message/${encodeURIComponent(messageId)}`,
+            { method: 'DELETE', headers: { 'X-Admin-Secret': args.adminSecret } }
+          );
+          check('admin soft-delete message (200)', del.status === 200);
+        } else {
+          skip('admin soft-delete message (200)', 'no message id');
+        }
+      } else {
+        skip('admin reports load with secret (200)', 'pass --admin-secret');
+        skip('admin soft-delete message (200)', 'pass --admin-secret');
       }
 
       authed.close();

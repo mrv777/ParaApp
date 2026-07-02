@@ -10,7 +10,9 @@
     "smoke": "tsx scripts/chat-smoke.ts"
   },
   "dependencies": {
+    "@2toad/profanity": "^3.3.0",
     "hono": "^4.12.0",
+    "obscenity": "^0.4.6",
     "zod": "^3.24.0"
   },
   "devDependencies": {

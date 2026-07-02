@@ -390,6 +390,17 @@ const en = {
     nicknamePlaceholder: 'Your nickname',
     nicknameSaved: 'Nickname saved',
     nicknameError: "Couldn't save nickname",
+    report: 'Report',
+    block: 'Block',
+    reported: 'Message reported',
+    blocked: 'User blocked',
+    eulaTitle: 'Community Guidelines',
+    eulaBody:
+      'Be respectful. Harassment, hate speech, and spam are not allowed and may result in a ban. By posting you agree to the guidelines and terms below.',
+    eulaGuidelines: 'Community Guidelines',
+    eulaTerms: 'Terms (EULA)',
+    eulaPrivacy: 'Privacy Policy',
+    eulaAccept: 'Agree & Post',
     errors: {
       generic: "Couldn't send message",
       rate_limited: 'Slow down a moment',

@@ -43,6 +43,9 @@ interface SettingsState {
   // Leaderboard / rank display mode
   roundMode: RoundMode;
 
+  // Accepted chat EULA/community-guidelines version (persisted; null = not accepted)
+  chatEulaVersion: string | null;
+
   // Dismissed tips (persisted)
   dismissedTips: string[];
 
@@ -71,6 +74,7 @@ interface SettingsActions {
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
   setPushToken: (token: string | null) => void;
   setWidgetUpdatesEnabled: (enabled: boolean) => void;
+  setChatEulaVersion: (version: string) => void;
   dismissTip: (tipId: string) => void;
   setWorkerNote: (workerName: string, note: string | null) => void;
   updateCacheTimestamp: (type: 'pool' | 'user') => void;
@@ -91,6 +95,7 @@ const initialState: SettingsState = {
   notificationPrefs: { blocks: true, workers: true, bestDiff: true },
   pushToken: null,
   widgetUpdatesEnabled: true,
+  chatEulaVersion: null,
   dismissedTips: [],
   workerNotes: {},
   lastPoolFetch: null,
@@ -132,6 +137,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
 
       setWidgetUpdatesEnabled: (enabled) =>
         set({ widgetUpdatesEnabled: enabled }),
+
+      setChatEulaVersion: (version) => set({ chatEulaVersion: version }),
 
       dismissTip: (tipId) =>
         set((state) => ({
@@ -180,6 +187,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         notificationPrefs: state.notificationPrefs,
         pushToken: state.pushToken,
         widgetUpdatesEnabled: state.widgetUpdatesEnabled,
+        chatEulaVersion: state.chatEulaVersion,
         dismissedTips: state.dismissedTips,
         workerNotes: state.workerNotes,
       }),
@@ -243,6 +251,8 @@ export const selectPushToken = (state: SettingsState) => state.pushToken;
 export const selectWidgetUpdatesEnabled = (state: SettingsState) =>
   state.widgetUpdatesEnabled;
 export const selectRoundMode = (state: SettingsState) => state.roundMode;
+export const selectChatEulaVersion = (state: SettingsState) =>
+  state.chatEulaVersion;
 export const selectMinerViewMode = (state: SettingsState) =>
   state.minerViewMode;
 export const selectWorkerNotes = (state: SettingsState) => state.workerNotes;

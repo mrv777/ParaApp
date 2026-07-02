@@ -75,3 +75,54 @@ export async function putChatNickname(
     }
   );
 }
+
+interface ChatOkResponse {
+  success: boolean;
+  error?: unknown;
+}
+
+export async function reportChatMessage(
+  token: string,
+  messageId: string,
+  reason: string
+): Promise<ApiResult<ChatOkResponse>> {
+  return postJson<ChatOkResponse>(
+    `${CHAT_HTTP_BASE}/chat/report`,
+    { token, messageId, reason },
+    { retries: 0 }
+  );
+}
+
+export async function blockChatAddress(
+  token: string,
+  targetAddress: string
+): Promise<ApiResult<ChatOkResponse>> {
+  return postJson<ChatOkResponse>(
+    `${CHAT_HTTP_BASE}/chat/block`,
+    { token, targetAddress },
+    { retries: 0 }
+  );
+}
+
+export async function unblockChatAddress(
+  token: string,
+  targetAddress: string
+): Promise<ApiResult<ChatOkResponse>> {
+  return fetchWithTimeout<ChatOkResponse>(`${CHAT_HTTP_BASE}/chat/block`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, targetAddress }),
+    retries: 0,
+  });
+}
+
+export async function acceptChatEula(
+  token: string,
+  version: string
+): Promise<ApiResult<ChatOkResponse>> {
+  return postJson<ChatOkResponse>(
+    `${CHAT_HTTP_BASE}/chat/eula`,
+    { token, version },
+    { retries: 0 }
+  );
+}

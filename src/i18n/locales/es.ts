@@ -347,6 +347,17 @@ const es = {
     nicknamePlaceholder: 'Tu apodo',
     nicknameSaved: 'Apodo guardado',
     nicknameError: 'No se pudo guardar el apodo',
+    report: 'Reportar',
+    block: 'Bloquear',
+    reported: 'Mensaje reportado',
+    blocked: 'Usuario bloqueado',
+    eulaTitle: 'Normas de la comunidad',
+    eulaBody:
+      'Sé respetuoso. No se permiten el acoso, el discurso de odio ni el spam, y pueden conllevar un veto. Al publicar aceptas las normas y los términos siguientes.',
+    eulaGuidelines: 'Normas de la comunidad',
+    eulaTerms: 'Términos (EULA)',
+    eulaPrivacy: 'Política de privacidad',
+    eulaAccept: 'Aceptar y publicar',
     errors: {
       generic: 'No se pudo enviar el mensaje',
       rate_limited: 'Ve más despacio',

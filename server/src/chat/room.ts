@@ -18,11 +18,15 @@ import {
   removeReaction,
   getReactionCount,
   getNickname,
+  getBlockedBy,
 } from './db';
+import { isClean, moderateAI } from './moderation';
 
 interface SocketAttachment {
   /** Empty string = anonymous read-only viewer (may not post). */
   address: string;
+  /** Addresses this viewer has blocked (loaded on connect; refreshed on reconnect). */
+  blocked: string[];
 }
 
 // Rate limit: 1 message / 1.5s and 10 messages / 60s per address.
@@ -55,11 +59,15 @@ export class ChatRoom {
     }
 
     const address = request.headers.get('X-Chat-Address') ?? '';
+    // Load the viewer's block list once, at connect. New blocks take effect on
+    // the next reconnect (the client forces one after blocking).
+    const blocked = address ? await getBlockedBy(this.env.DB, address) : [];
+
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
     this.state.acceptWebSocket(server);
-    server.serializeAttachment({ address } satisfies SocketAttachment);
+    server.serializeAttachment({ address, blocked } satisfies SocketAttachment);
 
     this.broadcastPresence();
     return new Response(null, { status: 101, webSocket: client });
@@ -71,6 +79,7 @@ export class ChatRoom {
   ): Promise<void> {
     const { address } = (ws.deserializeAttachment() ?? {
       address: '',
+      blocked: [],
     }) as SocketAttachment;
 
     let event: ClientEvent;
@@ -117,14 +126,23 @@ export class ChatRoom {
     if (!body || body.length > MAX_MESSAGE_LENGTH) {
       return this.sendError(ws, 'bad_body');
     }
-    // Inline + AI moderation hook lands in Phase 5.
+    // Inline moderation (sync) + AI hook (disabled in v1).
+    if (!isClean(body)) return this.sendError(ws, 'blocked_content');
+    if (!(await moderateAI(this.env, body))) {
+      return this.sendError(ws, 'blocked_content');
+    }
 
     const id = crypto.randomUUID();
     const ts = Date.now();
     await insertChatMessage(this.env.DB, { id, address, body, createdAt: ts });
     const nickname = await getNickname(this.env.DB, address);
 
-    this.broadcast({ type: 'msg', id, ts, address, nickname, body });
+    // Per-connection block filtering: a blocked sender's messages never reach
+    // the blocker.
+    this.broadcastMessage(
+      { type: 'msg', id, ts, address, nickname, body },
+      address
+    );
   }
 
   private async handleReaction(
@@ -194,6 +212,20 @@ export class ChatRoom {
   private broadcast(event: ServerEvent): void {
     const payload = JSON.stringify(event);
     for (const ws of this.state.getWebSockets()) {
+      try {
+        ws.send(payload);
+      } catch {
+        // Socket already closing; ignore.
+      }
+    }
+  }
+
+  /** Broadcast a message, skipping viewers who have blocked the sender. */
+  private broadcastMessage(event: ServerEvent, senderAddress: string): void {
+    const payload = JSON.stringify(event);
+    for (const ws of this.state.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.blocked?.includes(senderAddress)) continue;
       try {
         ws.send(payload);
       } catch {

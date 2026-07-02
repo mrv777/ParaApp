@@ -39,6 +39,27 @@ export const chatNicknameSchema = z.object({
   nickname: z.string().max(MAX_NICKNAME_LENGTH),
 });
 
+export const chatReportSchema = z.object({
+  token: z.string().min(1),
+  messageId: z.string().min(1),
+  reason: z.string().max(500).optional(),
+});
+
+export const chatBlockSchema = z.object({
+  token: z.string().min(1),
+  targetAddress: z.string().min(26).max(62),
+});
+
+export const chatEulaSchema = z.object({
+  token: z.string().min(1),
+  version: z.string().min(1).max(20),
+});
+
+export const chatAdminBanSchema = z.object({
+  address: z.string().min(26).max(62),
+  reason: z.string().max(500).optional(),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type UnregisterInput = z.infer<typeof unregisterSchema>;
 export type PreferencesInput = z.infer<typeof preferencesSchema>;

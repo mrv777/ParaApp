@@ -65,6 +65,8 @@ export interface UseChatSocketReturn {
   lastError: ChatErrorCode | null;
   /** Clear the last error (e.g. after showing a toast). */
   clearError: () => void;
+  /** Force a reconnect (e.g. after blocking, so the DO reloads the block list). */
+  reconnect: () => void;
 }
 
 export function useChatSocket(): UseChatSocketReturn {
@@ -316,6 +318,10 @@ export function useChatSocket(): UseChatSocketReturn {
 
   const clearError = useCallback(() => setLastError(null), []);
 
+  const reconnect = useCallback(() => {
+    if (shouldConnectRef.current) connectRef.current();
+  }, []);
+
   return {
     sendMessage,
     sendReaction,
@@ -324,5 +330,6 @@ export function useChatSocket(): UseChatSocketReturn {
     gateDenied,
     lastError,
     clearError,
+    reconnect,
   };
 }

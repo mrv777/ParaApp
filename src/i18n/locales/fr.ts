@@ -347,6 +347,17 @@ const fr = {
     nicknamePlaceholder: 'Votre pseudo',
     nicknameSaved: 'Pseudo enregistré',
     nicknameError: 'Impossible d’enregistrer le pseudo',
+    report: 'Signaler',
+    block: 'Bloquer',
+    reported: 'Message signalé',
+    blocked: 'Utilisateur bloqué',
+    eulaTitle: 'Règles de la communauté',
+    eulaBody:
+      'Soyez respectueux. Le harcèlement, les propos haineux et le spam sont interdits et peuvent entraîner un bannissement. En publiant, vous acceptez les règles et conditions ci-dessous.',
+    eulaGuidelines: 'Règles de la communauté',
+    eulaTerms: 'Conditions (EULA)',
+    eulaPrivacy: 'Confidentialité',
+    eulaAccept: 'Accepter et publier',
     errors: {
       generic: 'Impossible d’envoyer le message',
       rate_limited: 'Doucement',
