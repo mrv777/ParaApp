@@ -71,3 +71,7 @@ server/.dev.vars
 # build; not committed to this public repo (see CHAT_BUILD_PLAN.md decision).
 CHAT_SPEC.md
 CHAT_BUILD_PLAN.md
+
+# Local-only hardware API reference notes (kept on disk, not tracked).
+CANAAN_AVALON_API.md
+HAMMER_API.md
