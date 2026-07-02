@@ -62,6 +62,15 @@ export const chatAdminBanSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+export const chatAdminNicknameSchema = z.object({
+  address: z.string().min(26).max(62),
+  // Empty string clears the handle (falls back to truncated address).
+  nickname: z.string().max(MAX_NICKNAME_LENGTH),
+  // Assigned handles are locked (official) by default; pass false for a plain,
+  // user-overwritable name.
+  official: z.boolean().optional(),
+});
+
 export const chatAnnouncementSchema = z.object({
   body: z.string().min(1).max(280),
 });

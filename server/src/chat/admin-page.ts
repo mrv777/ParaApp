@@ -56,6 +56,15 @@ export function adminPageHtml(): string {
     <button class="danger" onclick="clearAnn()">Clear</button>
   </div>
 
+  <h2>Assign nickname</h2>
+  <p class="muted" style="margin:0 0 6px">Set an authoritative handle for an address. Locked handles can't be taken or overwritten by users. Leave the name blank to release it.</p>
+  <div class="row">
+    <input id="nickAddr" type="text" placeholder="address" style="width:280px" />
+    <input id="nickName" type="text" placeholder="nickname (blank = clear)" maxlength="24" style="width:180px" />
+    <label class="muted" style="display:inline-flex;align-items:center;gap:4px"><input id="nickOfficial" type="checkbox" checked /> official (locked)</label>
+    <button onclick="assignNick()">Assign</button>
+  </div>
+
   <h2>Recent messages</h2>
   <div class="row" style="margin-bottom:4px">
     <button onclick="loadMessages()">Refresh</button>
@@ -137,9 +146,30 @@ export function adminPageHtml(): string {
     else setStatus('clear failed ' + res.status);
   }
 
+  // ---- Assign nickname ------------------------------------------------------
+  async function assignNick() {
+    const address = document.getElementById('nickAddr').value.trim();
+    if (!address) { setStatus('enter an address'); return; }
+    const nickname = document.getElementById('nickName').value.trim();
+    const official = document.getElementById('nickOfficial').checked;
+    if (!nickname && !confirm('Clear the nickname for ' + address + '?')) return;
+    let res;
+    try { res = await api('/chat/admin/nickname', { method: 'POST', body: JSON.stringify({ address, nickname, official }) }); }
+    catch (e) { setStatus('network error'); return; }
+    if (res.ok) {
+      setStatus(nickname ? 'nickname assigned' : 'nickname cleared');
+      document.getElementById('nickName').value = '';
+      loadMessages();
+    } else {
+      let msg = 'assign failed ' + res.status;
+      try { const j = await res.json(); if (j && typeof j.error === 'string') msg = j.error; } catch (e) { /* ignore */ }
+      setStatus(msg);
+    }
+  }
+
   // ---- Recent messages (open /chat/history read + guarded delete) -----------
   function renderMsgRow(m) {
-    const who = m.nickname ? esc(m.nickname) : esc(shortAddr(m.address));
+    const who = m.nickname ? esc(m.nickname) + (m.official ? ' ✓' : '') : esc(shortAddr(m.address));
     return \`
       <div class="report" id="msg-\${esc(m.id)}">
         <div class="muted">\${who} · \${new Date(m.ts).toLocaleString()}</div>

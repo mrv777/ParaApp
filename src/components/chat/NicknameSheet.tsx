@@ -3,7 +3,7 @@
  * value clears it (falls back to the truncated address).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, TextInput } from 'react-native';
 import Toast from 'react-native-toast-message';
 
@@ -22,6 +22,8 @@ interface NicknameSheetProps {
   onClose: () => void;
   token: string | null;
   initialNickname?: string;
+  /** True when the handle is admin-assigned (locked); the editor is read-only. */
+  locked?: boolean;
 }
 
 export function NicknameSheet({
@@ -29,10 +31,17 @@ export function NicknameSheet({
   onClose,
   token,
   initialNickname = '',
+  locked = false,
 }: NicknameSheetProps) {
   const { t } = useTranslation();
   const [value, setValue] = useState(initialNickname);
   const [saving, setSaving] = useState(false);
+
+  // Re-sync the field to the caller's current handle each time the sheet opens
+  // (the parent may have learned it after this component first mounted).
+  useEffect(() => {
+    if (visible) setValue(initialNickname);
+  }, [visible, initialNickname]);
 
   const handleSave = async () => {
     if (!token) {
@@ -44,7 +53,15 @@ export function NicknameSheet({
     setSaving(false);
     if (isError(result) || !result.data.success) {
       haptics.warning();
-      Toast.show({ type: 'error', text1: t('chat.nicknameError') });
+      // Map the server's status to a specific reason where we have one.
+      const status = isError(result) ? result.error.status : undefined;
+      const text1 =
+        status === 409
+          ? t('chat.nicknameTaken')
+          : status === 403
+            ? t('chat.nicknameLocked')
+            : t('chat.nicknameError');
+      Toast.show({ type: 'error', text1 });
       return;
     }
     haptics.success();
@@ -59,24 +76,27 @@ export function NicknameSheet({
           {t('chat.nickname')}
         </Text>
         <Text variant="caption" color="muted" className="mb-3">
-          {t('chat.nicknameHint')}
+          {locked ? t('chat.nicknameLockedHint') : t('chat.nicknameHint')}
         </Text>
         <TextInput
           className="text-foreground border border-border px-3 py-2 mb-4"
-          style={{ fontFamily: 'SpaceGrotesk_400Regular' }}
+          style={{ fontFamily: 'SpaceGrotesk_400Regular', opacity: locked ? 0.5 : 1 }}
           placeholder={t('chat.nicknamePlaceholder')}
           placeholderTextColor={colors.textMuted}
           value={value}
           onChangeText={setValue}
+          editable={!locked}
           maxLength={MAX_NICKNAME_LENGTH}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="done"
           onSubmitEditing={handleSave}
         />
-        <Button onPress={handleSave} loading={saving} disabled={saving}>
-          {t('common.save')}
-        </Button>
+        {!locked ? (
+          <Button onPress={handleSave} loading={saving} disabled={saving}>
+            {t('common.save')}
+          </Button>
+        ) : null}
       </View>
     </Sheet>
   );

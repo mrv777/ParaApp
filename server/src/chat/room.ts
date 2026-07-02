@@ -18,7 +18,7 @@ import {
   addReaction,
   removeReaction,
   getReactionCount,
-  getNickname,
+  getProfile,
   getBlockedBy,
 } from './db';
 import { isClean, moderateAI } from './moderation';
@@ -164,12 +164,12 @@ export class ChatRoom {
     const id = crypto.randomUUID();
     const ts = Date.now();
     await insertChatMessage(this.env.DB, { id, address, body, createdAt: ts });
-    const nickname = await getNickname(this.env.DB, address);
+    const { nickname, official } = await getProfile(this.env.DB, address);
 
     // Per-connection block filtering: a blocked sender's messages never reach
     // the blocker.
     this.broadcastMessage(
-      { type: 'msg', id, ts, address, nickname, body },
+      { type: 'msg', id, ts, address, nickname, official, body },
       address
     );
   }

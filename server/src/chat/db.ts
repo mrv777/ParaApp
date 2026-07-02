@@ -16,6 +16,7 @@ interface HistoryRow {
   body: string;
   created_at: number;
   nickname: string | null;
+  official: number | null;
 }
 
 export async function insertChatMessage(
@@ -58,7 +59,7 @@ export async function getRecentMessages(
 
   const { results } = await db
     .prepare(
-      `SELECT m.id, m.address, m.body, m.created_at, p.nickname
+      `SELECT m.id, m.address, m.body, m.created_at, p.nickname, p.official
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
        WHERE ${conditions.join(' AND ')}
@@ -72,6 +73,7 @@ export async function getRecentMessages(
     ts: row.created_at,
     address: row.address,
     nickname: row.nickname ?? null,
+    official: row.official === 1,
     body: row.body,
   }));
 
@@ -216,22 +218,56 @@ export async function isBanned(
 // Profiles / nicknames (Phase 4)
 // ============================================================================
 
+export interface ChatProfile {
+  /** Display nickname, or null to fall back to the truncated address. */
+  nickname: string | null;
+  /** True when the handle was assigned by an admin (locked, rendered with a marker). */
+  official: boolean;
+}
+
+export async function getProfile(
+  db: D1Database,
+  address: string
+): Promise<ChatProfile> {
+  const row = await db
+    .prepare('SELECT nickname, official FROM chat_profiles WHERE address = ?')
+    .bind(address)
+    .first<{ nickname: string | null; official: number | null }>();
+  return { nickname: row?.nickname ?? null, official: row?.official === 1 };
+}
+
 export async function getNickname(
   db: D1Database,
   address: string
 ): Promise<string | null> {
-  const row = await db
-    .prepare('SELECT nickname FROM chat_profiles WHERE address = ?')
-    .bind(address)
-    .first<{ nickname: string | null }>();
-  return row?.nickname ?? null;
+  return (await getProfile(db, address)).nickname;
 }
 
-/** Upsert a nickname, or clear it (fall back to truncated address) when null. */
+/** The address currently holding a given norm key, or null. Used to enforce
+ *  nickname uniqueness (no two addresses may share a folded key). */
+export async function nicknameOwner(
+  db: D1Database,
+  norm: string
+): Promise<string | null> {
+  if (!norm) return null;
+  const row = await db
+    .prepare('SELECT address FROM chat_profiles WHERE norm = ?')
+    .bind(norm)
+    .first<{ address: string }>();
+  return row?.address ?? null;
+}
+
+/**
+ * Upsert a nickname, or clear it (fall back to truncated address) when null.
+ * `norm` is the caller-supplied canonical uniqueness key (from nicknameKey());
+ * pass '' to store NULL (name has no alphabetic content). `official` marks an
+ * admin-assigned, locked handle.
+ */
 export async function setNickname(
   db: D1Database,
   address: string,
-  nickname: string | null
+  nickname: string | null,
+  opts: { norm?: string; official?: boolean } = {}
 ): Promise<void> {
   if (nickname === null) {
     await db
@@ -240,15 +276,19 @@ export async function setNickname(
       .run();
     return;
   }
+  const norm = opts.norm && opts.norm.length ? opts.norm : null;
+  const official = opts.official ? 1 : 0;
   await db
     .prepare(
-      `INSERT INTO chat_profiles (address, nickname, updated_at)
-       VALUES (?, ?, unixepoch())
+      `INSERT INTO chat_profiles (address, nickname, norm, official, updated_at)
+       VALUES (?, ?, ?, ?, unixepoch())
        ON CONFLICT(address) DO UPDATE SET
          nickname = excluded.nickname,
+         norm = excluded.norm,
+         official = excluded.official,
          updated_at = unixepoch()`
     )
-    .bind(address, nickname)
+    .bind(address, nickname, norm, official)
     .run();
 }
 
@@ -363,7 +403,17 @@ export async function softDeleteMessage(
     .prepare('UPDATE chat_messages SET deleted = 1 WHERE id = ?')
     .bind(messageId)
     .run();
-  return (result.meta?.changes ?? 0) === 1;
+  const deleted = (result.meta?.changes ?? 0) === 1;
+  // Reap the message's reactions now rather than leaving them to linger until
+  // the retention prune. They're already hidden (history skips deleted rows),
+  // so this is purely housekeeping — but keeps chat_reactions free of orphans.
+  if (deleted) {
+    await db
+      .prepare('DELETE FROM chat_reactions WHERE message_id = ?')
+      .bind(messageId)
+      .run();
+  }
+  return deleted;
 }
 
 export async function banAddress(

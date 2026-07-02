@@ -59,6 +59,10 @@ export interface UseChatSocketReturn {
   canPost: boolean;
   /** Current posting token (for REST actions like nickname); null if none. */
   token: string | null;
+  /** The caller's current nickname (null = none / read-only), for prefilling the editor. */
+  selfNickname: string | null;
+  /** True when the caller's handle is admin-assigned (locked — not user-editable). */
+  selfOfficial: boolean;
   /** True when an address is set but failed the activity gate (or is banned). */
   gateDenied: boolean;
   /** Last server error code (e.g. rate_limited, blocked_content), if any. */
@@ -102,6 +106,8 @@ export function useChatSocket(): UseChatSocketReturn {
 
   const [canPost, setCanPost] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [selfNickname, setSelfNickname] = useState<string | null>(null);
+  const [selfOfficial, setSelfOfficial] = useState(false);
   const [gateDenied, setGateDenied] = useState(false);
   const [lastError, setLastError] = useState<ChatErrorCode | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -235,6 +241,9 @@ export function useChatSocket(): UseChatSocketReturn {
     const session = await fetchChatSession(address);
     if (!isError(session) && session.data.data?.token) {
       setGateDenied(false);
+      // Capture the caller's current handle so the editor can prefill + lock it.
+      setSelfNickname(session.data.data.nickname ?? null);
+      setSelfOfficial(!!session.data.data.official);
       return session.data.data.token;
     }
     // Address has no pool activity or is banned — distinct from "verifying".
@@ -295,6 +304,7 @@ export function useChatSocket(): UseChatSocketReturn {
               ts: msg.ts,
               address: msg.address,
               nickname: msg.nickname,
+              official: msg.official,
               body: msg.body,
             },
           ]);
@@ -451,6 +461,8 @@ export function useChatSocket(): UseChatSocketReturn {
     sendReaction,
     canPost,
     token,
+    selfNickname,
+    selfOfficial,
     gateDenied,
     lastError,
     clearError,

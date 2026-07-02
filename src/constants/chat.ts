@@ -61,6 +61,8 @@ export interface ChatMessage {
   ts: number; // ms epoch
   address: string;
   nickname: string | null;
+  /** True when the nickname is an admin-assigned (locked) official handle. */
+  official?: boolean;
   body: string;
   reactions?: ReactionSummary[];
   /** Present only when this message is a reply (not yet wired server-side). */
@@ -83,6 +85,7 @@ export type ServerEvent =
       ts: number;
       address: string;
       nickname: string | null;
+      official?: boolean;
       body: string;
     }
   | {

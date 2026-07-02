@@ -11,6 +11,7 @@ import {
   chatBlockSchema,
   chatEulaSchema,
   chatAdminBanSchema,
+  chatAdminNicknameSchema,
   chatAnnouncementSchema,
 } from './validation';
 import {
@@ -23,6 +24,8 @@ import {
   getRecentMessages,
   isBanned,
   setNickname,
+  getProfile,
+  nicknameOwner,
   addReport,
   addBlock,
   removeBlock,
@@ -35,7 +38,7 @@ import {
   setAnnouncement,
 } from './chat/db';
 import { isClean } from './chat/moderation';
-import { isReservedNickname } from './chat/reserved-nicknames';
+import { isReservedNickname, nicknameKey } from './chat/reserved-nicknames';
 import { stripInvisible } from './chat/sanitize';
 import { adminPageHtml } from './chat/admin-page';
 import {
@@ -320,7 +323,13 @@ app.post('/chat/session', async (c) => {
     }
 
     const token = await issueSessionToken(btcAddress, c.env.SESSION_SECRET);
-    return c.json({ success: true, data: { token } });
+    // Return the caller's current profile so the client can prefill the nickname
+    // editor and lock it when the handle is admin-assigned.
+    const profile = await getProfile(c.env.DB, btcAddress);
+    return c.json({
+      success: true,
+      data: { token, nickname: profile.nickname, official: profile.official },
+    });
   } catch (error) {
     console.error('chat/session error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);
@@ -394,11 +403,33 @@ app.put('/chat/nickname', async (c) => {
       return c.json({ success: false, error: 'This address is banned from chat' }, 403);
     }
 
+    // Users cannot overwrite an admin-assigned (locked) official handle.
+    if ((await getProfile(c.env.DB, verified.address)).official) {
+      return c.json(
+        { success: false, error: 'This handle is managed by an admin' },
+        403
+      );
+    }
+
     const trimmed = stripInvisible(result.data.nickname).trim();
     if (trimmed && (!isClean(trimmed) || isReservedNickname(trimmed))) {
       return c.json({ success: false, error: 'Nickname not allowed' }, 400);
     }
-    await setNickname(c.env.DB, verified.address, trimmed.length ? trimmed : null);
+    // Global uniqueness on the folded key: no two addresses may share a name
+    // (or a leetspeak / homoglyph look-alike of it).
+    const norm = trimmed ? nicknameKey(trimmed) : '';
+    if (norm) {
+      const owner = await nicknameOwner(c.env.DB, norm);
+      if (owner && owner !== verified.address) {
+        return c.json({ success: false, error: 'Nickname already taken' }, 409);
+      }
+    }
+    await setNickname(
+      c.env.DB,
+      verified.address,
+      trimmed.length ? trimmed : null,
+      { norm, official: false }
+    );
     return c.json({ success: true, data: { nickname: trimmed || null } });
   } catch (error) {
     console.error('chat/nickname error:', error);
@@ -571,6 +602,50 @@ app.post('/chat/admin/ban', async (c) => {
   }
   await banAddress(c.env.DB, result.data.address, result.data.reason ?? '');
   return c.json({ success: true });
+});
+
+// Assign (or clear) a nickname for any address. Bypasses the reserved-word and
+// profanity checks (admin is trusted and may grant "official" authority handles),
+// but still strips invisible chars and enforces the length cap. Assigned handles
+// default to locked (official) so users can't overwrite them.
+app.post('/chat/admin/nickname', async (c) => {
+  const result = chatAdminNicknameSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const { address } = result.data;
+  const trimmed = stripInvisible(result.data.nickname).trim();
+
+  // Empty ⇒ release the handle (fall back to truncated address).
+  if (!trimmed) {
+    await setNickname(c.env.DB, address, null);
+    return c.json({ success: true, data: { nickname: null } });
+  }
+
+  const norm = nicknameKey(trimmed);
+  if (norm) {
+    const owner = await nicknameOwner(c.env.DB, norm);
+    if (owner && owner !== address) {
+      // Admin wins over a non-official holder (their name is cleared), but an
+      // existing official handle is protected — reject so the admin decides.
+      if ((await getProfile(c.env.DB, owner)).official) {
+        return c.json(
+          {
+            success: false,
+            error: `Nickname held by another official handle (${owner})`,
+          },
+          409
+        );
+      }
+      await setNickname(c.env.DB, owner, null);
+    }
+  }
+
+  await setNickname(c.env.DB, address, trimmed, {
+    norm,
+    official: result.data.official ?? true,
+  });
+  return c.json({ success: true, data: { nickname: trimmed } });
 });
 
 app.post('/chat/admin/reports/:id/resolve', async (c) => {

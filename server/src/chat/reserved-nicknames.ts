@@ -57,7 +57,15 @@ const LEET: Record<string, string> = {
   $: 's',
 };
 
-function normalize(name: string): string {
+/**
+ * Canonical key for a nickname: folds case, diacritics, Greek/Cyrillic
+ * homoglyphs and leetspeak, then drops spaces/punctuation/emoji. Used both to
+ * match the reserved blacklist AND to enforce uniqueness, so "satoshi",
+ * "sat0shi", "S A T O S H I" and a Cyrillic look-alike all collapse to the same
+ * key. Returns '' for names with no alphabetic content (pure emoji/digits) —
+ * callers skip uniqueness for an empty key.
+ */
+export function nicknameKey(name: string): string {
   // foldConfusables lowercases + folds diacritics and Greek/Cyrillic homoglyphs
   // to ASCII first, so "Yοu" / "аdmin" can't evade the blacklist.
   return foldConfusables(name)
@@ -66,7 +74,7 @@ function normalize(name: string): string {
 }
 
 export function isReservedNickname(name: string): boolean {
-  const normalized = normalize(name);
+  const normalized = nicknameKey(name);
   if (!normalized) return false;
   return RESERVED.has(normalized);
 }

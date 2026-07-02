@@ -166,6 +166,12 @@ const MessageRow = memo(function MessageRow({
           ) : (
             <RNText style={styles.handle}>{handle}</RNText>
           )}
+          {/* Admin-assigned (locked) official handle. */}
+          {message.official ? (
+            <RNText style={styles.official} accessibilityLabel="Official handle">
+              ✓
+            </RNText>
+          ) : null}
           <View style={{ flex: 1 }} />
           <RNText style={styles.time}>{formatTime(message.ts)}</RNText>
         </View>
@@ -250,6 +256,8 @@ export function ChatScreen({ navigation }: Props) {
     sendReaction,
     canPost,
     token,
+    selfNickname,
+    selfOfficial,
     gateDenied,
     lastError,
     clearError,
@@ -589,7 +597,13 @@ export function ChatScreen({ navigation }: Props) {
         )}
       </KeyboardAvoidingView>
 
-      <NicknameSheet visible={nicknameOpen} onClose={() => setNicknameOpen(false)} token={token} />
+      <NicknameSheet
+        visible={nicknameOpen}
+        onClose={() => setNicknameOpen(false)}
+        token={token}
+        initialNickname={selfNickname ?? ''}
+        locked={selfOfficial}
+      />
 
       <MessageActionsSheet
         message={actionMessage}
@@ -704,6 +718,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     letterSpacing: 0.24,
   },
+  official: { fontFamily: MONO, fontSize: 11, color: colors.primary, marginLeft: -4 },
   time: { fontFamily: MONO, fontSize: 11, color: TEXT_TIME },
 
   // Reply quote

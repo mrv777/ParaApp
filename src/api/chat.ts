@@ -10,7 +10,7 @@ import { CHAT_HTTP_BASE, type ChatMessage } from '@/constants/chat';
 
 interface ChatSessionResponse {
   success: boolean;
-  data?: { token: string };
+  data?: { token: string; nickname?: string | null; official?: boolean };
   error?: unknown;
 }
 
