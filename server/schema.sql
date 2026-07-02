@@ -70,3 +70,60 @@ CREATE TABLE IF NOT EXISTS widget_user_snapshots (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_addr_active ON push_subscriptions(btc_address, active);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_active ON push_subscriptions(active);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_widget_updates ON push_subscriptions(widget_updates_enabled, last_widget_push_at);
+
+-- ============================================================================
+-- Community chat (see migrations/0005_add_chat_schema.sql). chat_messages.created_at
+-- is MILLISECONDS to match the WS `ts` field; other *_at columns are seconds.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY,
+  address TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  deleted INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
+
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  message_id TEXT NOT NULL,
+  address TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()),
+  PRIMARY KEY (message_id, address, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_reactions_message ON chat_reactions(message_id);
+
+CREATE TABLE IF NOT EXISTS chat_profiles (
+  address TEXT PRIMARY KEY,
+  nickname TEXT,
+  updated_at INTEGER DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS chat_blocks (
+  blocker TEXT NOT NULL,
+  blocked TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()),
+  PRIMARY KEY (blocker, blocked)
+);
+
+CREATE TABLE IF NOT EXISTS chat_reports (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+  reporter TEXT NOT NULL,
+  reason TEXT,
+  created_at INTEGER DEFAULT (unixepoch()),
+  resolved INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chat_reports_resolved ON chat_reports(resolved, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_bans (
+  address TEXT PRIMARY KEY,
+  reason TEXT,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
+CREATE TABLE IF NOT EXISTS chat_eula_accept (
+  address TEXT PRIMARY KEY,
+  version TEXT NOT NULL,
+  accepted_at INTEGER DEFAULT (unixepoch())
+);

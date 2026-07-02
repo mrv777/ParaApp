@@ -5,7 +5,14 @@ import {
   registerSchema,
   unregisterSchema,
   preferencesSchema,
+  chatSessionSchema,
 } from './validation';
+import {
+  passesActivityGate,
+  issueSessionToken,
+  verifySessionToken,
+} from './chat/identity';
+import { getRecentMessages, isBanned } from './chat/db';
 import {
   upsertSubscription,
   deleteSubscription,
@@ -262,6 +269,84 @@ app.get('/widget/user/:address', async (c) => {
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
 });
+
+// ============================================================================
+// Community chat
+// ============================================================================
+
+// Mint a short-lived session token for posting. Reading needs no session.
+app.post('/chat/session', async (c) => {
+  try {
+    const body = await c.req.json();
+    const result = chatSessionSchema.safeParse(body);
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const { btcAddress } = result.data;
+
+    if (await isBanned(c.env.DB, btcAddress)) {
+      return c.json({ success: false, error: 'This address is banned from chat' }, 403);
+    }
+    if (!(await passesActivityGate(c.env, btcAddress))) {
+      return c.json(
+        { success: false, error: 'Address has no activity on Parasite Pool' },
+        403
+      );
+    }
+
+    const token = await issueSessionToken(btcAddress, c.env.SESSION_SECRET);
+    return c.json({ success: true, data: { token } });
+  } catch (error) {
+    console.error('chat/session error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Open-read history with an exclusive millisecond `before` cursor.
+app.get('/chat/history', async (c) => {
+  try {
+    const before = c.req.query('before');
+    const limit = c.req.query('limit');
+    const messages = await getRecentMessages(c.env.DB, {
+      before: before ? Number(before) : undefined,
+      limit: limit ? Number(limit) : 50,
+    });
+    return c.json({ success: true, data: { messages } });
+  } catch (error) {
+    console.error('chat/history error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// WebSocket upgrade. Optional `token` → posting allowed; absent → read-only.
+// Validated address is forwarded to the DO via a query param it trusts (the DO
+// is only reachable through this route).
+app.get('/chat/ws', async (c) => {
+  if (c.req.header('Upgrade') !== 'websocket') {
+    return c.json({ success: false, error: 'Expected websocket' }, 426);
+  }
+
+  const token = c.req.query('token');
+  let address = '';
+  if (token) {
+    const verified = await verifySessionToken(token, c.env.SESSION_SECRET);
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    address = verified.address;
+  }
+
+  // Forward the upgrade to the DO. Clone via a Headers object (incoming request
+  // headers are immutable) so the `Upgrade: websocket` header is preserved and
+  // the validated address rides along in a header the DO trusts — reconstructing
+  // the Request with a new URL drops the upgrade on the production runtime.
+  const headers = new Headers(c.req.raw.headers);
+  headers.set('X-Chat-Address', address);
+  const stub = c.env.CHAT_ROOM.get(c.env.CHAT_ROOM.idFromName('global'));
+  return stub.fetch(new Request(c.req.url, { method: 'GET', headers }));
+});
+
+export { ChatRoom } from './chat/room';
 
 export default {
   fetch: app.fetch,

@@ -1,6 +1,11 @@
 export interface Env {
   DB: D1Database;
   PARASITE_API_URL: string;
+  // Community chat
+  CHAT_ROOM: DurableObjectNamespace;
+  SESSION_SECRET: string; // HMAC key for chat session tokens
+  ADMIN_SECRET: string; // guards /chat/admin/* routes + web admin page
+  CHAT_MODERATION_AI: string; // "off" | "on" — AI moderation toggle (v1: off)
 }
 
 export interface PushSubscription {

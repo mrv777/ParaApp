@@ -28,6 +28,11 @@ export const preferencesSchema = z.object({
   notificationsEnabled: z.boolean().optional(),
 });
 
+export const chatSessionSchema = z.object({
+  btcAddress: z.string().min(26).max(62),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type UnregisterInput = z.infer<typeof unregisterSchema>;
 export type PreferencesInput = z.infer<typeof preferencesSchema>;
+export type ChatSessionInput = z.infer<typeof chatSessionSchema>;
