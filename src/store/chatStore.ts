@@ -27,6 +27,12 @@ interface ChatState {
   messages: ChatMessage[]; // oldest-first (index 0 = oldest), matches LegendList alignItemsAtEnd
   online: number;
   connectionState: ChatConnectionState;
+  /**
+   * True once the first history backfill of this session has resolved (success
+   * or failure). Gates the feed's initial skeleton vs. the real empty state, so
+   * a still-loading room isn't shown as "no messages yet". Re-armed on reset().
+   */
+  historyLoaded: boolean;
   announcement: string | null; // admin banner shown at the top (null = none)
   /**
    * Newest message ts the user has actually looked at (Chat tab focused).
@@ -55,6 +61,8 @@ interface ChatActions {
   removeMessage: (id: string) => void;
   setOnline: (online: number) => void;
   setConnectionState: (state: ChatConnectionState) => void;
+  /** Mark the initial history backfill as resolved (or re-arm with false). */
+  setHistoryLoaded: (loaded: boolean) => void;
   setAnnouncement: (announcement: string | null) => void;
   /** Mark everything currently loaded as seen (call while the Chat tab is focused). */
   markSeen: () => void;
@@ -73,6 +81,7 @@ const initialState: ChatState = {
   messages: EMPTY_MESSAGES,
   online: 0,
   connectionState: 'disconnected',
+  historyLoaded: false,
   announcement: null,
   lastSeenTs: 0,
 };
@@ -149,6 +158,8 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
 
   setConnectionState: (connectionState) => set({ connectionState }),
 
+  setHistoryLoaded: (historyLoaded) => set({ historyLoaded }),
+
   setAnnouncement: (announcement) => set({ announcement }),
 
   markSeen: () =>
@@ -170,6 +181,8 @@ export const selectChatMessages = (state: ChatState) => state.messages;
 export const selectChatOnline = (state: ChatState) => state.online;
 export const selectChatConnectionState = (state: ChatState) =>
   state.connectionState;
+/** True once the first history backfill of the session has resolved. */
+export const selectChatHistoryLoaded = (state: ChatState) => state.historyLoaded;
 export const selectChatAnnouncement = (state: ChatState) => state.announcement;
 /** True when messages newer than the last focused view exist (tab-bar dot). */
 export const selectHasUnread = (state: ChatState): boolean =>

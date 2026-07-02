@@ -42,6 +42,7 @@ import {
   selectChatOnline,
   selectChatConnectionState,
   selectChatAnnouncement,
+  selectChatHistoryLoaded,
   type ChatConnectionState,
 } from '@/store/chatStore';
 import {
@@ -56,6 +57,7 @@ import { sanitizeDisplayBody } from '@/utils/messageText';
 import { haptics } from '@/utils/haptics';
 import { glyphCells } from '@/utils/identicon';
 import { ReactionGlyph } from '@/components/chat/ReactionGlyph';
+import { SkeletonLoader } from '@/components/SkeletonLoader';
 import { useTranslation } from '@/i18n';
 import {
   MAX_MESSAGE_LENGTH,
@@ -225,6 +227,29 @@ const EmptyFeed = ({ title, hint }: { title: string; hint: string }) => (
   </View>
 );
 
+// Placeholder rows shown while the first history backfill is in flight, so a
+// still-loading room isn't mistaken for an empty one. Widths vary per row to
+// read as natural chat lines; matches the row padding of a real message.
+const SKELETON_ROWS: { nick: number; body: number }[] = [
+  { nick: 74, body: 168 },
+  { nick: 92, body: 224 },
+  { nick: 60, body: 132 },
+  { nick: 108, body: 196 },
+  { nick: 80, body: 248 },
+  { nick: 66, body: 150 },
+];
+
+const ChatFeedSkeleton = () => (
+  <View style={styles.skeletonWrap} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    {SKELETON_ROWS.map((r, i) => (
+      <View key={i} style={styles.skeletonRow}>
+        <SkeletonLoader variant="text" width={r.nick} height={11} />
+        <SkeletonLoader variant="text" width={r.body} height={14} />
+      </View>
+    ))}
+  </View>
+);
+
 // Shown at the top of the feed while an older page is being fetched.
 const LoadingOlder = () => (
   <View style={styles.loadingOlder}>
@@ -312,6 +337,7 @@ export function ChatScreen({ navigation }: Props) {
 
   const online = useChatStore(selectChatOnline);
   const connectionState = useChatStore(selectChatConnectionState);
+  const historyLoaded = useChatStore(selectChatHistoryLoaded);
   const announcement = useChatStore(selectChatAnnouncement);
   const removeMessagesFrom = useChatStore((s) => s.removeMessagesFrom);
   const applyReaction = useChatStore((s) => s.applyReaction);
@@ -577,7 +603,13 @@ export function ChatScreen({ navigation }: Props) {
           onStartReachedThreshold={0.2}
           ListHeaderComponent={loadingOlder ? <LoadingOlder /> : null}
           ListEmptyComponent={
-            <EmptyFeed title={t('chat.empty')} hint={t('chat.emptyHint')} />
+            // Skeleton while the first backfill runs (connecting or connected);
+            // the real "say hi" empty state only once history has resolved.
+            !historyLoaded && connectionState !== 'disconnected' ? (
+              <ChatFeedSkeleton />
+            ) : (
+              <EmptyFeed title={t('chat.empty')} hint={t('chat.emptyHint')} />
+            )
           }
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
@@ -738,6 +770,8 @@ const styles = StyleSheet.create({
   feed: { flex: 1, minHeight: 0 },
   feedContent: { paddingVertical: 8 },
   loadingOlder: { paddingVertical: 12, alignItems: 'center' },
+  skeletonWrap: { paddingVertical: 8 },
+  skeletonRow: { paddingVertical: 9, paddingHorizontal: 20, gap: 7 },
   emptyWrap: { alignItems: 'center', paddingVertical: 48, gap: 6 },
   emptyTitle: { fontFamily: MONO, fontSize: 14, color: TEXT_MUTED },
   emptyHint: { fontFamily: MONO, fontSize: 12, color: TEXT_TIME },

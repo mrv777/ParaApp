@@ -103,6 +103,7 @@ export function useChatSocket(): UseChatSocketReturn {
   const setOnline = useChatStore((s) => s.setOnline);
   const setConnectionState = useChatStore((s) => s.setConnectionState);
   const setAnnouncement = useChatStore((s) => s.setAnnouncement);
+  const setHistoryLoaded = useChatStore((s) => s.setHistoryLoaded);
   const resetMessages = useChatStore((s) => s.reset);
 
   const [canPost, setCanPost] = useState(false);
@@ -176,38 +177,44 @@ export function useChatSocket(): UseChatSocketReturn {
   }, []);
 
   const backfillHistory = useCallback(async () => {
-    const result = await fetchChatHistory({
-      limit: 50,
-      token: tokenRef.current ?? undefined,
-    });
-    if (!isError(result) && result.data.data) {
-      if (result.data.data.messages) {
-        const fetched = result.data.data.messages;
-        // Gap guard: if more than a page arrived while away, the newest-50
-        // backfill doesn't overlap the buffer — merging would render a
-        // seamless-looking hole that loadOlder (which pages back from the
-        // buffer's oldest message) can never fill. No overlap → start fresh.
-        const stored = useChatStore.getState().messages;
-        if (stored.length > 0 && fetched.length > 0) {
-          const oldestFetched = fetched.reduce(
-            (min, m) => Math.min(min, m.ts),
-            Infinity
-          );
-          const newestStored = stored[stored.length - 1].ts;
-          if (oldestFetched > newestStored) resetMessages();
+    try {
+      const result = await fetchChatHistory({
+        limit: 50,
+        token: tokenRef.current ?? undefined,
+      });
+      if (!isError(result) && result.data.data) {
+        if (result.data.data.messages) {
+          const fetched = result.data.data.messages;
+          // Gap guard: if more than a page arrived while away, the newest-50
+          // backfill doesn't overlap the buffer — merging would render a
+          // seamless-looking hole that loadOlder (which pages back from the
+          // buffer's oldest message) can never fill. No overlap → start fresh.
+          const stored = useChatStore.getState().messages;
+          if (stored.length > 0 && fetched.length > 0) {
+            const oldestFetched = fetched.reduce(
+              (min, m) => Math.min(min, m.ts),
+              Infinity
+            );
+            const newestStored = stored[stored.length - 1].ts;
+            if (oldestFetched > newestStored) resetMessages();
+          }
+          addMessages(fetched);
+          // A full page implies older messages may exist; a short page = we've
+          // already got the beginning. Reset paging state for the fresh session.
+          const more = result.data.data.messages.length >= 50;
+          hasMoreRef.current = more;
+          setHasMoreHistory(more);
         }
-        addMessages(fetched);
-        // A full page implies older messages may exist; a short page = we've
-        // already got the beginning. Reset paging state for the fresh session.
-        const more = result.data.data.messages.length >= 50;
-        hasMoreRef.current = more;
-        setHasMoreHistory(more);
+        if (result.data.data.announcement !== undefined) {
+          setAnnouncement(result.data.data.announcement);
+        }
       }
-      if (result.data.data.announcement !== undefined) {
-        setAnnouncement(result.data.data.announcement);
-      }
+    } finally {
+      // Resolved (success or failure) — swap the feed's initial skeleton for the
+      // real content/empty state. A failed fetch must not leave a stuck skeleton.
+      setHistoryLoaded(true);
     }
-  }, [addMessages, resetMessages, setAnnouncement]);
+  }, [addMessages, resetMessages, setAnnouncement, setHistoryLoaded]);
 
   /**
    * Page one screen further back on scroll-to-top. Guarded against concurrent
