@@ -44,6 +44,8 @@ const RESERVED = new Set<string>([
   'zkshark',
 ]);
 
+import { foldConfusables } from './sanitize';
+
 const LEET: Record<string, string> = {
   '0': 'o',
   '1': 'i',
@@ -56,8 +58,9 @@ const LEET: Record<string, string> = {
 };
 
 function normalize(name: string): string {
-  return name
-    .toLowerCase()
+  // foldConfusables lowercases + folds diacritics and Greek/Cyrillic homoglyphs
+  // to ASCII first, so "Yοu" / "аdmin" can't evade the blacklist.
+  return foldConfusables(name)
     .replace(/[0134579@$]/g, (c) => LEET[c] ?? c)
     .replace(/[^a-z]/g, ''); // drop spaces, punctuation, emoji (digits handled above)
 }

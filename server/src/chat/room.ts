@@ -11,6 +11,7 @@
 import type { Env } from '../types';
 import type { ClientEvent, ServerEvent, ChatErrorCode } from './protocol';
 import { MAX_MESSAGE_LENGTH, isReactionEmoji } from './protocol';
+import { stripInvisible } from './sanitize';
 import {
   insertChatMessage,
   isBanned,
@@ -34,7 +35,7 @@ interface SocketAttachment {
  * per-line trailing spaces and reduce any run of newlines to a single one.
  */
 function normalizeBody(raw: string): string {
-  return raw
+  return stripInvisible(raw)
     .replace(/[ \t]+$/gm, '')
     .replace(/\n{2,}/g, '\n')
     .trim();
@@ -71,6 +72,14 @@ export class ChatRoom {
     if (url.pathname === '/internal/announcement' && request.method === 'POST') {
       const { body } = (await request.json()) as { body: string | null };
       this.broadcast({ type: 'announcement', body });
+      return new Response(null, { status: 204 });
+    }
+
+    // Internal, worker-only hook: a message was deleted (admin moderation) —
+    // tell live sockets to drop it so it disappears without a reload.
+    if (url.pathname === '/internal/delete' && request.method === 'POST') {
+      const { id } = (await request.json()) as { id: string };
+      this.broadcast({ type: 'delete', id });
       return new Response(null, { status: 204 });
     }
 

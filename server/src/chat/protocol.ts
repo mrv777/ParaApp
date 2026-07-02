@@ -60,6 +60,7 @@ export type ServerEvent =
     }
   | { type: 'presence'; online: number }
   | { type: 'announcement'; body: string | null }
+  | { type: 'delete'; id: string } // a message was removed (admin moderation)
   | { type: 'history'; messages: ChatMessage[] }
   | { type: 'error'; code: ChatErrorCode };
 

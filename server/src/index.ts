@@ -36,6 +36,7 @@ import {
 } from './chat/db';
 import { isClean } from './chat/moderation';
 import { isReservedNickname } from './chat/reserved-nicknames';
+import { stripInvisible } from './chat/sanitize';
 import { adminPageHtml } from './chat/admin-page';
 import {
   upsertSubscription,
@@ -393,7 +394,7 @@ app.put('/chat/nickname', async (c) => {
       return c.json({ success: false, error: 'This address is banned from chat' }, 403);
     }
 
-    const trimmed = result.data.nickname.trim();
+    const trimmed = stripInvisible(result.data.nickname).trim();
     if (trimmed && (!isClean(trimmed) || isReservedNickname(trimmed))) {
       return c.json({ success: false, error: 'Nickname not allowed' }, 400);
     }
@@ -521,6 +522,18 @@ async function broadcastAnnouncement(
   );
 }
 
+// Tell live sockets a message was removed so it disappears without a reload.
+async function broadcastDelete(env: Env, id: string): Promise<void> {
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+  );
+}
+
 // ---- Admin (guarded) --------------------------------------------------------
 
 // The admin PAGE is public HTML; it prompts for the secret and calls the guarded
@@ -541,7 +554,9 @@ app.get('/chat/admin/reports', async (c) => {
 });
 
 app.delete('/chat/admin/message/:id', async (c) => {
-  const deleted = await softDeleteMessage(c.env.DB, c.req.param('id'));
+  const id = c.req.param('id');
+  const deleted = await softDeleteMessage(c.env.DB, id);
+  if (deleted) await broadcastDelete(c.env, id); // drop it from live sockets
   return c.json({ success: true, data: { deleted } });
 });
 
