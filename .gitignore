@@ -75,3 +75,6 @@ CHAT_BUILD_PLAN.md
 # Local-only hardware API reference notes (kept on disk, not tracked).
 CANAAN_AVALON_API.md
 HAMMER_API.md
+
+# Legal pages to upload to mrv777.com (website content, not app code).
+legal/
