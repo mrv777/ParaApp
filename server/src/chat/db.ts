@@ -92,7 +92,12 @@ export async function getRecentMessages(
 // Reactions (Phase 3)
 // ============================================================================
 
-/** Returns true only if the reaction was newly added (idempotent). */
+/**
+ * Returns true only if the reaction was newly added (idempotent). Guarded so a
+ * react targeting a nonexistent or soft-deleted message is a silent no-op —
+ * without the EXISTS check a tokened client could mint orphan rows for arbitrary
+ * UUIDs, and the retention prune (which joins on chat_messages) never reaps them.
+ */
 export async function addReaction(
   db: D1Database,
   messageId: string,
@@ -101,7 +106,9 @@ export async function addReaction(
 ): Promise<boolean> {
   const result = await db
     .prepare(
-      'INSERT OR IGNORE INTO chat_reactions (message_id, address, emoji) VALUES (?, ?, ?)'
+      `INSERT OR IGNORE INTO chat_reactions (message_id, address, emoji)
+       SELECT ?1, ?2, ?3
+       WHERE EXISTS (SELECT 1 FROM chat_messages WHERE id = ?1 AND deleted = 0)`
     )
     .bind(messageId, address, emoji)
     .run();
@@ -285,16 +292,23 @@ export async function removeBlock(
     .run();
 }
 
+/**
+ * Queue a report. Returns false (no insert) when the target message doesn't
+ * exist or is already soft-deleted — same orphan-row guard as addReaction.
+ */
 export async function addReport(
   db: D1Database,
   report: { id: string; messageId: string; reporter: string; reason: string }
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const result = await db
     .prepare(
-      'INSERT INTO chat_reports (id, message_id, reporter, reason) VALUES (?, ?, ?, ?)'
+      `INSERT INTO chat_reports (id, message_id, reporter, reason)
+       SELECT ?1, ?2, ?3, ?4
+       WHERE EXISTS (SELECT 1 FROM chat_messages WHERE id = ?2 AND deleted = 0)`
     )
     .bind(report.id, report.messageId, report.reporter, report.reason)
     .run();
+  return (result.meta?.changes ?? 0) === 1;
 }
 
 /** Current admin announcement banner text (null = none). */

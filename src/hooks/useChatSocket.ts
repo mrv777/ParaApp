@@ -98,6 +98,7 @@ export function useChatSocket(): UseChatSocketReturn {
   const setOnline = useChatStore((s) => s.setOnline);
   const setConnectionState = useChatStore((s) => s.setConnectionState);
   const setAnnouncement = useChatStore((s) => s.setAnnouncement);
+  const resetMessages = useChatStore((s) => s.reset);
 
   const [canPost, setCanPost] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -113,6 +114,10 @@ export function useChatSocket(): UseChatSocketReturn {
   const tokenRef = useRef<string | null>(null);
   const attemptsRef = useRef(0);
   const shouldConnectRef = useRef(false);
+  // Last address we (re)connected under. When it changes, the server-side history
+  // filter (block list) changes with it, so the current feed — merged by id and
+  // never pruned by addMessages — must be dropped before backfilling afresh.
+  const prevAddressRef = useRef(address);
   // Bumped on every connect(); an in-flight connect bails if superseded, so a
   // reconnect during the async token fetch can't orphan a second live socket.
   const generationRef = useRef(0);
@@ -358,6 +363,11 @@ export function useChatSocket(): UseChatSocketReturn {
   // changes so posting picks up the new identity's token.
   useEffect(() => {
     if (isActive) {
+      // Identity switch (address changed) → drop the feed loaded under the old
+      // block filter so backfill can't leave now-blocked senders visible. Guarded
+      // to address-value changes only, so ordinary reconnects don't flash empty.
+      if (prevAddressRef.current !== address) resetMessages();
+      prevAddressRef.current = address;
       shouldConnectRef.current = true;
       attemptsRef.current = 0;
       void connect();
@@ -375,7 +385,7 @@ export function useChatSocket(): UseChatSocketReturn {
       detachAndClose(wsRef.current);
       wsRef.current = null;
     };
-  }, [isActive, connect, clearTimers, setConnectionState]);
+  }, [isActive, address, connect, clearTimers, setConnectionState, resetMessages]);
 
   const sendMessage = useCallback((body: string): boolean => {
     const ws = wsRef.current;

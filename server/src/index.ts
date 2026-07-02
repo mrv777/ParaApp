@@ -423,12 +423,15 @@ app.post('/chat/report', async (c) => {
     if (await isBanned(c.env.DB, verified.address)) {
       return c.json({ success: false, error: 'This address is banned from chat' }, 403);
     }
-    await addReport(c.env.DB, {
+    const reported = await addReport(c.env.DB, {
       id: crypto.randomUUID(),
       messageId: result.data.messageId,
       reporter: verified.address,
       reason: result.data.reason ?? '',
     });
+    if (!reported) {
+      return c.json({ success: false, error: 'Message not found' }, 404);
+    }
     return c.json({ success: true });
   } catch (error) {
     console.error('chat/report error:', error);
@@ -479,7 +482,8 @@ app.delete('/chat/block', async (c) => {
   }
 });
 
-// Record one-time EULA / community-guidelines acceptance.
+// Record one-time EULA / community-guidelines acceptance. Best-effort compliance
+// record only — posting is client-gated, not blocked server-side on this.
 app.post('/chat/eula', async (c) => {
   try {
     const result = chatEulaSchema.safeParse(await c.req.json());

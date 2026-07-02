@@ -58,7 +58,10 @@ CREATE TABLE IF NOT EXISTS chat_bans (
   created_at INTEGER DEFAULT (unixepoch())
 );
 
--- One-time EULA / community-guidelines acceptance before first post (Phase 5).
+-- One-time EULA / community-guidelines acceptance (Phase 5). Client-gated
+-- best-effort: the app records acceptance here asynchronously around the first
+-- post; it is NOT enforced server-side (the message handler never consults this
+-- table), so this is a compliance record, not a posting gate.
 CREATE TABLE IF NOT EXISTS chat_eula_accept (
   address TEXT PRIMARY KEY,
   version TEXT NOT NULL,
