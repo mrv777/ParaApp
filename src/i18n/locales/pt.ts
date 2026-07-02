@@ -360,6 +360,9 @@ const pt = {
     copied: 'Copiado para a área de transferência',
     reported: 'Mensagem denunciada',
     blocked: 'Usuário bloqueado',
+    reportFailed: 'Não foi possível denunciar — tente novamente',
+    blockFailed: 'Não foi possível bloquear — tente novamente',
+    actionFailed: 'Algo deu errado — tente novamente',
     eulaTitle: 'Diretrizes da comunidade',
     eulaBody:
       'Seja respeitoso. Assédio, discurso de ódio e spam não são permitidos e podem resultar em banimento. Ao publicar, você concorda com as diretrizes e os termos abaixo.',

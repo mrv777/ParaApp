@@ -68,6 +68,13 @@ export interface UseChatSocketReturn {
   /** Force a reconnect (e.g. after blocking, so the DO reloads the block list). */
   reconnect: () => void;
   /**
+   * Re-mint the posting token for the current address without reconnecting the
+   * socket. For REST actions (report/block/eula/nickname) that 401 when the
+   * token ages out mid-session — the open WS stays valid, only REST needs the
+   * fresh token. Returns the new token, or null if none (no address / gate).
+   */
+  refreshToken: () => Promise<string | null>;
+  /**
    * Reconcile history on demand (e.g. when the Chat tab regains focus). Re-runs
    * the backfill if the socket is live, or reconnects if it has silently dropped
    * — covers messages missed while away, a network hiccup, or a dropped event.
@@ -209,6 +216,27 @@ export function useChatSocket(): UseChatSocketReturn {
     }
   }, [address, addMessages]);
 
+  /**
+   * Fetch a fresh posting token for the current address (read-only → null).
+   * Updates `gateDenied` as a side effect but does NOT touch socket/token state —
+   * callers decide when to apply the result (connect after its generation guard;
+   * refreshToken immediately). Shared by connect() and refreshToken().
+   */
+  const mintToken = useCallback(async (): Promise<string | null> => {
+    if (!address) {
+      setGateDenied(false);
+      return null;
+    }
+    const session = await fetchChatSession(address);
+    if (!isError(session) && session.data.data?.token) {
+      setGateDenied(false);
+      return session.data.data.token;
+    }
+    // Address has no pool activity or is banned — distinct from "verifying".
+    if (isError(session) && session.error.status === 403) setGateDenied(true);
+    return null;
+  }, [address]);
+
   const connect = useCallback(async () => {
     if (!shouldConnectRef.current) return;
     const gen = ++generationRef.current; // supersede any in-flight connect
@@ -219,19 +247,7 @@ export function useChatSocket(): UseChatSocketReturn {
     setConnectionState('connecting');
 
     // Acquire a posting token if we have an address (read-only otherwise).
-    let token: string | null = null;
-    if (address) {
-      const session = await fetchChatSession(address);
-      if (!isError(session) && session.data.data?.token) {
-        token = session.data.data.token;
-        setGateDenied(false);
-      } else if (isError(session) && session.error.status === 403) {
-        // Address has no pool activity or is banned — distinct from "verifying".
-        setGateDenied(true);
-      }
-    } else {
-      setGateDenied(false);
-    }
+    const token = await mintToken();
     // Bail if backgrounded or superseded by a newer connect during the await.
     if (!shouldConnectRef.current || gen !== generationRef.current) return;
     tokenRef.current = token;
@@ -324,6 +340,7 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   }, [
     address,
+    mintToken,
     addMessages,
     applyReaction,
     removeMessage,
@@ -397,6 +414,18 @@ export function useChatSocket(): UseChatSocketReturn {
     if (shouldConnectRef.current) connectRef.current();
   }, []);
 
+  const refreshToken = useCallback(async (): Promise<string | null> => {
+    const fresh = await mintToken();
+    // Apply on success so canPost + future REST calls use the new token; leave
+    // the existing token in place on failure (the caller's retry just fails).
+    if (fresh) {
+      tokenRef.current = fresh;
+      setToken(fresh);
+      setCanPost(true);
+    }
+    return fresh;
+  }, [mintToken]);
+
   const refresh = useCallback(() => {
     if (!shouldConnectRef.current) return;
     const ws = wsRef.current;
@@ -416,6 +445,7 @@ export function useChatSocket(): UseChatSocketReturn {
     lastError,
     clearError,
     reconnect,
+    refreshToken,
     refresh,
     loadOlder: () => void loadOlder(),
     loadingOlder,

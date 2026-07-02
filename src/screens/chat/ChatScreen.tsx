@@ -34,6 +34,8 @@ import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
 import { EulaSheet } from '@/components/chat/EulaSheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import { reportChatMessage, blockChatAddress, acceptChatEula } from '@/api/chat';
+import { isError } from '@/api/client';
+import type { ApiResult } from '@/types';
 import {
   useChatStore,
   selectChatMessages,
@@ -212,6 +214,33 @@ const LoadingOlder = () => (
   </View>
 );
 
+/**
+ * Run a token-authed REST action, re-minting the session token and retrying once
+ * if it 401s. The posting token expires ~1h into a session; the open socket stays
+ * valid (authed at upgrade) but REST calls need a fresh token. Returns null only
+ * when there was no token to begin with.
+ */
+async function runTokenAction<T>(
+  token: string | null,
+  refreshToken: () => Promise<string | null>,
+  action: (token: string) => Promise<ApiResult<T>>
+): Promise<ApiResult<T> | null> {
+  if (!token) return null;
+  let result = await action(token);
+  if (isError(result) && result.error.status === 401) {
+    const fresh = await refreshToken();
+    if (fresh) result = await action(fresh);
+  }
+  return result;
+}
+
+/** True when a REST action resolved to a successful `{success:true}` body. */
+function actionSucceeded(
+  res: ApiResult<{ success: boolean }> | null
+): boolean {
+  return !!res && !isError(res) && res.data.success;
+}
+
 type Props = MainTabScreenProps<'Chat'>;
 
 export function ChatScreen({ navigation }: Props) {
@@ -225,6 +254,7 @@ export function ChatScreen({ navigation }: Props) {
     lastError,
     clearError,
     reconnect,
+    refreshToken,
     refresh,
     loadOlder,
     loadingOlder,
@@ -318,13 +348,25 @@ export function ChatScreen({ navigation }: Props) {
   }, [input, eulaVersion, doSend]);
 
   const handleAcceptEula = useCallback(() => {
+    // Set the local version + send immediately so the first post isn't gated on a
+    // network round-trip. Record acceptance server-side in the background, with a
+    // token refresh on 401; surface a toast only if it ultimately fails so a
+    // missing compliance record is visible rather than silently dropped.
     setChatEulaVersion(CHAT_EULA_VERSION);
-    if (token) void acceptChatEula(token, CHAT_EULA_VERSION);
     setEulaOpen(false);
     const body = pendingSend;
     setPendingSend(null);
     if (body) doSend(body);
-  }, [setChatEulaVersion, token, pendingSend, doSend]);
+    if (token) {
+      void runTokenAction(token, refreshToken, (tk) =>
+        acceptChatEula(tk, CHAT_EULA_VERSION)
+      ).then((res) => {
+        if (!actionSucceeded(res)) {
+          Toast.show({ type: 'error', text1: t('chat.actionFailed') });
+        }
+      });
+    }
+  }, [setChatEulaVersion, token, refreshToken, pendingSend, doSend, t]);
 
   // Account icon: edit nickname when eligible, else route to add an address.
   const handleAccountPress = useCallback(() => {
@@ -348,27 +390,43 @@ export function ChatScreen({ navigation }: Props) {
   );
 
   const handleReport = useCallback(
-    (message: ChatMessage) => {
+    async (message: ChatMessage) => {
       setActionMessage(null);
       if (!token) return;
-      void reportChatMessage(token, message.id, '');
-      haptics.success();
-      Toast.show({ type: 'success', text1: t('chat.reported') });
+      const res = await runTokenAction(token, refreshToken, (tk) =>
+        reportChatMessage(tk, message.id, '')
+      );
+      if (actionSucceeded(res)) {
+        haptics.success();
+        Toast.show({ type: 'success', text1: t('chat.reported') });
+      } else {
+        haptics.warning();
+        Toast.show({ type: 'error', text1: t('chat.reportFailed') });
+      }
     },
-    [token, t]
+    [token, refreshToken, t]
   );
 
   const handleBlock = useCallback(
-    (message: ChatMessage) => {
+    async (message: ChatMessage) => {
       setActionMessage(null);
       if (!token) return;
-      void blockChatAddress(token, message.address);
-      removeMessagesFrom(message.address); // optimistic
-      reconnect(); // reload the DO block list so live delivery is filtered too
-      haptics.success();
-      Toast.show({ type: 'success', text1: t('chat.blocked') });
+      const res = await runTokenAction(token, refreshToken, (tk) =>
+        blockChatAddress(tk, message.address)
+      );
+      if (actionSucceeded(res)) {
+        // Only prune + reload the DO block list once the server confirms — so the
+        // UI never implies a block that didn't actually take.
+        removeMessagesFrom(message.address);
+        reconnect();
+        haptics.success();
+        Toast.show({ type: 'success', text1: t('chat.blocked') });
+      } else {
+        haptics.warning();
+        Toast.show({ type: 'error', text1: t('chat.blockFailed') });
+      }
     },
-    [token, removeMessagesFrom, reconnect, t]
+    [token, refreshToken, removeMessagesFrom, reconnect, t]
   );
 
   const renderItem = useCallback(

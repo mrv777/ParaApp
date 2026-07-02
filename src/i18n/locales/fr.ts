@@ -362,6 +362,9 @@ const fr = {
     copied: 'Copié dans le presse-papiers',
     reported: 'Message signalé',
     blocked: 'Utilisateur bloqué',
+    reportFailed: 'Échec du signalement — réessayez',
+    blockFailed: 'Échec du blocage — réessayez',
+    actionFailed: 'Une erreur est survenue — réessayez',
     eulaTitle: 'Règles de la communauté',
     eulaBody:
       'Soyez respectueux. Le harcèlement, les propos haineux et le spam sont interdits et peuvent entraîner un bannissement. En publiant, vous acceptez les règles et conditions ci-dessous.',

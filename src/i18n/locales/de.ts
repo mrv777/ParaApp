@@ -360,6 +360,9 @@ const de = {
     copied: 'In Zwischenablage kopiert',
     reported: 'Nachricht gemeldet',
     blocked: 'Nutzer blockiert',
+    reportFailed: 'Melden fehlgeschlagen – erneut versuchen',
+    blockFailed: 'Blockieren fehlgeschlagen – erneut versuchen',
+    actionFailed: 'Etwas ist schiefgelaufen – erneut versuchen',
     eulaTitle: 'Community-Richtlinien',
     eulaBody:
       'Sei respektvoll. Belästigung, Hassrede und Spam sind nicht erlaubt und können zu einer Sperre führen. Mit dem Posten stimmst du den folgenden Richtlinien und Bedingungen zu.',

@@ -358,6 +358,9 @@ const es = {
     copied: 'Copiado al portapapeles',
     reported: 'Mensaje reportado',
     blocked: 'Usuario bloqueado',
+    reportFailed: 'No se pudo reportar — inténtalo de nuevo',
+    blockFailed: 'No se pudo bloquear — inténtalo de nuevo',
+    actionFailed: 'Algo salió mal — inténtalo de nuevo',
     eulaTitle: 'Normas de la comunidad',
     eulaBody:
       'Sé respetuoso. No se permiten el acoso, el discurso de odio ni el spam, y pueden conllevar un veto. Al publicar aceptas las normas y los términos siguientes.',

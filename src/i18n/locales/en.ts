@@ -400,6 +400,9 @@ const en = {
     copied: 'Copied to clipboard',
     reported: 'Message reported',
     blocked: 'User blocked',
+    reportFailed: "Couldn't report — try again",
+    blockFailed: "Couldn't block — try again",
+    actionFailed: 'Something went wrong — try again',
     eulaTitle: 'Community Guidelines',
     eulaBody:
       'Be respectful. Harassment, hate speech, and spam are not allowed and may result in a ban. By posting you agree to the guidelines and terms below.',
