@@ -6,6 +6,7 @@ const en = {
   tabs: {
     home: 'Home',
     pool: 'Pool',
+    chat: 'Chat',
     miners: 'Miners',
     settings: 'Settings',
   },
@@ -370,6 +371,29 @@ const en = {
     widgetUpdatesPermissionHint:
       'Silent widget pushes are unavailable while notifications are denied, but background refresh may still update widgets.',
     openSettings: 'Open Settings',
+  },
+
+  chat: {
+    title: 'Chat',
+    online: '{{count}} online',
+    connecting: 'Connecting…',
+    disconnected: 'Offline',
+    empty: 'No messages yet — say hi!',
+    composerPlaceholder: 'Message the community…',
+    composerVerifying: 'Checking pool activity…',
+    composerReadOnly: 'Add your Bitcoin address to post',
+    composerNoActivity: 'This address has no pool activity yet',
+    addAddress: 'Add address',
+    send: 'Send message',
+    errors: {
+      generic: "Couldn't send message",
+      rate_limited: 'Slow down a moment',
+      blocked_content: 'Message blocked',
+      banned: "You're banned from chat",
+      bad_body: 'Message too long or empty',
+      not_authenticated: 'Set your address to post',
+      bad_emoji: 'Invalid reaction',
+    },
   },
 
   qrScanner: {

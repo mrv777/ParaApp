@@ -15,6 +15,7 @@ interface TabIconConfig {
 const TAB_ICONS: Record<string, TabIconConfig> = {
   Home: { active: 'home', inactive: 'home-outline' },
   Pool: { active: 'stats-chart', inactive: 'stats-chart-outline' },
+  Chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
   Miners: { active: 'hardware-chip', inactive: 'hardware-chip-outline' },
   Settings: { active: 'settings', inactive: 'settings-outline' },
 };

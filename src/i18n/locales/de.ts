@@ -7,6 +7,7 @@ const de = {
   tabs: {
     home: 'Start',
     pool: 'Pool',
+    chat: 'Chat',
     miners: 'Miner',
     settings: 'Einstellungen',
   },
@@ -327,6 +328,29 @@ const de = {
     widgetUpdatesPermissionHint:
       'Stille Widget-Pushs sind nicht verfügbar, solange Benachrichtigungen verweigert werden. Hintergrundaktualisierung kann Widgets weiterhin aktualisieren.',
     openSettings: 'Einstellungen öffnen',
+  },
+
+  chat: {
+    title: 'Chat',
+    online: '{{count}} online',
+    connecting: 'Verbinden…',
+    disconnected: 'Offline',
+    empty: 'Noch keine Nachrichten – sag Hallo!',
+    composerPlaceholder: 'Schreibe der Community…',
+    composerVerifying: 'Pool-Aktivität wird geprüft…',
+    composerReadOnly: 'Bitcoin-Adresse hinzufügen, um zu posten',
+    composerNoActivity: 'Diese Adresse hat noch keine Pool-Aktivität',
+    addAddress: 'Adresse hinzufügen',
+    send: 'Nachricht senden',
+    errors: {
+      generic: 'Nachricht konnte nicht gesendet werden',
+      rate_limited: 'Etwas langsamer',
+      blocked_content: 'Nachricht blockiert',
+      banned: 'Du bist vom Chat gesperrt',
+      bad_body: 'Nachricht zu lang oder leer',
+      not_authenticated: 'Adresse festlegen, um zu posten',
+      bad_emoji: 'Ungültige Reaktion',
+    },
   },
 
   qrScanner: {

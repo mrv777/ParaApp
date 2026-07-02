@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 export type MainTabParamList = {
   Home: undefined;
   Pool: undefined;
+  Chat: undefined;
   Miners: undefined;
   Settings: undefined;
 };

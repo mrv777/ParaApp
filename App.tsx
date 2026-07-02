@@ -20,7 +20,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { PoolScreen } from '@/screens';
+import { PoolScreen, ChatScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
 import { Toast } from '@/components/Toast';
 import { HomeStack, MinersStack, SettingsStack } from '@/navigation';
@@ -59,6 +59,7 @@ const linking: LinkingOptions<MainTabParamList> = {
         },
       },
       Pool: 'pool',
+      Chat: 'chat',
       Miners: 'miners',
       Settings: {
         path: 'settings',
@@ -125,6 +126,7 @@ export default function App() {
           >
             <Tab.Screen name="Home" component={HomeStack} />
             <Tab.Screen name="Pool" component={PoolScreen} />
+            <Tab.Screen name="Chat" component={ChatScreen} />
             <Tab.Screen name="Miners" component={MinersStack} />
             <Tab.Screen name="Settings" component={SettingsStack} />
           </Tab.Navigator>
