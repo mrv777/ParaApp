@@ -1,8 +1,14 @@
 /**
- * Minimal self-contained admin page for triaging the chat report queue.
- * Served (unauthenticated) at GET /chat/admin; every action calls the
- * ADMIN_SECRET-guarded /chat/admin/* API with the secret entered here (kept only
- * in the page's memory, never persisted).
+ * Minimal self-contained admin page for the chat. Served (unauthenticated) at
+ * GET /chat/admin; the secret entered here is kept only in the page's memory
+ * (never persisted) and sent as X-Admin-Secret on every ADMIN_SECRET-guarded
+ * /chat/admin/* call.
+ *
+ * The tooling stays hidden until a successful login (a probe of
+ * /chat/admin/reports): only the secret box shows until then. Once unlocked it
+ * exposes the announcement banner, a recent-messages browser (delete any
+ * message, reported or not — reuses the open /chat/history read), and the
+ * report queue.
  */
 export function adminPageHtml(): string {
   return `<!doctype html>
@@ -16,8 +22,10 @@ export function adminPageHtml(): string {
   :root { color-scheme: dark; }
   body { margin: 0; background: #000; color: #fff; font: 14px/1.5 -apple-system, system-ui, sans-serif; padding: 16px; }
   h1 { font-size: 18px; margin: 0 0 12px; }
+  h2 { font-size: 15px; margin: 22px 0 6px; }
   input, button { font: inherit; }
-  input[type=password] { background: #0a0a0b; color: #fff; border: 1px solid rgba(255,255,255,.2); padding: 8px; width: 280px; }
+  input[type=password], input[type=text] { background: #0a0a0b; color: #fff; border: 1px solid rgba(255,255,255,.2); padding: 8px; }
+  input[type=password] { width: 280px; }
   button { background: #0a0a0b; color: #fff; border: 1px solid rgba(255,255,255,.2); padding: 6px 10px; cursor: pointer; }
   button:hover { background: #1c1c1e; }
   button.danger { border-color: #ff5247; color: #ff5247; }
@@ -27,48 +35,166 @@ export function adminPageHtml(): string {
   .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .body { background: #0a0a0b; border-left: 3px solid rgba(255,255,255,.2); padding: 8px; margin: 8px 0; white-space: pre-wrap; }
   #status { margin-left: 8px; }
+  #console { display: none; }
+  #logout { display: none; }
 </style>
 </head>
 <body>
 <h1>Chat Admin</h1>
 <div>
-  <input id="secret" type="password" placeholder="ADMIN_SECRET" />
-  <button onclick="load()">Load</button>
+  <input id="secret" type="password" placeholder="ADMIN_SECRET" onkeydown="if(event.key==='Enter')login()" />
+  <button id="loginBtn" onclick="login()">Log in</button>
+  <button id="logout" onclick="logout()">Log out</button>
   <span id="status" class="muted"></span>
 </div>
 
-<h2 style="font-size:15px;margin:18px 0 6px">Announcement banner</h2>
-<textarea id="ann" rows="2" placeholder="Shown at the top of chat for everyone (max 280 chars)" style="width:100%;max-width:520px;background:#0a0a0b;color:#fff;border:1px solid rgba(255,255,255,.2);padding:8px" maxlength="280"></textarea>
-<div class="row">
-  <button onclick="saveAnn()">Save announcement</button>
-  <button class="danger" onclick="clearAnn()">Clear</button>
+<div id="console">
+  <h2>Announcement banner</h2>
+  <textarea id="ann" rows="2" placeholder="Shown at the top of chat for everyone (max 280 chars)" style="width:100%;max-width:520px;background:#0a0a0b;color:#fff;border:1px solid rgba(255,255,255,.2);padding:8px" maxlength="280"></textarea>
+  <div class="row">
+    <button onclick="saveAnn()">Save announcement</button>
+    <button class="danger" onclick="clearAnn()">Clear</button>
+  </div>
+
+  <h2>Recent messages</h2>
+  <div class="row" style="margin-bottom:4px">
+    <button onclick="loadMessages()">Refresh</button>
+    <input id="delId" type="text" placeholder="delete by message id" style="width:280px" />
+    <button class="danger" onclick="delById()">Delete by ID</button>
+  </div>
+  <div id="messages"></div>
+  <div class="row">
+    <button id="loadOlder" onclick="loadMessages(oldestTs)" style="display:none">Load older</button>
+  </div>
+
+  <h2>Reports</h2>
+  <div id="reports"></div>
 </div>
 
-<h2 style="font-size:15px;margin:18px 0 6px">Reports</h2>
-<div id="reports"></div>
 <script>
-  const secret = () => document.getElementById('secret').value;
+  const secretEl = () => document.getElementById('secret');
+  const secret = () => secretEl().value;
   const setStatus = (m) => { document.getElementById('status').textContent = m; };
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&#34;',"'":'&#39;' }[c]));
+  const shortAddr = (a) => { a = String(a || ''); return a.length > 14 ? a.slice(0, 8) + '…' + a.slice(-4) : a; };
+  let oldestTs = null;
+
   async function api(path, opts = {}) {
-    const res = await fetch(path, {
+    return fetch(path, {
       ...opts,
       headers: { 'X-Admin-Secret': secret(), 'Content-Type': 'application/json', ...(opts.headers || {}) },
     });
-    return res;
   }
-  async function load() {
-    setStatus('loading…');
-    // Prefill the current announcement (open-read endpoint).
+
+  function setLoggedIn(v) {
+    document.getElementById('console').style.display = v ? 'block' : 'none';
+    document.getElementById('logout').style.display = v ? 'inline-block' : 'none';
+    document.getElementById('loginBtn').style.display = v ? 'none' : 'inline-block';
+  }
+
+  // Login = probe the guarded reports endpoint. Reveal the console only on 200.
+  async function login() {
+    setStatus('logging in…');
+    let res;
+    try { res = await api('/chat/admin/reports'); }
+    catch (e) { setStatus('network error'); setLoggedIn(false); return; }
+    if (!res.ok) { setStatus(res.status === 401 ? 'wrong secret' : 'error ' + res.status); setLoggedIn(false); return; }
+    setLoggedIn(true);
+    const { data } = await res.json();
+    const reports = (data && data.reports) || [];
+    renderReports(reports);
+    setStatus(reports.length + ' open report' + (reports.length === 1 ? '' : 's'));
+    await loadAnnouncement();
+    await loadMessages();
+  }
+
+  function logout() {
+    secretEl().value = '';
+    setLoggedIn(false);
+    document.getElementById('messages').innerHTML = '';
+    document.getElementById('reports').innerHTML = '';
+    oldestTs = null;
+    setStatus('logged out');
+    secretEl().focus();
+  }
+
+  async function loadAnnouncement() {
     try {
       const a = await fetch('/chat/announcement');
       if (a.ok) { const j = await a.json(); document.getElementById('ann').value = (j.data && j.data.announcement) || ''; }
     } catch (e) { /* ignore */ }
-    const res = await api('/chat/admin/reports');
-    if (!res.ok) { setStatus('error ' + res.status); return; }
+  }
+
+  async function saveAnn() {
+    const body = document.getElementById('ann').value.trim();
+    if (!body) { setStatus('announcement empty — use Clear to remove'); return; }
+    const res = await api('/chat/admin/announcement', { method: 'POST', body: JSON.stringify({ body }) });
+    setStatus(res.ok ? 'announcement saved' : 'save failed ' + res.status);
+  }
+  async function clearAnn() {
+    const res = await api('/chat/admin/announcement', { method: 'DELETE' });
+    if (res.ok) { document.getElementById('ann').value = ''; setStatus('announcement cleared'); }
+    else setStatus('clear failed ' + res.status);
+  }
+
+  // ---- Recent messages (open /chat/history read + guarded delete) -----------
+  function renderMsgRow(m) {
+    const who = m.nickname ? esc(m.nickname) : esc(shortAddr(m.address));
+    return \`
+      <div class="report" id="msg-\${esc(m.id)}">
+        <div class="muted">\${who} · \${new Date(m.ts).toLocaleString()}</div>
+        <div class="body">\${esc(m.body)}</div>
+        <div class="mono muted">\${esc(m.address)}</div>
+        <div class="row">
+          <button class="danger" data-act="delmsg" data-mid="\${esc(m.id)}">Delete</button>
+        </div>
+      </div>\`;
+  }
+
+  // No before-cursor → fresh load (replace); with a cursor → older page (append).
+  // History excludes deleted messages, so a deleted row won't come back.
+  async function loadMessages(before) {
+    const url = '/chat/history?limit=50' + (before ? '&before=' + encodeURIComponent(before) : '');
+    let res;
+    try { res = await fetch(url); } catch (e) { setStatus('history network error'); return; }
+    if (!res.ok) { setStatus('history error ' + res.status); return; }
     const { data } = await res.json();
-    const reports = (data && data.reports) || [];
-    setStatus(reports.length + ' open');
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&#34;',"'":'&#39;' }[c]));
+    const msgs = (data && data.messages) || [];
+    const container = document.getElementById('messages');
+    const html = msgs.map(renderMsgRow).join('');
+    if (before) container.insertAdjacentHTML('beforeend', html);
+    else container.innerHTML = html || '<p class="muted">No messages.</p>';
+    if (msgs.length) oldestTs = msgs[msgs.length - 1].ts;
+    // A full page implies more history may exist.
+    document.getElementById('loadOlder').style.display = msgs.length >= 50 ? 'inline-block' : 'none';
+    if (!before) setStatus(msgs.length + ' recent message' + (msgs.length === 1 ? '' : 's'));
+  }
+
+  // Delete any message by id; drops the row if it's on screen. The server also
+  // broadcasts the removal so it vanishes live for connected clients.
+  async function delMsgById(id) {
+    const res = await api('/chat/admin/message/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!res.ok) { setStatus('delete failed ' + res.status); return; }
+    const { data } = await res.json();
+    const el = document.getElementById('msg-' + id);
+    if (el) el.remove();
+    setStatus(data && data.deleted ? 'message deleted' : 'not found (already deleted?)');
+  }
+  async function delById() {
+    const id = document.getElementById('delId').value.trim();
+    if (!id) { setStatus('enter a message id'); return; }
+    if (!confirm('Delete message ' + id + '?')) return;
+    await delMsgById(id);
+    document.getElementById('delId').value = '';
+  }
+  document.getElementById('messages').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-act="delmsg"]');
+    if (!btn) return;
+    if (confirm('Delete this message?')) delMsgById(btn.dataset.mid);
+  });
+
+  // ---- Reports --------------------------------------------------------------
+  function renderReports(reports) {
     document.getElementById('reports').innerHTML = reports.map((r) => \`
       <div class="report" id="report-\${esc(r.id)}">
         <div class="muted">reported \${new Date(r.created_at * 1000).toLocaleString()} · reason: \${esc(r.reason) || '—'}</div>
@@ -82,18 +208,7 @@ export function adminPageHtml(): string {
         </div>
       </div>\`).join('') || '<p class="muted">No open reports.</p>';
   }
-  async function saveAnn() {
-    const body = document.getElementById('ann').value.trim();
-    if (!body) { setStatus('announcement empty — use Clear to remove'); return; }
-    const res = await api('/chat/admin/announcement', { method: 'POST', body: JSON.stringify({ body }) });
-    setStatus(res.ok ? 'announcement saved' : 'save failed ' + res.status);
-  }
-  async function clearAnn() {
-    const res = await api('/chat/admin/announcement', { method: 'DELETE' });
-    if (res.ok) { document.getElementById('ann').value = ''; setStatus('announcement cleared'); }
-    else setStatus('clear failed ' + res.status);
-  }
-  async function delMsg(id, reportId) {
+  async function delReported(id, reportId) {
     if (!confirm('Delete this message?')) return;
     const res = await api('/chat/admin/message/' + encodeURIComponent(id), { method: 'DELETE' });
     if (res.ok) { await resolve(reportId, true); } else setStatus('delete failed ' + res.status);
@@ -113,7 +228,7 @@ export function adminPageHtml(): string {
     const btn = ev.target.closest('button[data-act]');
     if (!btn) return;
     const d = btn.dataset;
-    if (d.act === 'del') delMsg(d.mid, d.rid);
+    if (d.act === 'del') delReported(d.mid, d.rid);
     else if (d.act === 'ban') ban(d.addr, d.rid);
     else if (d.act === 'resolve') resolve(d.rid);
   });
