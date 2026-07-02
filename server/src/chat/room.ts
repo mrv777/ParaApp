@@ -260,6 +260,36 @@ export class ChatRoom {
     // No-op (already reacted / wasn't reacted): nothing to broadcast.
     if (!changed) return;
 
+    // Same-address multi-device sync: the acting socket updates its own chip
+    // optimistically, but the actor's *other* devices only ever see the
+    // count-only coalesced flush and would keep a stale `mine`. Send them a
+    // targeted echo carrying actor+op so their `mine` stays correct. Only pays
+    // a COUNT query when a sibling socket actually exists, so the common
+    // single-device path keeps the coalescing optimization untouched.
+    const siblings = this.state.getWebSockets().filter((w) => {
+      if (w === ws) return false; // acting device already handled optimistically
+      const a = w.deserializeAttachment() as SocketAttachment | null;
+      return a?.address === address;
+    });
+    if (siblings.length) {
+      const count = await getReactionCount(this.env.DB, messageId, emoji);
+      const payload = JSON.stringify({
+        type: 'react',
+        messageId,
+        emoji,
+        count,
+        actor: truncateChatAddress(address),
+        op,
+      } satisfies ServerEvent);
+      for (const w of siblings) {
+        try {
+          w.send(payload);
+        } catch {
+          // Socket already closing; ignore.
+        }
+      }
+    }
+
     // Coalesce the count broadcast: a pile-on on one message collapses to a
     // single COUNT query + fan-out per REACTION_FLUSH_MS window. The acting
     // client updates its own chip optimistically, so the server no longer needs

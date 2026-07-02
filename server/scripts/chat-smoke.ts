@@ -259,9 +259,33 @@ async function main(): Promise<void> {
 
       // Reactions (Phase 3).
       if (messageId) {
+        // Same-address multi-device sync (PR3 review finding #2): the actor's
+        // *other* device only ever sees the count-only coalesced broadcast and
+        // would keep a stale `mine`. It must receive a targeted echo carrying
+        // actor+op. Connect a sibling on the SAME token (= same address) and
+        // assert it gets that echo. `b` (anonymous, different address) must not.
+        const sibling = await Client.connect(args.ws, session.token);
+        authed.send({ type: 'react', messageId, emoji: '🔥', op: 'add' });
+        const siblingEcho = await sibling.waitFor(
+          (e) =>
+            e.type === 'react' &&
+            e.messageId === messageId &&
+            e.emoji === '🔥' &&
+            e.actor != null
+        );
+        check(
+          'same-address sibling receives targeted react echo (actor+op)',
+          siblingEcho?.type === 'react' &&
+            siblingEcho.op === 'add' &&
+            siblingEcho.count === 1,
+          siblingEcho?.type === 'react'
+            ? `op=${siblingEcho.op} count=${siblingEcho.count}`
+            : 'no echo received'
+        );
+        sibling.close();
+
         // Reaction broadcasts are coalesced to a count-only event (no actor/op),
         // trailing the send by ~150ms — match on the authoritative count.
-        authed.send({ type: 'react', messageId, emoji: '🔥', op: 'add' });
         const reactAdd = await b.waitFor(
           (e) =>
             e.type === 'react' &&
