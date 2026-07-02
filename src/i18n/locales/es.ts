@@ -336,6 +336,7 @@ const es = {
     connecting: 'Conectando…',
     disconnected: 'Sin conexión',
     empty: 'Aún no hay mensajes: ¡saluda!',
+    emptyHint: 'Sé el primero en publicar',
     composerPlaceholder: 'Escribe a la comunidad…',
     composerVerifying: 'Comprobando actividad en el pool…',
     composerReadOnly: 'Añade tu dirección de Bitcoin para publicar',

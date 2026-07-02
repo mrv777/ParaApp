@@ -344,6 +344,18 @@ async function main(): Promise<void> {
         skip('message carries nickname', 'no token');
       }
 
+      // Whitespace normalization: runs of blank lines collapse to one newline.
+      await sleep(1600);
+      authed.send({ type: 'msg', body: 'smoke A\n\n\n\n\nB' });
+      const nlBroadcast = await b.waitFor(
+        (e) => e.type === 'msg' && e.body.startsWith('smoke A') && e.body.includes('B')
+      );
+      check(
+        'excess line breaks collapsed',
+        nlBroadcast?.type === 'msg' && nlBroadcast.body === 'smoke A\nB',
+        nlBroadcast?.type === 'msg' ? JSON.stringify(nlBroadcast.body) : 'no broadcast'
+      );
+
       // Moderation (Phase 5): profane message rejected inline.
       await sleep(1600); // respect message min-gap
       authed.send({ type: 'msg', body: 'fuck this test' });

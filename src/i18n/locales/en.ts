@@ -379,6 +379,7 @@ const en = {
     connecting: 'Connecting…',
     disconnected: 'Offline',
     empty: 'No messages yet — say hi!',
+    emptyHint: 'Be the first to post',
     composerPlaceholder: 'Message the community…',
     composerVerifying: 'Checking pool activity…',
     composerReadOnly: 'Add your Bitcoin address to post',

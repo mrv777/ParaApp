@@ -54,6 +54,9 @@ import {
 } from '@/constants/chat';
 import type { MainTabScreenProps } from '@/types/navigation';
 
+const MIN_INPUT_HEIGHT = 40;
+const MAX_INPUT_HEIGHT = 120;
+
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], {
     hour: '2-digit',
@@ -94,11 +97,7 @@ const MessageBubble = memo(function MessageBubble({
     >
       <View className="px-4 py-2">
         <View className="flex-row items-baseline justify-between mb-0.5">
-          <Text
-            variant="caption"
-            className="font-mono"
-            color={isOwn ? 'default' : 'muted'}
-          >
+          <Text variant="caption" color={isOwn ? 'default' : 'muted'}>
             {sender}
           </Text>
           <Text variant="caption" color="muted">
@@ -120,8 +119,10 @@ const MessageBubble = memo(function MessageBubble({
                 }
                 className="flex-row items-center mr-2 mt-1 px-2 py-0.5 border"
                 style={{
-                  borderColor: r.mine ? colors.text : colors.border,
-                  backgroundColor: r.mine ? colors.surfaceElevated : 'transparent',
+                  borderColor: r.mine ? colors.primary : colors.border,
+                  backgroundColor: r.mine
+                    ? colors.surfaceElevated
+                    : colors.transparent,
                 }}
               >
                 <Text variant="caption" color="default">{`${r.emoji} ${r.count}`}</Text>
@@ -161,6 +162,7 @@ export function ChatScreen({ navigation }: Props) {
   const setChatEulaVersion = useSettingsStore((s) => s.setChatEulaVersion);
 
   const [input, setInput] = useState('');
+  const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const [actionMessage, setActionMessage] = useState<ChatMessage | null>(null);
   const [nicknameOpen, setNicknameOpen] = useState(false);
   const [eulaOpen, setEulaOpen] = useState(false);
@@ -183,6 +185,7 @@ export function ChatScreen({ navigation }: Props) {
     (body: string) => {
       if (sendMessage(body)) {
         setInput('');
+        setInputHeight(MIN_INPUT_HEIGHT); // shrink back after sending
         haptics.light();
       } else {
         haptics.warning();
@@ -269,7 +272,7 @@ export function ChatScreen({ navigation }: Props) {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-        <Text variant="subtitle">{t('chat.title')}</Text>
+        <Text variant="title">{t('chat.title')}</Text>
         <View className="flex-row items-center">
           <View
             style={{
@@ -342,9 +345,20 @@ export function ChatScreen({ navigation }: Props) {
           ListEmptyComponent={
             // Counter-flip: `inverted` mirrors the list, which would otherwise
             // render the empty state upside-down.
-            <View style={{ transform: [{ scaleY: -1 }] }}>
-              <Text variant="body" color="muted" align="center">
+            <View
+              style={{ transform: [{ scaleY: -1 }] }}
+              className="items-center px-8"
+            >
+              <Ionicons
+                name="chatbubbles-outline"
+                size={48}
+                color={colors.textMuted}
+              />
+              <Text variant="body" color="default" align="center" className="mt-3">
                 {t('chat.empty')}
+              </Text>
+              <Text variant="caption" color="muted" align="center" className="mt-1">
+                {t('chat.emptyHint')}
               </Text>
             </View>
           }
@@ -352,16 +366,27 @@ export function ChatScreen({ navigation }: Props) {
 
         {/* Composer, or a read-only bar explaining why posting is unavailable. */}
         {canPost ? (
-          <View className="flex-row items-end px-3 py-2 border-t border-border">
+          <View className="flex-row items-end px-4 py-2 border-t border-border">
             <TextInput
-              className="flex-1 text-foreground px-3 py-2"
-              style={{ fontFamily: 'SpaceGrotesk_400Regular', maxHeight: 120 }}
+              className="flex-1 text-foreground py-2"
+              style={{
+                fontFamily: 'SpaceGrotesk_400Regular',
+                height: inputHeight,
+              }}
               placeholder={t('chat.composerPlaceholder')}
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}
               multiline
               maxLength={MAX_MESSAGE_LENGTH}
+              onContentSizeChange={(e) =>
+                setInputHeight(
+                  Math.min(
+                    MAX_INPUT_HEIGHT,
+                    Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height)
+                  )
+                )
+              }
               onSubmitEditing={handleSend}
               blurOnSubmit={false}
               returnKeyType="send"

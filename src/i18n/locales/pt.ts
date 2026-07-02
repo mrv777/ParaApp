@@ -336,6 +336,7 @@ const pt = {
     connecting: 'Conectando…',
     disconnected: 'Off-line',
     empty: 'Ainda não há mensagens — diga olá!',
+    emptyHint: 'Seja o primeiro a publicar',
     composerPlaceholder: 'Escreva para a comunidade…',
     composerVerifying: 'Verificando atividade no pool…',
     composerReadOnly: 'Adicione seu endereço Bitcoin para publicar',

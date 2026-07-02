@@ -88,6 +88,9 @@ export function useChatSocket(): UseChatSocketReturn {
   const tokenRef = useRef<string | null>(null);
   const attemptsRef = useRef(0);
   const shouldConnectRef = useRef(false);
+  // Bumped on every connect(); an in-flight connect bails if superseded, so a
+  // reconnect during the async token fetch can't orphan a second live socket.
+  const generationRef = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,6 +153,7 @@ export function useChatSocket(): UseChatSocketReturn {
 
   const connect = useCallback(async () => {
     if (!shouldConnectRef.current) return;
+    const gen = ++generationRef.current; // supersede any in-flight connect
     // Tear down any existing socket first (silent — no reconnect).
     detachAndClose(wsRef.current);
     wsRef.current = null;
@@ -170,7 +174,8 @@ export function useChatSocket(): UseChatSocketReturn {
     } else {
       setGateDenied(false);
     }
-    if (!shouldConnectRef.current) return; // backgrounded during the await
+    // Bail if backgrounded or superseded by a newer connect during the await.
+    if (!shouldConnectRef.current || gen !== generationRef.current) return;
     tokenRef.current = token;
     setToken(token);
     setCanPost(!!token);

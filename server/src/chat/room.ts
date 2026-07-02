@@ -29,6 +29,17 @@ interface SocketAttachment {
   blocked: string[];
 }
 
+/**
+ * Collapse whitespace so a message can't be a wall of blank lines: strip
+ * per-line trailing spaces and reduce any run of newlines to a single one.
+ */
+function normalizeBody(raw: string): string {
+  return raw
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
 // Rate limit: 1 message / 1.5s and 10 messages / 60s per address.
 const MIN_GAP_MS = 1500;
 const WINDOW_MS = 60_000;
@@ -131,7 +142,7 @@ export class ChatRoom {
     if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
     if (!this.allowSend(address)) return this.sendError(ws, 'rate_limited');
 
-    const body = (rawBody ?? '').trim();
+    const body = normalizeBody(rawBody ?? '');
     if (!body || body.length > MAX_MESSAGE_LENGTH) {
       return this.sendError(ws, 'bad_body');
     }

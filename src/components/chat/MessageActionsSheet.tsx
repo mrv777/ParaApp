@@ -43,7 +43,7 @@ export function MessageActionsSheet({
   return (
     <Sheet visible={!!message} onClose={onClose}>
       <View className="px-4 pt-2 pb-4">
-        <Text variant="caption" color="muted" className="mb-3 font-mono">
+        <Text variant="caption" color="muted" className="mb-3">
           {sender}
         </Text>
 
@@ -56,10 +56,10 @@ export function MessageActionsSheet({
               accessibilityRole="button"
               className="mr-2 px-3 py-2 border"
               style={{
-                borderColor: mineFor(emoji) ? colors.text : colors.border,
+                borderColor: mineFor(emoji) ? colors.primary : colors.border,
                 backgroundColor: mineFor(emoji)
                   ? colors.surfaceElevated
-                  : 'transparent',
+                  : colors.transparent,
               }}
             >
               <Text variant="body">{emoji}</Text>

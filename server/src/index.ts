@@ -17,6 +17,7 @@ import {
   passesActivityGate,
   issueSessionToken,
   verifySessionToken,
+  timingSafeEqual,
 } from './chat/identity';
 import {
   getRecentMessages,
@@ -418,6 +419,9 @@ app.post('/chat/report', async (c) => {
     if (!verified) {
       return c.json({ success: false, error: 'Invalid or expired token' }, 401);
     }
+    if (await isBanned(c.env.DB, verified.address)) {
+      return c.json({ success: false, error: 'This address is banned from chat' }, 403);
+    }
     await addReport(c.env.DB, {
       id: crypto.randomUUID(),
       messageId: result.data.messageId,
@@ -525,7 +529,7 @@ app.get('/chat/admin', (c) => c.html(adminPageHtml()));
 
 app.use('/chat/admin/*', async (c, next) => {
   const secret = c.req.header('X-Admin-Secret');
-  if (!secret || secret !== c.env.ADMIN_SECRET) {
+  if (!secret || !timingSafeEqual(secret, c.env.ADMIN_SECRET ?? '')) {
     return c.json({ success: false, error: 'Unauthorized' }, 401);
   }
   await next();

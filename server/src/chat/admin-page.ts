@@ -68,7 +68,7 @@ export function adminPageHtml(): string {
     const { data } = await res.json();
     const reports = (data && data.reports) || [];
     setStatus(reports.length + ' open');
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]));
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&#34;',"'":'&#39;' }[c]));
     document.getElementById('reports').innerHTML = reports.map((r) => \`
       <div class="report" id="report-\${esc(r.id)}">
         <div class="muted">reported \${new Date(r.created_at * 1000).toLocaleString()} · reason: \${esc(r.reason) || '—'}</div>
@@ -76,9 +76,9 @@ export function adminPageHtml(): string {
         <div class="mono muted">sender: \${esc(r.message_address) || '—'}</div>
         <div class="mono muted">reporter: \${esc(r.reporter)}</div>
         <div class="row">
-          <button class="danger" onclick="delMsg('\${esc(r.message_id)}','\${esc(r.id)}')">Delete message</button>
-          <button class="danger" onclick="ban('\${esc(r.message_address)}','\${esc(r.id)}')" \${r.message_address ? '' : 'disabled'}>Ban sender</button>
-          <button onclick="resolve('\${esc(r.id)}')">Dismiss</button>
+          <button class="danger" data-act="del" data-mid="\${esc(r.message_id)}" data-rid="\${esc(r.id)}">Delete message</button>
+          <button class="danger" data-act="ban" data-addr="\${esc(r.message_address)}" data-rid="\${esc(r.id)}" \${r.message_address ? '' : 'disabled'}>Ban sender</button>
+          <button data-act="resolve" data-rid="\${esc(r.id)}">Dismiss</button>
         </div>
       </div>\`).join('') || '<p class="muted">No open reports.</p>';
   }
@@ -108,6 +108,15 @@ export function adminPageHtml(): string {
     if (res.ok) { const el = document.getElementById('report-' + reportId); if (el) el.remove(); if (!silent) setStatus('dismissed'); }
     else setStatus('resolve failed ' + res.status);
   }
+  // Delegated handlers (no inline JS built from report data — avoids injection).
+  document.getElementById('reports').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    const d = btn.dataset;
+    if (d.act === 'del') delMsg(d.mid, d.rid);
+    else if (d.act === 'ban') ban(d.addr, d.rid);
+    else if (d.act === 'resolve') resolve(d.rid);
+  });
 </script>
 </body>
 </html>`;

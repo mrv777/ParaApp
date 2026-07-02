@@ -15,6 +15,8 @@ export type ChatConnectionState =
   | 'disconnected';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
+/** Cap the in-memory list so a long-lived foreground session stays bounded. */
+const MAX_MESSAGES = 200;
 
 interface ChatState {
   messages: ChatMessage[]; // newest-first (index 0 = newest), matches inverted FlatList
@@ -60,7 +62,9 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
       if (incoming.length === 0) return state;
       const byId = new Map(state.messages.map((m) => [m.id, m]));
       for (const message of incoming) byId.set(message.id, message);
-      const merged = Array.from(byId.values()).sort((a, b) => b.ts - a.ts);
+      const merged = Array.from(byId.values())
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, MAX_MESSAGES); // newest-first, keep the most recent N
       return { messages: merged };
     }),
 

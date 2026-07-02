@@ -53,7 +53,7 @@ async function hmacSign(secret: string, data: string): Promise<Uint8Array> {
 }
 
 /** Constant-time string compare (avoids leaking the signature via timing). */
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i);

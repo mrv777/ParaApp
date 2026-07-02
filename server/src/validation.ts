@@ -41,7 +41,9 @@ export const chatNicknameSchema = z.object({
 
 export const chatReportSchema = z.object({
   token: z.string().min(1),
-  messageId: z.string().min(1),
+  // UUID only — message ids are crypto.randomUUID(). Also prevents crafted ids
+  // from reaching the admin page (defense against HTML/JS-context injection).
+  messageId: z.string().uuid(),
   reason: z.string().max(500).optional(),
 });
 

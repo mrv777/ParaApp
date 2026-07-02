@@ -8,6 +8,7 @@ import { View, Pressable, Linking } from 'react-native';
 import { Sheet } from '@/components/Sheet';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
+import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import { CHAT_LEGAL_URLS } from '@/constants/chat';
 
@@ -22,7 +23,7 @@ export function EulaSheet({ visible, onAccept, onClose }: EulaSheetProps) {
 
   const link = (label: string, url: string) => (
     <Pressable onPress={() => Linking.openURL(url)} accessibilityRole="link">
-      <Text variant="caption" color="success" className="py-1">
+      <Text variant="caption" className="py-1" style={{ color: colors.info }}>
         {label} ↗
       </Text>
     </Pressable>

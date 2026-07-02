@@ -336,6 +336,7 @@ const fr = {
     connecting: 'Connexion…',
     disconnected: 'Hors ligne',
     empty: 'Aucun message pour l’instant — dites bonjour !',
+    emptyHint: 'Soyez le premier à publier',
     composerPlaceholder: 'Écrire à la communauté…',
     composerVerifying: 'Vérification de l’activité du pool…',
     composerReadOnly: 'Ajoutez votre adresse Bitcoin pour publier',

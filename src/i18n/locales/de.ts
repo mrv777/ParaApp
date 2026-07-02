@@ -336,6 +336,7 @@ const de = {
     connecting: 'Verbinden…',
     disconnected: 'Offline',
     empty: 'Noch keine Nachrichten – sag Hallo!',
+    emptyHint: 'Sei der Erste, der etwas postet',
     composerPlaceholder: 'Schreibe der Community…',
     composerVerifying: 'Pool-Aktivität wird geprüft…',
     composerReadOnly: 'Bitcoin-Adresse hinzufügen, um zu posten',
