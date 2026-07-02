@@ -27,6 +27,7 @@ import {
   claimCronTick,
   pruneCronRuns,
 } from './db';
+import { pruneChatMessages } from './chat/db';
 import { getUser, getPoolStats } from './parasite-api';
 import {
   sendPushNotifications,
@@ -50,6 +51,8 @@ const WIDGET_PUSH_INTERVAL_SECONDS = 2 * 60 * 60;
 // Per-device floor between event-driven widget refreshes, so frequent events
 // (e.g. blocks on a busy pool) can't blow the silent-push budget.
 const WIDGET_EVENT_MIN_INTERVAL_SECONDS = 15 * 60;
+// Community chat: rolling 30-day message retention.
+const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Whether a subscription should receive an event-driven silent widget refresh
@@ -143,6 +146,16 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     await pruneCronRuns(env.DB, scheduledTime - 60 * 60 * 1000);
   } catch (error) {
     console.error('Cron tick claim error, proceeding anyway:', error);
+  }
+
+  // Community-chat retention: prune messages (+ their reactions) older than 30
+  // days. Cheap when nothing is due (created_at indexed); isolated so a failure
+  // never blocks notifications.
+  try {
+    const pruned = await pruneChatMessages(env.DB, Date.now() - CHAT_RETENTION_MS);
+    if (pruned > 0) console.log(`Pruned ${pruned} chat messages (30d retention)`);
+  } catch (error) {
+    console.error('Chat retention prune error:', error);
   }
 
   const allMessages: ExpoPushMessage[] = [];

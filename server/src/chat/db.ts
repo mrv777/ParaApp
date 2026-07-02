@@ -171,6 +171,29 @@ export async function getReactionsForMessages(
   return byMessage;
 }
 
+/**
+ * Retention prune: delete chat messages older than the cutoff and cascade to
+ * their reactions. chat_messages.created_at is MILLISECONDS, so pass a ms
+ * threshold. Returns the number of messages deleted. Cheap when nothing is due
+ * (created_at is indexed), so it's safe to run every cron tick.
+ */
+export async function pruneChatMessages(
+  db: D1Database,
+  olderThanMs: number
+): Promise<number> {
+  await db
+    .prepare(
+      'DELETE FROM chat_reactions WHERE message_id IN (SELECT id FROM chat_messages WHERE created_at < ?)'
+    )
+    .bind(olderThanMs)
+    .run();
+  const result = await db
+    .prepare('DELETE FROM chat_messages WHERE created_at < ?')
+    .bind(olderThanMs)
+    .run();
+  return result.meta?.changes ?? 0;
+}
+
 export async function isBanned(
   db: D1Database,
   address: string
