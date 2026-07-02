@@ -54,7 +54,8 @@ const es = {
     tapToExpand: 'Toca para expandir',
     tipAddDevices: 'Añade dispositivos en la pestaña de mineros para gestionarlos',
     trackStats: 'Rastrea tus Estadísticas',
-    trackStatsDesc: 'Añade tu dirección de Bitcoin para ver tu hashrate, workers y progreso de minería',
+    trackStatsDesc:
+      'Añade tu dirección de Bitcoin para ver tu hashrate, workers y progreso de minería',
     addBitcoinAddress: 'Añadir Dirección Bitcoin',
     miningStats: 'Estadísticas de Minería',
     currentHashrate: 'Hashrate Actual',
@@ -85,8 +86,7 @@ const es = {
       'Arriba: tu rango de dificultad. Abajo: tu mejor share (mayor dificultad) de esa ronda.',
     roundsInfoWorkDesc:
       'Arriba: tu rango de trabajo. Abajo: el trabajo total (shares) que enviaste esa ronda.',
-    roundsInfoBlocksDesc:
-      'Arriba: tu rango de lealtad. Abajo: bloques en los que participaste.',
+    roundsInfoBlocksDesc: 'Arriba: tu rango de lealtad. Abajo: bloques en los que participaste.',
     poolOverview: 'Resumen del Pool',
     noWorkersFound: 'No se encontraron workers',
     workersAppearHint: 'Los workers aparecerán cuando envíen shares',
@@ -320,7 +320,8 @@ const es = {
     blockNotifications: 'Bloque del Pool Encontrado',
     workerNotifications: 'Estado del Worker',
     bestDiffNotifications: 'Nueva Mejor Dificultad',
-    notificationsDenied: 'Los permisos de notificación fueron denegados. Actívalos en los ajustes del sistema para recibir alertas.',
+    notificationsDenied:
+      'Los permisos de notificación fueron denegados. Actívalos en los ajustes del sistema para recibir alertas.',
     widgets: 'Widgets',
     widgetUpdates: 'Actualizaciones de widgets',
     widgetUpdatesDesc:
@@ -334,6 +335,8 @@ const es = {
     title: 'Chat',
     pinnedLabel: 'FIJADO · POOL',
     online: '{{count}} en línea',
+    dateToday: 'Hoy',
+    dateYesterday: 'Ayer',
     connecting: 'Conectando…',
     disconnected: 'Sin conexión',
     empty: 'Aún no hay mensajes: ¡saluda!',
@@ -378,7 +381,8 @@ const es = {
     instruction: 'Apunta la cámara al código QR de la dirección Bitcoin',
     loadingCamera: 'Cargando cámara...',
     cameraRequired: 'Acceso a Cámara Requerido',
-    cameraRequiredDesc: 'Permite el acceso a la cámara para escanear códigos QR de direcciones Bitcoin',
+    cameraRequiredDesc:
+      'Permite el acceso a la cámara para escanear códigos QR de direcciones Bitcoin',
     allowCamera: 'Permitir Acceso a Cámara',
     cameraDenied: 'El permiso de cámara fue denegado. Por favor, habilítalo en Ajustes.',
     openSettings: 'Abrir Ajustes',

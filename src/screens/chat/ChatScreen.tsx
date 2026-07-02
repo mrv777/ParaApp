@@ -16,27 +16,24 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text as RNText,
-  FlatList,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  type ListRenderItem,
+  ActivityIndicator,
 } from 'react-native';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 import { NicknameSheet } from '@/components/chat/NicknameSheet';
 import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
 import { EulaSheet } from '@/components/chat/EulaSheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
-import {
-  reportChatMessage,
-  blockChatAddress,
-  acceptChatEula,
-} from '@/api/chat';
+import { reportChatMessage, blockChatAddress, acceptChatEula } from '@/api/chat';
 import {
   useChatStore,
   selectChatMessages,
@@ -52,7 +49,8 @@ import {
   selectChatEulaVersion,
 } from '@/store/settingsStore';
 import { colors } from '@/constants/colors';
-import { truncateAddress } from '@/utils/formatting';
+import { truncateAddress, formatDateDivider, isSameLocalDay } from '@/utils/formatting';
+import { sanitizeDisplayBody } from '@/utils/messageText';
 import { haptics } from '@/utils/haptics';
 import { glyphCells } from '@/utils/identicon';
 import { ReactionGlyph } from '@/components/chat/ReactionGlyph';
@@ -104,13 +102,7 @@ const CONNECTION_DOT: Record<ChatConnectionState, string> = {
 };
 
 /** Deterministic 5×5 block-glyph avatar derived from the sender's address. */
-const Identicon = memo(function Identicon({
-  address,
-  self,
-}: {
-  address: string;
-  self: boolean;
-}) {
+const Identicon = memo(function Identicon({ address, self }: { address: string; self: boolean }) {
   const cells = useMemo(() => glyphCells(address, self), [address, self]);
   return (
     <View style={styles.identicon}>
@@ -129,6 +121,8 @@ interface RowProps {
   isOwn: boolean;
   youLabel: string;
   canReact: boolean;
+  /** Day-divider label to show above this row (first message of a new day), else null. */
+  dateLabel: string | null;
   onLongPress: (message: ChatMessage) => void;
   onToggleReaction: (id: string, emoji: ReactionEmoji, mine: boolean) => void;
 }
@@ -138,76 +132,90 @@ const MessageRow = memo(function MessageRow({
   isOwn,
   youLabel,
   canReact,
+  dateLabel,
   onLongPress,
   onToggleReaction,
 }: RowProps) {
-  const handle = isOwn
-    ? youLabel
-    : message.nickname || truncateAddress(message.address);
+  const handle = isOwn ? youLabel : message.nickname || truncateAddress(message.address);
+  const body = useMemo(() => sanitizeDisplayBody(message.body), [message.body]);
 
   return (
-    <Pressable
-      onLongPress={() => canReact && onLongPress(message)}
-      delayLongPress={300}
-      style={styles.row}
-    >
-      {/* Meta line: identicon · handle · spacer · timestamp */}
-      <View style={styles.meta}>
-        <Identicon address={message.address} self={isOwn} />
-        {isOwn ? (
-          <RNText style={styles.handleSelf}>{handle}</RNText>
-        ) : (
-          <RNText style={styles.handle}>{handle}</RNText>
-        )}
-        <View style={{ flex: 1 }} />
-        <RNText style={styles.time}>{formatTime(message.ts)}</RNText>
-      </View>
-
-      {/* Reply quote (only when the message references a parent). */}
-      {message.replyTo ? (
-        <View style={styles.replyQuote}>
-          <RNText style={styles.replyHandle}>{`↩ ${message.replyTo.senderDisplay}`}</RNText>
-          <RNText style={styles.replyPreview} numberOfLines={1}>
-            {message.replyTo.textPreview}
-          </RNText>
+    <>
+      {/* Day divider — first message of each local day. Outside the Pressable
+          so a long-press here doesn't open the message actions. */}
+      {dateLabel ? (
+        <View style={styles.dayDivider}>
+          <View style={styles.dayRule} />
+          <RNText style={styles.dayLabel}>{dateLabel}</RNText>
+          <View style={styles.dayRule} />
         </View>
       ) : null}
 
-      {/* Body */}
-      <RNText style={styles.body}>{message.body}</RNText>
+      <Pressable
+        onLongPress={() => canReact && onLongPress(message)}
+        delayLongPress={300}
+        style={styles.row}
+      >
+        {/* Meta line: identicon · handle · spacer · timestamp */}
+        <View style={styles.meta}>
+          <Identicon address={message.address} self={isOwn} />
+          {isOwn ? (
+            <RNText style={styles.handleSelf}>{handle}</RNText>
+          ) : (
+            <RNText style={styles.handle}>{handle}</RNText>
+          )}
+          <View style={{ flex: 1 }} />
+          <RNText style={styles.time}>{formatTime(message.ts)}</RNText>
+        </View>
 
-      {/* Reaction chips (tap to toggle). */}
-      {message.reactions && message.reactions.length > 0 ? (
-        <View style={styles.reactions}>
-          {message.reactions.map((r) => (
-            <Pressable
-              key={r.emoji}
-              onPress={() =>
-                canReact && onToggleReaction(message.id, r.emoji, !!r.mine)
-              }
-              style={[
-                styles.chip,
-                { borderColor: r.mine ? colors.primary : colors.border },
-              ]}
-            >
-              {/* Monochrome vector icon (color emoji don't render reliably and
+        {/* Reply quote (only when the message references a parent). */}
+        {message.replyTo ? (
+          <View style={styles.replyQuote}>
+            <RNText style={styles.replyHandle}>{`↩ ${message.replyTo.senderDisplay}`}</RNText>
+            <RNText style={styles.replyPreview} numberOfLines={1}>
+              {message.replyTo.textPreview}
+            </RNText>
+          </View>
+        ) : null}
+
+        {/* Body */}
+        <RNText style={styles.body}>{body}</RNText>
+
+        {/* Reaction chips (tap to toggle). */}
+        {message.reactions && message.reactions.length > 0 ? (
+          <View style={styles.reactions}>
+            {message.reactions.map((r) => (
+              <Pressable
+                key={r.emoji}
+                onPress={() => canReact && onToggleReaction(message.id, r.emoji, !!r.mine)}
+                style={[styles.chip, { borderColor: r.mine ? colors.primary : colors.border }]}
+              >
+                {/* Monochrome vector icon (color emoji don't render reliably and
                   clash with the theme); count stays mono. */}
-              <ReactionGlyph emoji={r.emoji} size={13} color={TEXT_BODY} />
-              <RNText style={styles.chipCount}>{` ${r.count}`}</RNText>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-    </Pressable>
+                <ReactionGlyph emoji={r.emoji} size={13} color={TEXT_BODY} />
+                <RNText style={styles.chipCount}>{` ${r.count}`}</RNText>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </Pressable>
+    </>
   );
 });
 
 const Separator = () => <View style={styles.separator} />;
 
+// Shown at the top of the feed while an older page is being fetched.
+const LoadingOlder = () => (
+  <View style={styles.loadingOlder}>
+    <ActivityIndicator size="small" color={TEXT_MUTED} />
+  </View>
+);
+
 type Props = MainTabScreenProps<'Chat'>;
 
 export function ChatScreen({ navigation }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     sendMessage,
     sendReaction,
@@ -217,9 +225,41 @@ export function ChatScreen({ navigation }: Props) {
     lastError,
     clearError,
     reconnect,
+    refresh,
+    loadOlder,
+    loadingOlder,
   } = useChatSocket();
 
+  // Reconcile history whenever the Chat tab regains focus. The screen stays
+  // mounted across tab switches (so the socket persists but backfill wouldn't
+  // re-run), and non-broadcast changes — admin edits, or anything missed during
+  // a hiccup — only surface on a fresh fetch.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
+
   const messages = useChatStore(selectChatMessages);
+
+  // Day dividers: a message gets a label only when it's the first of its local
+  // day (vs the previous, older message). Precomputed as id → label so the row
+  // renderer stays a cheap lookup and `data` remains pure messages (keeps
+  // pagination / reactions / scroll-anchoring untouched). O(n), n ≤ MAX_MESSAGES.
+  const dividerById = useMemo(() => {
+    const map = new Map<string, string>();
+    const today = t('chat.dateToday');
+    const yesterday = t('chat.dateYesterday');
+    for (let i = 0; i < messages.length; i++) {
+      const cur = messages[i];
+      const prev = messages[i - 1];
+      if (!prev || !isSameLocalDay(prev.ts, cur.ts)) {
+        map.set(cur.id, formatDateDivider(cur.ts, today, yesterday, i18n.language));
+      }
+    }
+    return map;
+  }, [messages, t, i18n.language]);
+
   const online = useChatStore(selectChatOnline);
   const connectionState = useChatStore(selectChatConnectionState);
   const announcement = useChatStore(selectChatAnnouncement);
@@ -331,18 +371,19 @@ export function ChatScreen({ navigation }: Props) {
     [token, removeMessagesFrom, reconnect, t]
   );
 
-  const renderItem = useCallback<ListRenderItem<ChatMessage>>(
-    ({ item }) => (
+  const renderItem = useCallback(
+    ({ item }: LegendListRenderItemProps<ChatMessage>) => (
       <MessageRow
         message={item}
         isOwn={!!address && item.address === address}
         youLabel={t('common.you')}
         canReact={canPost}
+        dateLabel={dividerById.get(item.id) ?? null}
         onLongPress={handleLongPress}
         onToggleReaction={handleToggleReaction}
       />
     ),
-    [address, t, canPost, handleLongPress, handleToggleReaction]
+    [address, t, canPost, dividerById, handleLongPress, handleToggleReaction]
   );
 
   const online_ =
@@ -359,12 +400,7 @@ export function ChatScreen({ navigation }: Props) {
         <RNText style={styles.title}>{t('chat.title')}</RNText>
         <View style={styles.headerRight}>
           <View style={styles.online}>
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: CONNECTION_DOT[connectionState] },
-              ]}
-            />
+            <View style={[styles.dot, { backgroundColor: CONNECTION_DOT[connectionState] }]} />
             <RNText style={styles.onlineText}>{online_}</RNText>
           </View>
           <Pressable
@@ -373,28 +409,21 @@ export function ChatScreen({ navigation }: Props) {
             accessibilityLabel={t('chat.nickname')}
             hitSlop={8}
           >
-            <Ionicons
-              name="person-circle-outline"
-              size={24}
-              color={TEXT_MUTED}
-            />
+            <Ionicons name="person-circle-outline" size={24} color={TEXT_MUTED} />
           </Pressable>
         </View>
       </View>
 
-      {/* Pinned announcement (admin) — hidden entirely when none. */}
+      {/* Pinned announcement (admin) — just pin + message; hidden when none. */}
       {announcement ? (
         <View style={styles.pinned}>
-          <Ionicons
+          <MaterialCommunityIcons
             name="pin"
-            size={12}
+            size={15}
             color={TEXT_MUTED}
             style={{ marginTop: 1 }}
           />
-          <View style={{ flex: 1 }}>
-            <RNText style={styles.pinnedLabel}>{t('chat.pinnedLabel')}</RNText>
-            <RNText style={styles.pinnedBody}>{announcement}</RNText>
-          </View>
+          <RNText style={styles.pinnedBody}>{sanitizeDisplayBody(announcement)}</RNText>
         </View>
       ) : null}
 
@@ -402,15 +431,26 @@ export function ChatScreen({ navigation }: Props) {
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Bottom-anchored feed (inverted: newest at the bottom). */}
-        <FlatList
+        {/* Bottom-anchored feed (newest at the bottom via alignItemsAtEnd).
+            Scroll to the top pages older history; maintainVisibleContentPosition
+            keeps the viewport steady as older messages prepend. */}
+        <LegendList
           data={messages}
-          inverted
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           extraData={canPost}
+          recycleItems
           ItemSeparatorComponent={Separator}
           contentContainerStyle={styles.feedContent}
+          style={styles.feed}
+          alignItemsAtEnd
+          initialScrollAtEnd
+          maintainScrollAtEnd
+          maintainScrollAtEndThreshold={0.1}
+          maintainVisibleContentPosition={{ size: true, data: true }}
+          onStartReached={loadOlder}
+          onStartReachedThreshold={0.2}
+          ListHeaderComponent={loadingOlder ? <LoadingOlder /> : null}
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
         />
@@ -491,11 +531,7 @@ export function ChatScreen({ navigation }: Props) {
         )}
       </KeyboardAvoidingView>
 
-      <NicknameSheet
-        visible={nicknameOpen}
-        onClose={() => setNicknameOpen(false)}
-        token={token}
-      />
+      <NicknameSheet visible={nicknameOpen} onClose={() => setNicknameOpen(false)} token={token} />
 
       <MessageActionsSheet
         message={actionMessage}
@@ -551,25 +587,39 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
-  pinnedLabel: {
-    fontFamily: MONO,
-    fontSize: 9,
-    letterSpacing: 1.44,
-    color: TEXT_MUTED,
-  },
   pinnedBody: {
+    flex: 1,
     fontFamily: GROTESK,
     fontSize: 12.5,
     color: TEXT_PINNED,
-    marginTop: 2,
     lineHeight: 17,
   },
 
   // Feed / rows
   // Inverted list: newest at index 0 renders at the bottom, and short content
   // naturally rests at the bottom of the viewport (iMessage-style anchoring).
+  feed: { flex: 1, minHeight: 0 },
   feedContent: { paddingVertical: 8 },
+  loadingOlder: { paddingVertical: 12, alignItems: 'center' },
   separator: { height: 1, backgroundColor: HAIRLINE },
+
+  // Day divider: centered mono label between hairline rules.
+  dayDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 6,
+  },
+  dayRule: { flex: 1, height: 1, backgroundColor: PIN_BORDER },
+  dayLabel: {
+    fontFamily: MONO,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: TEXT_MUTED,
+    textTransform: 'uppercase',
+  },
   row: { paddingVertical: 9, paddingHorizontal: 20 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   identicon: {

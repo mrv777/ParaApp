@@ -54,7 +54,8 @@ const pt = {
     tapToExpand: 'Toque para expandir',
     tipAddDevices: 'Adicione dispositivos na aba mineradores para gerenciá-los',
     trackStats: 'Acompanhe suas estatísticas de mineração',
-    trackStatsDesc: 'Adicione seu endereço Bitcoin para ver sua hashrate, workers e progresso de mineração',
+    trackStatsDesc:
+      'Adicione seu endereço Bitcoin para ver sua hashrate, workers e progresso de mineração',
     addBitcoinAddress: 'Adicionar endereço Bitcoin',
     miningStats: 'Estatísticas de mineração',
     currentHashrate: 'Hashrate atual',
@@ -85,8 +86,7 @@ const pt = {
       'Topo: seu rank de dificuldade. Base: seu melhor share (maior dificuldade) daquela rodada.',
     roundsInfoWorkDesc:
       'Topo: seu rank de trabalho. Base: trabalho total (shares) que você enviou naquela rodada.',
-    roundsInfoBlocksDesc:
-      'Topo: seu rank de lealdade. Base: blocos dos quais você participou.',
+    roundsInfoBlocksDesc: 'Topo: seu rank de lealdade. Base: blocos dos quais você participou.',
     poolOverview: 'Visão geral do pool',
     noWorkersFound: 'Nenhum worker encontrado',
     workersAppearHint: 'Os workers aparecerão quando enviarem shares',
@@ -200,7 +200,8 @@ const pt = {
     onlineCount: '{{online}} de {{total}} online',
     tipSwipeRemove: 'Deslize para a esquerda em um minerador para removê-lo',
     noMinersFound: 'Nenhum minerador encontrado',
-    noMinersFoundDesc: 'Escaneie sua rede para descobrir mineradores, ou adicione um manualmente por IP.',
+    noMinersFoundDesc:
+      'Escaneie sua rede para descobrir mineradores, ou adicione um manualmente por IP.',
     discoverMiners: 'Descobrir mineradores',
     scanningProgress: 'Escaneando: {{scanned}}/{{total}}',
     foundCount: 'Encontrados: {{count}}',
@@ -231,7 +232,8 @@ const pt = {
     pendingChanges: 'Alterações pendentes',
     applyingSettings: 'Aplicando configurações...',
     loadingConfig: 'Carregando configuração...',
-    hardwareUnavailable: 'Configurações de hardware indisponíveis. Você ainda pode configurar as opções do pool.',
+    hardwareUnavailable:
+      'Configurações de hardware indisponíveis. Você ainda pode configurar as opções do pool.',
     minerIsOffline: 'O minerador está offline',
     lastSeen: 'Visto por último',
     lastBestDiff: 'Última melhor dif.',
@@ -320,7 +322,8 @@ const pt = {
     blockNotifications: 'Bloco do Pool Encontrado',
     workerNotifications: 'Status do Worker',
     bestDiffNotifications: 'Nova Melhor Dificuldade',
-    notificationsDenied: 'As permissões de notificação foram negadas. Ative-as nas configurações do sistema para receber alertas.',
+    notificationsDenied:
+      'As permissões de notificação foram negadas. Ative-as nas configurações do sistema para receber alertas.',
     widgets: 'Widgets',
     widgetUpdates: 'Atualizações de widgets',
     widgetUpdatesDesc:
@@ -334,6 +337,8 @@ const pt = {
     title: 'Chat',
     pinnedLabel: 'FIXADO · POOL',
     online: '{{count}} on-line',
+    dateToday: 'Hoje',
+    dateYesterday: 'Ontem',
     connecting: 'Conectando…',
     disconnected: 'Off-line',
     empty: 'Ainda não há mensagens — diga olá!',

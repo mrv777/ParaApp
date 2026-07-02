@@ -15,11 +15,16 @@ export type ChatConnectionState =
   | 'disconnected';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
-/** Cap the in-memory list so a long-lived foreground session stays bounded. */
-const MAX_MESSAGES = 200;
+/**
+ * Cap the in-memory list so a long-lived foreground session stays bounded. Also
+ * doubles as the max scroll-back depth: paging older stops once the buffer is
+ * full (see useChatSocket.loadOlder), since keep-newest-N trimming would
+ * otherwise drop the very messages just fetched.
+ */
+export const MAX_MESSAGES = 1000;
 
 interface ChatState {
-  messages: ChatMessage[]; // newest-first (index 0 = newest), matches inverted FlatList
+  messages: ChatMessage[]; // oldest-first (index 0 = oldest), matches LegendList alignItemsAtEnd
   online: number;
   connectionState: ChatConnectionState;
   announcement: string | null; // admin banner shown at the top (null = none)
@@ -41,6 +46,8 @@ interface ChatActions {
   ) => void;
   /** Optimistically drop a blocked address's messages (server enforces on reconnect). */
   removeMessagesFrom: (address: string) => void;
+  /** Drop a single message by id (admin moderation delete, pushed over the socket). */
+  removeMessage: (id: string) => void;
   setOnline: (online: number) => void;
   setConnectionState: (state: ChatConnectionState) => void;
   setAnnouncement: (announcement: string | null) => void;
@@ -63,8 +70,8 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
       const byId = new Map(state.messages.map((m) => [m.id, m]));
       for (const message of incoming) byId.set(message.id, message);
       const merged = Array.from(byId.values())
-        .sort((a, b) => b.ts - a.ts)
-        .slice(0, MAX_MESSAGES); // newest-first, keep the most recent N
+        .sort((a, b) => a.ts - b.ts)
+        .slice(-MAX_MESSAGES); // oldest-first, keep the most recent N
       return { messages: merged };
     }),
 
@@ -102,6 +109,14 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
         : { messages: filtered };
     }),
 
+  removeMessage: (id) =>
+    set((state) => {
+      const filtered = state.messages.filter((m) => m.id !== id);
+      return filtered.length === state.messages.length
+        ? state
+        : { messages: filtered };
+    }),
+
   setOnline: (online) => set({ online }),
 
   setConnectionState: (connectionState) => set({ connectionState }),
@@ -119,6 +134,4 @@ export const selectChatConnectionState = (state: ChatState) =>
 export const selectChatAnnouncement = (state: ChatState) => state.announcement;
 /** Oldest ts loaded — exclusive cursor for paging further back. */
 export const selectOldestTs = (state: ChatState): number | undefined =>
-  state.messages.length
-    ? state.messages[state.messages.length - 1].ts
-    : undefined;
+  state.messages.length ? state.messages[0].ts : undefined;

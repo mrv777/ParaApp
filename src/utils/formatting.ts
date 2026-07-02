@@ -43,10 +43,7 @@ export function formatHashrate(hashrate: number): string {
  * @param unit - Display unit preference
  * @returns Formatted string like "65°C" or "149°F"
  */
-export function formatTemperature(
-  tempCelsius: number,
-  unit: TemperatureUnit = 'celsius'
-): string {
+export function formatTemperature(tempCelsius: number, unit: TemperatureUnit = 'celsius'): string {
   if (!Number.isFinite(tempCelsius)) return '--°';
 
   if (unit === 'fahrenheit') {
@@ -115,6 +112,44 @@ export function formatTimestamp(timestamp: number): string {
   const minutes = date.getMinutes().toString().padStart(2, '0');
 
   return `${month} ${day}, ${hours}:${minutes}`;
+}
+
+/** True when two epoch-ms timestamps fall on the same local calendar day. */
+export function isSameLocalDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
+
+/**
+ * Label for a chat day-divider: "Today" / "Yesterday" (caller passes the
+ * localized words) else a localized date — weekday+month+day within this year,
+ * with the year appended for older messages.
+ */
+export function formatDateDivider(
+  ts: number,
+  todayLabel: string,
+  yesterdayLabel: string,
+  locale?: string
+): string {
+  const now = Date.now();
+  if (isSameLocalDay(ts, now)) return todayLabel;
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1); // DST-safe (calendar-day step)
+  if (isSameLocalDay(ts, yesterday.getTime())) return yesterdayLabel;
+
+  const d = new Date(ts);
+  const sameYear = d.getFullYear() === new Date(now).getFullYear();
+  return d.toLocaleDateString(
+    locale,
+    sameYear
+      ? { weekday: 'short', month: 'short', day: 'numeric' }
+      : { year: 'numeric', month: 'short', day: 'numeric' }
+  );
 }
 
 /**
@@ -217,9 +252,7 @@ export function truncateWorker(worker: string, maxLength = 24): string {
     const workerName = worker.substring(dotIndex + 1);
     // Truncate address, keep worker name
     const truncatedAddr =
-      address.length > 12
-        ? `${address.slice(0, 6)}...${address.slice(-4)}`
-        : address;
+      address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address;
     return `${truncatedAddr}.${workerName}`;
   }
 

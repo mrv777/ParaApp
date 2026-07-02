@@ -95,6 +95,7 @@ export type ServerEvent =
     }
   | { type: 'presence'; online: number }
   | { type: 'announcement'; body: string | null }
+  | { type: 'delete'; id: string }
   | { type: 'history'; messages: ChatMessage[] }
   | { type: 'error'; code: ChatErrorCode };
 

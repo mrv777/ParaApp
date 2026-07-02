@@ -84,8 +84,7 @@ const en = {
       'Top: your difficulty rank. Bottom: your best share (highest difficulty) that round.',
     roundsInfoWorkDesc:
       'Top: your work rank. Bottom: total work (shares) you submitted that round.',
-    roundsInfoBlocksDesc:
-      'Top: your loyalty rank. Bottom: blocks you participated in.',
+    roundsInfoBlocksDesc: 'Top: your loyalty rank. Bottom: blocks you participated in.',
     poolOverview: 'Pool Overview',
     noWorkersFound: 'No workers found',
     workersAppearHint: 'Workers will appear once they submit shares',
@@ -247,7 +246,8 @@ const en = {
     invalidStratumUrl: 'Invalid stratum URL (e.g. stratum.pool.com)',
     invalidPort: 'Port must be between 1 and 65535',
     workerTooLong: 'Worker name too long (max {{max}} chars)',
-    fallbackIncomplete: 'Fallback pool requires URL, port, and worker — fill all three or clear all three',
+    fallbackIncomplete:
+      'Fallback pool requires URL, port, and worker — fill all three or clear all three',
     poolChangeWarning: 'Pool changes can disconnect the miner. Verify carefully.',
     fixErrorsBeforeApply: 'Fix the errors above before applying',
     pendingChanges: 'Pending Changes',
@@ -319,8 +319,7 @@ const en = {
       "Pool config requires the device's web admin password. Default is 'admin'. Stored securely on this device only.",
     avalonAdminPasswordPlaceholder: 'admin',
     avalonPoolConfig: 'Pool Configuration',
-    avalonPoolConfigHint:
-      'Up to 3 pool slots. The miner will reboot to apply changes.',
+    avalonPoolConfigHint: 'Up to 3 pool slots. The miner will reboot to apply changes.',
     avalonPoolSlot: 'Pool {{n}}',
     swipeToSavePools: 'Swipe to save & reboot',
   },
@@ -363,7 +362,8 @@ const en = {
     blockNotifications: 'Pool Block Found',
     workerNotifications: 'Worker Status',
     bestDiffNotifications: 'New Best Difficulty',
-    notificationsDenied: 'Notification permissions were denied. Enable them in system settings to receive alerts.',
+    notificationsDenied:
+      'Notification permissions were denied. Enable them in system settings to receive alerts.',
     widgets: 'Widgets',
     widgetUpdates: 'Widget Updates',
     widgetUpdatesDesc:
@@ -377,6 +377,8 @@ const en = {
     title: 'Chat',
     pinnedLabel: 'PINNED · POOL',
     online: '{{count}} online',
+    dateToday: 'Today',
+    dateYesterday: 'Yesterday',
     connecting: 'Connecting…',
     disconnected: 'Offline',
     empty: 'No messages yet — say hi!',

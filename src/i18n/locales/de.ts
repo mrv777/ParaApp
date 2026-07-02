@@ -54,7 +54,8 @@ const de = {
     tapToExpand: 'Tippen zum Erweitern',
     tipAddDevices: 'Füge Geräte im Miner-Tab hinzu, um sie zu verwalten',
     trackStats: 'Verfolge deine Mining-Statistiken',
-    trackStatsDesc: 'Füge deine Bitcoin-Adresse hinzu, um deine Hashrate, Worker und Mining-Fortschritt zu sehen',
+    trackStatsDesc:
+      'Füge deine Bitcoin-Adresse hinzu, um deine Hashrate, Worker und Mining-Fortschritt zu sehen',
     addBitcoinAddress: 'Bitcoin-Adresse hinzufügen',
     miningStats: 'Mining-Statistiken',
     currentHashrate: 'Aktuelle Hashrate',
@@ -85,8 +86,7 @@ const de = {
       'Oben: dein Schwierigkeitsrang. Unten: dein bester Share (höchste Schwierigkeit) dieser Runde.',
     roundsInfoWorkDesc:
       'Oben: dein Arbeitsrang. Unten: gesamte Arbeit (Shares), die du in dieser Runde eingereicht hast.',
-    roundsInfoBlocksDesc:
-      'Oben: dein Treuerang. Unten: Blöcke, an denen du teilgenommen hast.',
+    roundsInfoBlocksDesc: 'Oben: dein Treuerang. Unten: Blöcke, an denen du teilgenommen hast.',
     poolOverview: 'Pool-Übersicht',
     noWorkersFound: 'Keine Worker gefunden',
     workersAppearHint: 'Worker erscheinen, wenn sie Shares einreichen',
@@ -200,7 +200,8 @@ const de = {
     onlineCount: '{{online}} von {{total}} online',
     tipSwipeRemove: 'Nach links wischen, um einen Miner zu entfernen',
     noMinersFound: 'Keine Miner Gefunden',
-    noMinersFoundDesc: 'Scanne dein Netzwerk, um Miner zu finden, oder füge einen manuell per IP hinzu.',
+    noMinersFoundDesc:
+      'Scanne dein Netzwerk, um Miner zu finden, oder füge einen manuell per IP hinzu.',
     discoverMiners: 'Miner Entdecken',
     scanningProgress: 'Scanne: {{scanned}}/{{total}}',
     foundCount: 'Gefunden: {{count}}',
@@ -231,7 +232,8 @@ const de = {
     pendingChanges: 'Ausstehende Änderungen',
     applyingSettings: 'Einstellungen werden angewendet...',
     loadingConfig: 'Konfiguration wird geladen...',
-    hardwareUnavailable: 'Hardware-Einstellungen nicht verfügbar. Pool-Einstellungen können trotzdem konfiguriert werden.',
+    hardwareUnavailable:
+      'Hardware-Einstellungen nicht verfügbar. Pool-Einstellungen können trotzdem konfiguriert werden.',
     minerIsOffline: 'Miner ist offline',
     lastSeen: 'Zuletzt gesehen',
     lastBestDiff: 'Letzte beste Diff.',
@@ -320,7 +322,8 @@ const de = {
     blockNotifications: 'Pool-Block gefunden',
     workerNotifications: 'Worker-Status',
     bestDiffNotifications: 'Neue beste Schwierigkeit',
-    notificationsDenied: 'Benachrichtigungsberechtigungen wurden verweigert. Aktiviere sie in den Systemeinstellungen, um Benachrichtigungen zu erhalten.',
+    notificationsDenied:
+      'Benachrichtigungsberechtigungen wurden verweigert. Aktiviere sie in den Systemeinstellungen, um Benachrichtigungen zu erhalten.',
     widgets: 'Widgets',
     widgetUpdates: 'Widget-Updates',
     widgetUpdatesDesc:
@@ -334,6 +337,8 @@ const de = {
     title: 'Chat',
     pinnedLabel: 'ANGEPINNT · POOL',
     online: '{{count}} online',
+    dateToday: 'Heute',
+    dateYesterday: 'Gestern',
     connecting: 'Verbinden…',
     disconnected: 'Offline',
     empty: 'Noch keine Nachrichten – sag Hallo!',

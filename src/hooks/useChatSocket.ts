@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isError } from '@/api/client';
 import { fetchChatSession, fetchChatHistory } from '@/api/chat';
-import { useChatStore } from '@/store/chatStore';
+import { useChatStore, selectOldestTs, MAX_MESSAGES } from '@/store/chatStore';
 import { useSettingsStore, selectBitcoinAddress } from '@/store/settingsStore';
 import { useAppState } from './useAppState';
 import {
@@ -67,6 +67,18 @@ export interface UseChatSocketReturn {
   clearError: () => void;
   /** Force a reconnect (e.g. after blocking, so the DO reloads the block list). */
   reconnect: () => void;
+  /**
+   * Reconcile history on demand (e.g. when the Chat tab regains focus). Re-runs
+   * the backfill if the socket is live, or reconnects if it has silently dropped
+   * — covers messages missed while away, a network hiccup, or a dropped event.
+   */
+  refresh: () => void;
+  /** Fetch an older page of history (call on scroll-to-top); no-op if none/in-flight/at cap. */
+  loadOlder: () => void;
+  /** True while an older page is being fetched (for a top spinner). */
+  loadingOlder: boolean;
+  /** False once the beginning of history is reached (or the buffer cap is hit). */
+  hasMoreHistory: boolean;
 }
 
 export function useChatSocket(): UseChatSocketReturn {
@@ -75,6 +87,7 @@ export function useChatSocket(): UseChatSocketReturn {
 
   const addMessages = useChatStore((s) => s.addMessages);
   const applyReaction = useChatStore((s) => s.applyReaction);
+  const removeMessage = useChatStore((s) => s.removeMessage);
   const setOnline = useChatStore((s) => s.setOnline);
   const setConnectionState = useChatStore((s) => s.setConnectionState);
   const setAnnouncement = useChatStore((s) => s.setAnnouncement);
@@ -83,6 +96,11 @@ export function useChatSocket(): UseChatSocketReturn {
   const [token, setToken] = useState<string | null>(null);
   const [gateDenied, setGateDenied] = useState(false);
   const [lastError, setLastError] = useState<ChatErrorCode | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  // Synchronous guards read inside loadOlder to avoid stale-closure races.
+  const loadingOlderRef = useRef(false);
+  const hasMoreRef = useRef(true);
 
   const wsRef = useRef<WebSocket | null>(null);
   const tokenRef = useRef<string | null>(null);
@@ -144,12 +162,52 @@ export function useChatSocket(): UseChatSocketReturn {
       address: address ?? undefined,
     });
     if (!isError(result) && result.data.data) {
-      if (result.data.data.messages) addMessages(result.data.data.messages);
+      if (result.data.data.messages) {
+        addMessages(result.data.data.messages);
+        // A full page implies older messages may exist; a short page = we've
+        // already got the beginning. Reset paging state for the fresh session.
+        const more = result.data.data.messages.length >= 50;
+        hasMoreRef.current = more;
+        setHasMoreHistory(more);
+      }
       if (result.data.data.announcement !== undefined) {
         setAnnouncement(result.data.data.announcement);
       }
     }
   }, [addMessages, setAnnouncement, address]);
+
+  /**
+   * Page one screen further back on scroll-to-top. Guarded against concurrent
+   * fetches, a known end-of-history, and the buffer cap (= max scroll-back
+   * depth, since addMessages trims to the newest MAX_MESSAGES).
+   */
+  const loadOlder = useCallback(async () => {
+    if (loadingOlderRef.current || !hasMoreRef.current) return;
+    const state = useChatStore.getState();
+    const oldest = selectOldestTs(state);
+    if (oldest === undefined) return; // nothing loaded yet
+    if (state.messages.length >= MAX_MESSAGES) return; // buffer full = max depth
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const result = await fetchChatHistory({
+        before: oldest,
+        limit: 50,
+        address: address ?? undefined,
+      });
+      if (!isError(result) && result.data.data?.messages) {
+        const older = result.data.data.messages;
+        addMessages(older);
+        if (older.length < 50) {
+          hasMoreRef.current = false; // reached the beginning
+          setHasMoreHistory(false);
+        }
+      }
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [address, addMessages]);
 
   const connect = useCallback(async () => {
     if (!shouldConnectRef.current) return;
@@ -229,6 +287,9 @@ export function useChatSocket(): UseChatSocketReturn {
         case 'announcement':
           setAnnouncement(msg.body);
           break;
+        case 'delete':
+          removeMessage(msg.id);
+          break;
         case 'error':
           setLastError(msg.code);
           break;
@@ -265,6 +326,7 @@ export function useChatSocket(): UseChatSocketReturn {
     address,
     addMessages,
     applyReaction,
+    removeMessage,
     setOnline,
     setConnectionState,
     setAnnouncement,
@@ -335,6 +397,16 @@ export function useChatSocket(): UseChatSocketReturn {
     if (shouldConnectRef.current) connectRef.current();
   }, []);
 
+  const refresh = useCallback(() => {
+    if (!shouldConnectRef.current) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      void backfillHistory(); // live socket → just reconcile recent history
+    } else {
+      connectRef.current(); // dead/connecting → (re)establish; backfills on open
+    }
+  }, [backfillHistory]);
+
   return {
     sendMessage,
     sendReaction,
@@ -344,5 +416,9 @@ export function useChatSocket(): UseChatSocketReturn {
     lastError,
     clearError,
     reconnect,
+    refresh,
+    loadOlder: () => void loadOlder(),
+    loadingOlder,
+    hasMoreHistory,
   };
 }
