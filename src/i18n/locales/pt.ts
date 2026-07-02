@@ -332,6 +332,7 @@ const pt = {
 
   chat: {
     title: 'Chat',
+    pinnedLabel: 'FIXADO · POOL',
     online: '{{count}} on-line',
     connecting: 'Conectando…',
     disconnected: 'Off-line',
@@ -350,6 +351,8 @@ const pt = {
     nicknameError: 'Não foi possível salvar o apelido',
     report: 'Denunciar',
     block: 'Bloquear',
+    copy: 'Copiar texto',
+    copied: 'Copiado para a área de transferência',
     reported: 'Mensagem denunciada',
     blocked: 'Usuário bloqueado',
     eulaTitle: 'Diretrizes da comunidade',

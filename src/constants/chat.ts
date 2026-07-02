@@ -43,6 +43,19 @@ export interface ReactionSummary {
   mine?: boolean;
 }
 
+/**
+ * Quoted parent shown above a reply's body. The design specifies reply-quotes,
+ * but the server protocol does not carry a parent reference yet, so this stays
+ * unpopulated for now — the UI render path is ready for when the backend adds
+ * `replyTo` to the `msg` event + a D1 column. See the Chat screen handoff notes.
+ */
+export interface ChatReplyQuote {
+  /** Display string of the replied-to sender (nickname or truncated address). */
+  senderDisplay: string;
+  /** One-line preview of the replied-to message body. */
+  textPreview: string;
+}
+
 export interface ChatMessage {
   id: string;
   ts: number; // ms epoch
@@ -50,6 +63,8 @@ export interface ChatMessage {
   nickname: string | null;
   body: string;
   reactions?: ReactionSummary[];
+  /** Present only when this message is a reply (not yet wired server-side). */
+  replyTo?: ChatReplyQuote;
 }
 
 export type ClientEvent =

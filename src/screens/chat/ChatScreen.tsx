@@ -1,24 +1,33 @@
 /**
- * ChatScreen — the global community room. Inverted FlatList of messages, a
- * presence/connection header, and an activity-gated composer. Read-only when no
- * address is set. Reactions + report/block land in later phases.
+ * ChatScreen — the global community room, styled to the hi-fi Chat handoff.
+ *
+ * Layout (top → bottom): header (title + presence + account), a pinned
+ * announcement strip, a bottom-anchored inverted feed, and an activity-gated
+ * composer. Terminal/brutalist aesthetic: sharp corners, hairlines, Space
+ * Grotesk for prose and JetBrains Mono (the app's mono, in place of the
+ * handoff's Space Mono) for addresses/labels/timestamps.
+ *
+ * Data is real (WebSocket + chatStore); only the presentation follows the
+ * design. Reply-quotes are rendered when present but the backend does not carry
+ * a parent reference yet, so `replyTo` is currently never populated.
  */
 
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
+  Text as RNText,
   FlatList,
   TextInput,
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
   type ListRenderItem,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
-import { Text } from '@/components/Text';
 import { NicknameSheet } from '@/components/chat/NicknameSheet';
 import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
 import { EulaSheet } from '@/components/chat/EulaSheet';
@@ -45,6 +54,8 @@ import {
 import { colors } from '@/constants/colors';
 import { truncateAddress } from '@/utils/formatting';
 import { haptics } from '@/utils/haptics';
+import { glyphCells } from '@/utils/identicon';
+import { ReactionGlyph } from '@/components/chat/ReactionGlyph';
 import { useTranslation } from '@/i18n';
 import {
   MAX_MESSAGE_LENGTH,
@@ -54,12 +65,34 @@ import {
 } from '@/constants/chat';
 import type { MainTabScreenProps } from '@/types/navigation';
 
-const MIN_INPUT_HEIGHT = 40;
-const MAX_INPUT_HEIGHT = 120;
+const MIN_INPUT_HEIGHT = 22;
+const MAX_INPUT_HEIGHT = 110;
+
+// Weighted font families the app ships (RN doesn't synthesize weights). Space
+// Grotesk = prose/titles; JetBrains Mono = addresses/labels/timestamps.
+const MONO = 'JetBrainsMono_400Regular';
+const GROTESK = 'SpaceGrotesk_400Regular';
+const GROTESK_BOLD = 'SpaceGrotesk_700Bold';
+
+// Design tokens local to this screen (hairlines/text ramp beyond colors.ts).
+const HAIRLINE = 'rgba(255,255,255,0.055)'; // row separators
+const EDGE = 'rgba(255,255,255,0.1)'; // composer / header divider
+const PIN_BORDER = 'rgba(255,255,255,0.14)';
+const PIN_BG = 'rgba(255,255,255,0.03)';
+const IDENTICON_BORDER = 'rgba(255,255,255,0.16)';
+const REPLY_BAR = 'rgba(255,255,255,0.14)';
+
+const TEXT_BODY = '#f2f2f3';
+const TEXT_PINNED = '#e0e0e2';
+const TEXT_MUTED = '#8a8a8d';
+const TEXT_REPLY_HANDLE = '#6a6a6c';
+const TEXT_TIME = '#5a5a5c';
+const TEXT_REPLY_PREVIEW = '#7a7a7d';
+const CHIP_BG = '#f4f4f5';
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
   });
 }
@@ -70,7 +103,28 @@ const CONNECTION_DOT: Record<ChatConnectionState, string> = {
   disconnected: colors.danger,
 };
 
-interface BubbleProps {
+/** Deterministic 5×5 block-glyph avatar derived from the sender's address. */
+const Identicon = memo(function Identicon({
+  address,
+  self,
+}: {
+  address: string;
+  self: boolean;
+}) {
+  const cells = useMemo(() => glyphCells(address, self), [address, self]);
+  return (
+    <View style={styles.identicon}>
+      {cells.map((bg, i) => (
+        <View
+          key={i}
+          style={{ width: '20%', height: '20%', backgroundColor: bg ?? 'transparent' }}
+        />
+      ))}
+    </View>
+  );
+});
+
+interface RowProps {
   message: ChatMessage;
   isOwn: boolean;
   youLabel: string;
@@ -79,61 +133,76 @@ interface BubbleProps {
   onToggleReaction: (id: string, emoji: ReactionEmoji, mine: boolean) => void;
 }
 
-const MessageBubble = memo(function MessageBubble({
+const MessageRow = memo(function MessageRow({
   message,
   isOwn,
   youLabel,
   canReact,
   onLongPress,
   onToggleReaction,
-}: BubbleProps) {
-  const sender = isOwn
+}: RowProps) {
+  const handle = isOwn
     ? youLabel
     : message.nickname || truncateAddress(message.address);
+
   return (
     <Pressable
       onLongPress={() => canReact && onLongPress(message)}
       delayLongPress={300}
+      style={styles.row}
     >
-      <View className="px-4 py-2">
-        <View className="flex-row items-baseline justify-between mb-0.5">
-          <Text variant="caption" color={isOwn ? 'default' : 'muted'}>
-            {sender}
-          </Text>
-          <Text variant="caption" color="muted">
-            {formatTime(message.ts)}
-          </Text>
-        </View>
-        <Text variant="body" color="default">
-          {message.body}
-        </Text>
-
-        {/* Reaction chips (tap to toggle). */}
-        {message.reactions && message.reactions.length > 0 ? (
-          <View className="flex-row flex-wrap mt-1.5">
-            {message.reactions.map((r) => (
-              <Pressable
-                key={r.emoji}
-                onPress={() =>
-                  canReact && onToggleReaction(message.id, r.emoji, !!r.mine)
-                }
-                className="flex-row items-center mr-2 mt-1 px-2 py-0.5 border"
-                style={{
-                  borderColor: r.mine ? colors.primary : colors.border,
-                  backgroundColor: r.mine
-                    ? colors.surfaceElevated
-                    : colors.transparent,
-                }}
-              >
-                <Text variant="caption" color="default">{`${r.emoji} ${r.count}`}</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
+      {/* Meta line: identicon · handle · spacer · timestamp */}
+      <View style={styles.meta}>
+        <Identicon address={message.address} self={isOwn} />
+        {isOwn ? (
+          <RNText style={styles.handleSelf}>{handle}</RNText>
+        ) : (
+          <RNText style={styles.handle}>{handle}</RNText>
+        )}
+        <View style={{ flex: 1 }} />
+        <RNText style={styles.time}>{formatTime(message.ts)}</RNText>
       </View>
+
+      {/* Reply quote (only when the message references a parent). */}
+      {message.replyTo ? (
+        <View style={styles.replyQuote}>
+          <RNText style={styles.replyHandle}>{`↩ ${message.replyTo.senderDisplay}`}</RNText>
+          <RNText style={styles.replyPreview} numberOfLines={1}>
+            {message.replyTo.textPreview}
+          </RNText>
+        </View>
+      ) : null}
+
+      {/* Body */}
+      <RNText style={styles.body}>{message.body}</RNText>
+
+      {/* Reaction chips (tap to toggle). */}
+      {message.reactions && message.reactions.length > 0 ? (
+        <View style={styles.reactions}>
+          {message.reactions.map((r) => (
+            <Pressable
+              key={r.emoji}
+              onPress={() =>
+                canReact && onToggleReaction(message.id, r.emoji, !!r.mine)
+              }
+              style={[
+                styles.chip,
+                { borderColor: r.mine ? colors.primary : colors.border },
+              ]}
+            >
+              {/* Monochrome vector icon (color emoji don't render reliably and
+                  clash with the theme); count stays mono. */}
+              <ReactionGlyph emoji={r.emoji} size={13} color={TEXT_BODY} />
+              <RNText style={styles.chipCount}>{` ${r.count}`}</RNText>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </Pressable>
   );
 });
+
+const Separator = () => <View style={styles.separator} />;
 
 type Props = MainTabScreenProps<'Chat'>;
 
@@ -167,6 +236,8 @@ export function ChatScreen({ navigation }: Props) {
   const [nicknameOpen, setNicknameOpen] = useState(false);
   const [eulaOpen, setEulaOpen] = useState(false);
   const [pendingSend, setPendingSend] = useState<string | null>(null);
+
+  const hasDraft = input.trim().length > 0;
 
   // Surface server errors (rate limited, blocked, etc.) as a toast.
   useEffect(() => {
@@ -215,6 +286,12 @@ export function ChatScreen({ navigation }: Props) {
     if (body) doSend(body);
   }, [setChatEulaVersion, token, pendingSend, doSend]);
 
+  // Account icon: edit nickname when eligible, else route to add an address.
+  const handleAccountPress = useCallback(() => {
+    if (canPost) setNicknameOpen(true);
+    else navigation.navigate('Settings');
+  }, [canPost, navigation]);
+
   const handleLongPress = useCallback((message: ChatMessage) => {
     haptics.medium();
     setActionMessage(message);
@@ -256,7 +333,7 @@ export function ChatScreen({ navigation }: Props) {
 
   const renderItem = useCallback<ListRenderItem<ChatMessage>>(
     ({ item }) => (
-      <MessageBubble
+      <MessageRow
         message={item}
         isOwn={!!address && item.address === address}
         youLabel={t('common.you')}
@@ -268,60 +345,56 @@ export function ChatScreen({ navigation }: Props) {
     [address, t, canPost, handleLongPress, handleToggleReaction]
   );
 
+  const online_ =
+    connectionState === 'connected'
+      ? t('chat.online', { count: online })
+      : connectionState === 'connecting'
+        ? t('chat.connecting')
+        : t('chat.disconnected');
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-3 border-b border-border">
-        <Text variant="title">{t('chat.title')}</Text>
-        <View className="flex-row items-center">
-          <View
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: CONNECTION_DOT[connectionState],
-              marginRight: 6,
-            }}
-          />
-          <Text variant="caption" color="muted">
-            {connectionState === 'connected'
-              ? t('chat.online', { count: online })
-              : connectionState === 'connecting'
-                ? t('chat.connecting')
-                : t('chat.disconnected')}
-          </Text>
-          {canPost ? (
-            <Pressable
-              onPress={() => setNicknameOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t('chat.nickname')}
-              className="ml-3 p-1"
-            >
-              <Ionicons
-                name="person-circle-outline"
-                size={22}
-                color={colors.textMuted}
-              />
-            </Pressable>
-          ) : null}
+      <View style={styles.header}>
+        <RNText style={styles.title}>{t('chat.title')}</RNText>
+        <View style={styles.headerRight}>
+          <View style={styles.online}>
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: CONNECTION_DOT[connectionState] },
+              ]}
+            />
+            <RNText style={styles.onlineText}>{online_}</RNText>
+          </View>
+          <Pressable
+            onPress={handleAccountPress}
+            accessibilityRole="button"
+            accessibilityLabel={t('chat.nickname')}
+            hitSlop={8}
+          >
+            <Ionicons
+              name="person-circle-outline"
+              size={24}
+              color={TEXT_MUTED}
+            />
+          </Pressable>
         </View>
       </View>
 
-      {/* Admin announcement banner */}
+      {/* Pinned announcement (admin) — hidden entirely when none. */}
       {announcement ? (
-        <View
-          className="flex-row items-center px-4 py-2 border-b border-border"
-          style={{ backgroundColor: colors.surfaceElevated }}
-        >
+        <View style={styles.pinned}>
           <Ionicons
-            name="megaphone-outline"
-            size={16}
-            color={colors.warning}
-            style={{ marginRight: 8 }}
+            name="pin"
+            size={12}
+            color={TEXT_MUTED}
+            style={{ marginTop: 1 }}
           />
-          <Text variant="caption" color="default" className="flex-1">
-            {announcement}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <RNText style={styles.pinnedLabel}>{t('chat.pinnedLabel')}</RNText>
+            <RNText style={styles.pinnedBody}>{announcement}</RNText>
+          </View>
         </View>
       ) : null}
 
@@ -329,52 +402,27 @@ export function ChatScreen({ navigation }: Props) {
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {/* Bottom-anchored feed (inverted: newest at the bottom). */}
         <FlatList
           data={messages}
           inverted
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           extraData={canPost}
-          contentContainerStyle={
-            messages.length === 0
-              ? { flex: 1, justifyContent: 'center' }
-              : { paddingVertical: 8 }
-          }
+          ItemSeparatorComponent={Separator}
+          contentContainerStyle={styles.feedContent}
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
-          ListEmptyComponent={
-            // Counter-flip: `inverted` mirrors the list, which would otherwise
-            // render the empty state upside-down.
-            <View
-              style={{ transform: [{ scaleY: -1 }] }}
-              className="items-center px-8"
-            >
-              <Ionicons
-                name="chatbubbles-outline"
-                size={48}
-                color={colors.textMuted}
-              />
-              <Text variant="body" color="default" align="center" className="mt-3">
-                {t('chat.empty')}
-              </Text>
-              <Text variant="caption" color="muted" align="center" className="mt-1">
-                {t('chat.emptyHint')}
-              </Text>
-            </View>
-          }
         />
 
         {/* Composer, or a read-only bar explaining why posting is unavailable. */}
         {canPost ? (
-          <View className="flex-row items-end px-4 py-2 border-t border-border">
+          <View style={styles.composer}>
+            <RNText style={styles.caret}>{'>'}</RNText>
             <TextInput
-              className="flex-1 text-foreground py-2"
-              style={{
-                fontFamily: 'SpaceGrotesk_400Regular',
-                height: inputHeight,
-              }}
+              style={[styles.composerInput, { height: inputHeight }]}
               placeholder={t('chat.composerPlaceholder')}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={TEXT_TIME}
               value={input}
               onChangeText={setInput}
               multiline
@@ -393,56 +441,52 @@ export function ChatScreen({ navigation }: Props) {
             />
             <Pressable
               onPress={handleSend}
-              disabled={input.trim().length === 0}
+              disabled={!hasDraft}
               accessibilityRole="button"
               accessibilityLabel={t('chat.send')}
-              className="items-center justify-center p-2"
+              hitSlop={8}
             >
               <Ionicons
-                name="send"
-                size={22}
-                color={input.trim().length > 0 ? colors.text : colors.textDisabled}
+                name="paper-plane"
+                size={24}
+                color={hasDraft ? colors.success : TEXT_REPLY_HANDLE}
               />
             </Pressable>
           </View>
         ) : !hasAddress ? (
           // No address → prompt to add one.
-          <View className="flex-row items-center justify-between px-4 py-3 border-t border-border">
-            <View className="flex-row items-center flex-1 mr-3">
+          <View style={styles.readOnly}>
+            <View style={styles.readOnlyLeft}>
               <Ionicons
                 name="lock-closed-outline"
                 size={16}
-                color={colors.textMuted}
+                color={TEXT_MUTED}
                 style={{ marginRight: 8 }}
               />
-              <Text variant="caption" color="muted" className="flex-1">
+              <RNText style={styles.readOnlyText} numberOfLines={2}>
                 {t('chat.composerReadOnly')}
-              </Text>
+              </RNText>
             </View>
             <Pressable
               onPress={() => navigation.navigate('Settings')}
               accessibilityRole="button"
-              className="px-3 py-2 border border-border"
+              style={styles.addBtn}
             >
-              <Text variant="caption" color="default">
-                {t('chat.addAddress')}
-              </Text>
+              <RNText style={styles.addBtnText}>{t('chat.addAddress')}</RNText>
             </Pressable>
           </View>
         ) : (
           // Address set but not (yet) eligible: gate denied vs still verifying.
-          <View className="flex-row items-center px-4 py-3 border-t border-border">
+          <View style={[styles.readOnly, { justifyContent: 'flex-start' }]}>
             <Ionicons
               name={gateDenied ? 'lock-closed-outline' : 'ellipsis-horizontal'}
               size={16}
-              color={colors.textMuted}
+              color={TEXT_MUTED}
               style={{ marginRight: 8 }}
             />
-            <Text variant="caption" color="muted" className="flex-1">
-              {gateDenied
-                ? t('chat.postingLocked')
-                : t('chat.composerVerifying')}
-            </Text>
+            <RNText style={[styles.readOnlyText, { flex: 1 }]}>
+              {gateDenied ? t('chat.postingLocked') : t('chat.composerVerifying')}
+            </RNText>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -473,3 +517,158 @@ export function ChatScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    paddingBottom: 14,
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontFamily: GROTESK_BOLD,
+    fontSize: 26,
+    color: '#ffffff',
+    letterSpacing: -0.26,
+  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  online: { flexDirection: 'row', alignItems: 'center' },
+  dot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
+  onlineText: { fontFamily: MONO, fontSize: 13, color: TEXT_MUTED },
+
+  // Pinned strip
+  pinned: {
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: PIN_BORDER,
+    backgroundColor: PIN_BG,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  pinnedLabel: {
+    fontFamily: MONO,
+    fontSize: 9,
+    letterSpacing: 1.44,
+    color: TEXT_MUTED,
+  },
+  pinnedBody: {
+    fontFamily: GROTESK,
+    fontSize: 12.5,
+    color: TEXT_PINNED,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+
+  // Feed / rows
+  // Inverted list: newest at index 0 renders at the bottom, and short content
+  // naturally rests at the bottom of the viewport (iMessage-style anchoring).
+  feedContent: { paddingVertical: 8 },
+  separator: { height: 1, backgroundColor: HAIRLINE },
+  row: { paddingVertical: 9, paddingHorizontal: 20 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  identicon: {
+    width: 18,
+    height: 18,
+    borderWidth: 1,
+    borderColor: IDENTICON_BORDER,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    overflow: 'hidden',
+  },
+  handle: {
+    fontFamily: MONO,
+    fontSize: 12,
+    color: TEXT_MUTED,
+    letterSpacing: 0.24,
+  },
+  handleSelf: {
+    fontFamily: MONO,
+    fontSize: 12,
+    color: '#000000',
+    backgroundColor: CHIP_BG,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    letterSpacing: 0.24,
+  },
+  time: { fontFamily: MONO, fontSize: 11, color: TEXT_TIME },
+
+  // Reply quote
+  replyQuote: {
+    marginLeft: 27,
+    marginTop: 5,
+    borderLeftWidth: 2,
+    borderLeftColor: REPLY_BAR,
+    paddingLeft: 9,
+  },
+  replyHandle: { fontFamily: MONO, fontSize: 10, color: TEXT_REPLY_HANDLE },
+  replyPreview: {
+    fontFamily: GROTESK,
+    fontSize: 11.5,
+    color: TEXT_REPLY_PREVIEW,
+    lineHeight: 15,
+  },
+
+  // Body
+  body: {
+    fontFamily: GROTESK,
+    fontSize: 15,
+    color: TEXT_BODY,
+    lineHeight: 21,
+    marginLeft: 27,
+    marginTop: 4,
+  },
+
+  // Reactions
+  reactions: { flexDirection: 'row', flexWrap: 'wrap', marginLeft: 27, marginTop: 6 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+  },
+  chipCount: { fontFamily: MONO, fontSize: 12, color: TEXT_BODY },
+
+  // Composer
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: EDGE,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  caret: { fontFamily: MONO, fontSize: 15, color: '#ffffff' },
+  composerInput: {
+    flex: 1,
+    fontFamily: MONO,
+    fontSize: 14,
+    color: TEXT_BODY,
+    padding: 0,
+    maxHeight: MAX_INPUT_HEIGHT,
+  },
+
+  // Read-only / gate bars
+  readOnly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: EDGE,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  readOnlyLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 },
+  readOnlyText: { fontFamily: MONO, fontSize: 13, color: TEXT_MUTED },
+  addBtn: { borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8 },
+  addBtnText: { fontFamily: MONO, fontSize: 13, color: TEXT_BODY },
+});

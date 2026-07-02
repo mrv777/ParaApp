@@ -332,6 +332,7 @@ const fr = {
 
   chat: {
     title: 'Chat',
+    pinnedLabel: 'ÉPINGLÉ · POOL',
     online: '{{count}} en ligne',
     connecting: 'Connexion…',
     disconnected: 'Hors ligne',
@@ -350,6 +351,8 @@ const fr = {
     nicknameError: 'Impossible d’enregistrer le pseudo',
     report: 'Signaler',
     block: 'Bloquer',
+    copy: 'Copier le texte',
+    copied: 'Copié dans le presse-papiers',
     reported: 'Message signalé',
     blocked: 'Utilisateur bloqué',
     eulaTitle: 'Règles de la communauté',

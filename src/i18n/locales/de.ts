@@ -332,6 +332,7 @@ const de = {
 
   chat: {
     title: 'Chat',
+    pinnedLabel: 'ANGEPINNT · POOL',
     online: '{{count}} online',
     connecting: 'Verbinden…',
     disconnected: 'Offline',
@@ -350,6 +351,8 @@ const de = {
     nicknameError: 'Spitzname konnte nicht gespeichert werden',
     report: 'Melden',
     block: 'Blockieren',
+    copy: 'Text kopieren',
+    copied: 'In Zwischenablage kopiert',
     reported: 'Nachricht gemeldet',
     blocked: 'Nutzer blockiert',
     eulaTitle: 'Community-Richtlinien',

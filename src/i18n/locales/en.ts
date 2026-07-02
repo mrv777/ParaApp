@@ -375,6 +375,7 @@ const en = {
 
   chat: {
     title: 'Chat',
+    pinnedLabel: 'PINNED · POOL',
     online: '{{count}} online',
     connecting: 'Connecting…',
     disconnected: 'Offline',
@@ -393,6 +394,8 @@ const en = {
     nicknameError: "Couldn't save nickname",
     report: 'Report',
     block: 'Block',
+    copy: 'Copy text',
+    copied: 'Copied to clipboard',
     reported: 'Message reported',
     blocked: 'User blocked',
     eulaTitle: 'Community Guidelines',

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
+import { ChatBubbleIcon } from './ChatBubbleIcon';
 
 type IoniconsName = keyof typeof Ionicons.glyphMap;
 
@@ -69,11 +70,20 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             accessibilityLabel={route.name}
             className="flex-1 items-center justify-center"
           >
-            <Ionicons
-              name={isFocused ? icons.active : icons.inactive}
-              size={ICON_SIZE}
-              color={isFocused ? colors.text : INACTIVE_ICON}
-            />
+            {route.name === 'Chat' ? (
+              // Custom square speech bubble (Ionicons only has rounded ones).
+              <ChatBubbleIcon
+                size={ICON_SIZE}
+                color={isFocused ? colors.text : INACTIVE_ICON}
+                filled={isFocused}
+              />
+            ) : (
+              <Ionicons
+                name={isFocused ? icons.active : icons.inactive}
+                size={ICON_SIZE}
+                color={isFocused ? colors.text : INACTIVE_ICON}
+              />
+            )}
           </Pressable>
         );
       })}

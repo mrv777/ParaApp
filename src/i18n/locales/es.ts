@@ -332,6 +332,7 @@ const es = {
 
   chat: {
     title: 'Chat',
+    pinnedLabel: 'FIJADO · POOL',
     online: '{{count}} en línea',
     connecting: 'Conectando…',
     disconnected: 'Sin conexión',
@@ -350,6 +351,8 @@ const es = {
     nicknameError: 'No se pudo guardar el apodo',
     report: 'Reportar',
     block: 'Bloquear',
+    copy: 'Copiar texto',
+    copied: 'Copiado al portapapeles',
     reported: 'Mensaje reportado',
     blocked: 'Usuario bloqueado',
     eulaTitle: 'Normas de la comunidad',
