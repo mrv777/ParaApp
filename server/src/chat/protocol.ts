@@ -72,8 +72,10 @@ export type ServerEvent =
       messageId: string;
       emoji: ReactionEmoji;
       count: number;
-      actor: string;
-      op: 'add' | 'remove';
+      // Coalesced count broadcasts omit these; a targeted echo may still carry
+      // them. Clients treat `count` as authoritative and own `mine` locally.
+      actor?: string;
+      op?: 'add' | 'remove';
     }
   | { type: 'presence'; online: number }
   | { type: 'announcement'; body: string | null }

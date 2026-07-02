@@ -10,7 +10,12 @@
  */
 
 import type { Env } from '../types';
-import type { ClientEvent, ServerEvent, ChatErrorCode } from './protocol';
+import type {
+  ClientEvent,
+  ServerEvent,
+  ChatErrorCode,
+  ReactionEmoji,
+} from './protocol';
 import {
   MAX_MESSAGE_LENGTH,
   isReactionEmoji,
@@ -53,6 +58,17 @@ const MAX_PER_WINDOW = 10;
 // Reactions are cheaper: 250ms min gap, 40 / 60s per address.
 const REACT_MIN_GAP_MS = 250;
 const REACT_MAX_PER_WINDOW = 40;
+// Identity (profile + ban) cache TTL. Removes a per-message getProfile+isBanned
+// round-trip; a mid-session nickname/official change or ban self-heals within
+// this window (own messages always render as "you" client-side, so the sender
+// never sees their own staleness).
+const IDENTITY_TTL_MS = 30_000;
+// Coalesce presence fan-out to a single trailing broadcast per window, so
+// reconnect churn can't turn into an O(N²) send storm.
+const PRESENCE_DEBOUNCE_MS = 750;
+// Coalesce reaction-count fan-out per (message, emoji) to one broadcast/window:
+// a pile-on collapses to a single COUNT query + a single fan-out.
+const REACTION_FLUSH_MS = 150;
 
 export class ChatRoom {
   private readonly state: DurableObjectState;
@@ -60,6 +76,20 @@ export class ChatRoom {
   /** In-memory recent-action timestamps per address (best-effort; resets on hibernation). */
   private readonly sendLog = new Map<string, number[]>();
   private readonly reactLog = new Map<string, number[]>();
+  /** Cached identity (profile + ban) per address; TTL IDENTITY_TTL_MS. */
+  private readonly identityCache = new Map<
+    string,
+    { nickname: string | null; official: boolean; banned: boolean; exp: number }
+  >();
+  /** Presence debounce: one pending trailing broadcast; last count actually sent. */
+  private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastOnline = -1;
+  /** Reaction coalescing: pending (message, emoji) keys awaiting a count flush. */
+  private readonly pendingReactions = new Map<
+    string,
+    { messageId: string; emoji: ReactionEmoji }
+  >();
+  private reactionFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -88,6 +118,15 @@ export class ChatRoom {
       return new Response(null, { status: 204 });
     }
 
+    // Internal, worker-only hook: an address's profile or ban status changed —
+    // evict the cached identity so the next message re-reads it (keeps nickname
+    // and ban changes effectively instant despite the read cache).
+    if (url.pathname === '/internal/identity' && request.method === 'POST') {
+      const { address } = (await request.json()) as { address: string };
+      this.identityCache.delete(address);
+      return new Response(null, { status: 204 });
+    }
+
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected websocket', { status: 426 });
     }
@@ -103,7 +142,7 @@ export class ChatRoom {
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ address, blocked } satisfies SocketAttachment);
 
-    this.broadcastPresence();
+    this.schedulePresence();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -144,11 +183,11 @@ export class ChatRoom {
   }
 
   webSocketClose(ws: WebSocket): void {
-    this.broadcastPresence();
+    this.schedulePresence();
   }
 
   webSocketError(ws: WebSocket): void {
-    this.broadcastPresence();
+    this.schedulePresence();
   }
 
   private async handleMessage(
@@ -159,7 +198,9 @@ export class ChatRoom {
     if (!address) return this.sendError(ws, 'not_authenticated');
     // In-memory rate check first: a spammer shouldn't cost a D1 read per attempt.
     if (!this.allowSend(address)) return this.sendError(ws, 'rate_limited');
-    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
+    // Cached ban + profile in one lookup (TTL'd) — no per-message D1 round-trip.
+    const identity = await this.getIdentity(address);
+    if (identity.banned) return this.sendError(ws, 'banned');
 
     const body = normalizeBody(rawBody ?? '');
     if (!body || body.length > MAX_MESSAGE_LENGTH) {
@@ -174,7 +215,7 @@ export class ChatRoom {
     const id = crypto.randomUUID();
     const ts = Date.now();
     await insertChatMessage(this.env.DB, { id, address, body, createdAt: ts });
-    const { nickname, official } = await getProfile(this.env.DB, address);
+    const { nickname, official } = identity;
 
     // Per-connection block filtering: a blocked sender's messages never reach
     // the blocker. Payload carries only the truncated public sender key.
@@ -208,29 +249,23 @@ export class ChatRoom {
       return this.sendError(ws, 'unknown_type');
     }
     if (!this.allowReact(address)) return this.sendError(ws, 'rate_limited');
-    if (await isBanned(this.env.DB, address)) return this.sendError(ws, 'banned');
+    if ((await this.getIdentity(address)).banned) {
+      return this.sendError(ws, 'banned');
+    }
 
     const changed =
       op === 'add'
         ? await addReaction(this.env.DB, messageId, address, emoji)
         : await removeReaction(this.env.DB, messageId, address, emoji);
-    // No-op (already reacted / wasn't reacted): don't broadcast a stale count.
+    // No-op (already reacted / wasn't reacted): nothing to broadcast.
     if (!changed) return;
 
-    const count = await getReactionCount(this.env.DB, messageId, emoji);
-    // Same block filtering as messages: a blocker never learns the blocked
-    // actor exists (their copy of the message is gone anyway).
-    this.broadcastMessage(
-      {
-        type: 'react',
-        messageId,
-        emoji,
-        count,
-        actor: truncateChatAddress(address),
-        op,
-      },
-      address
-    );
+    // Coalesce the count broadcast: a pile-on on one message collapses to a
+    // single COUNT query + fan-out per REACTION_FLUSH_MS window. The acting
+    // client updates its own chip optimistically, so the server no longer needs
+    // to echo actor/op for `mine`.
+    this.pendingReactions.set(`${messageId} ${emoji}`, { messageId, emoji });
+    this.scheduleReactionFlush();
   }
 
   private allowSend(address: string): boolean {
@@ -293,8 +328,64 @@ export class ChatRoom {
     }
   }
 
-  private broadcastPresence(): void {
-    this.broadcast({ type: 'presence', online: this.state.getWebSockets().length });
+  /**
+   * Cached {profile, ban} for an address (TTL IDENTITY_TTL_MS). Collapses the
+   * per-message getProfile + isBanned reads to one round-trip per address per
+   * window. Resets safely on hibernation (repopulates on next use).
+   */
+  private async getIdentity(
+    address: string
+  ): Promise<{ nickname: string | null; official: boolean; banned: boolean }> {
+    const cached = this.identityCache.get(address);
+    if (cached && cached.exp > Date.now()) return cached;
+    const [profile, banned] = await Promise.all([
+      getProfile(this.env.DB, address),
+      isBanned(this.env.DB, address),
+    ]);
+    const entry = {
+      nickname: profile.nickname,
+      official: profile.official,
+      banned,
+      exp: Date.now() + IDENTITY_TTL_MS,
+    };
+    this.identityCache.set(address, entry);
+    return entry;
+  }
+
+  /** Debounced presence: coalesce connect/close/error churn into one trailing
+   *  broadcast, and only when the count actually changed. */
+  private schedulePresence(): void {
+    if (this.presenceTimer) return;
+    this.presenceTimer = setTimeout(() => {
+      this.presenceTimer = null;
+      const online = this.state.getWebSockets().length;
+      if (online === this.lastOnline) return;
+      this.lastOnline = online;
+      this.broadcast({ type: 'presence', online });
+    }, PRESENCE_DEBOUNCE_MS);
+  }
+
+  private scheduleReactionFlush(): void {
+    if (this.reactionFlushTimer) return;
+    this.reactionFlushTimer = setTimeout(() => {
+      this.reactionFlushTimer = null;
+      void this.flushReactions();
+    }, REACTION_FLUSH_MS);
+  }
+
+  /**
+   * Broadcast the latest count for each pending (message, emoji). Counts are
+   * anonymous aggregates, so they go to every socket (no per-actor block
+   * filter) — this also fixes the prior count drift where a blocker never
+   * received an increment from a blocked reactor.
+   */
+  private async flushReactions(): Promise<void> {
+    const pending = [...this.pendingReactions.values()];
+    this.pendingReactions.clear();
+    for (const { messageId, emoji } of pending) {
+      const count = await getReactionCount(this.env.DB, messageId, emoji);
+      this.broadcast({ type: 'react', messageId, emoji, count });
+    }
   }
 
   private sendError(ws: WebSocket, code: ChatErrorCode): void {

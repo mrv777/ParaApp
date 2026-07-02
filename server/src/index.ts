@@ -451,6 +451,7 @@ app.put('/chat/nickname', async (c) => {
       }
       throw error;
     }
+    await invalidateChatIdentity(c.env, verified.address);
     return c.json({ success: true, data: { nickname: trimmed || null } });
   } catch (error) {
     console.error('chat/nickname error:', error);
@@ -603,6 +604,20 @@ async function broadcastDelete(env: Env, id: string): Promise<void> {
   );
 }
 
+// Evict the DO's cached identity for an address after its profile or ban status
+// changes, so the next message re-reads it (nickname/ban changes stay instant
+// despite the per-message read cache).
+async function invalidateChatIdentity(env: Env, address: string): Promise<void> {
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/identity', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ address }),
+    })
+  );
+}
+
 // ---- Admin (guarded) --------------------------------------------------------
 
 // The admin PAGE is public HTML; it prompts for the secret and calls the guarded
@@ -642,6 +657,7 @@ app.post('/chat/admin/ban', async (c) => {
     return c.json({ success: false, error: result.error.flatten() }, 400);
   }
   await banAddress(c.env.DB, result.data.address, result.data.reason ?? '');
+  await invalidateChatIdentity(c.env, result.data.address);
   return c.json({ success: true });
 });
 
@@ -660,6 +676,7 @@ app.post('/chat/admin/nickname', async (c) => {
   // Empty ⇒ release the handle (fall back to truncated address).
   if (!trimmed) {
     await setNickname(c.env.DB, address, null);
+    await invalidateChatIdentity(c.env, address);
     return c.json({ success: true, data: { nickname: null } });
   }
 
@@ -679,6 +696,7 @@ app.post('/chat/admin/nickname', async (c) => {
         );
       }
       await setNickname(c.env.DB, owner, null);
+      await invalidateChatIdentity(c.env, owner);
     }
   }
 
@@ -686,6 +704,7 @@ app.post('/chat/admin/nickname', async (c) => {
     norm,
     official: result.data.official ?? true,
   });
+  await invalidateChatIdentity(c.env, address);
   return c.json({ success: true, data: { nickname: trimmed } });
 });
 

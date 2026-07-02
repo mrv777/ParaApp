@@ -314,6 +314,7 @@ export function ChatScreen({ navigation }: Props) {
   const connectionState = useChatStore(selectChatConnectionState);
   const announcement = useChatStore(selectChatAnnouncement);
   const removeMessagesFrom = useChatStore((s) => s.removeMessagesFrom);
+  const applyReaction = useChatStore((s) => s.applyReaction);
   const markSeen = useChatStore((s) => s.markSeen);
 
   // Keep the tab-bar unread dot cleared while the user is actually looking at
@@ -437,11 +438,22 @@ export function ChatScreen({ navigation }: Props) {
   const handleToggleReaction = useCallback(
     (id: string, emoji: ReactionEmoji, mine: boolean) => {
       const ok = sendReaction(id, emoji, mine ? 'remove' : 'add');
-      if (ok) haptics.selection();
-      else haptics.warning();
+      if (ok) {
+        // Optimistic local update: the server echoes reactions only as a
+        // coalesced, count-only broadcast (no per-actor `mine`), so own
+        // feedback must be applied here. The authoritative flushed count
+        // reconciles any drift a moment later.
+        const msg = useChatStore.getState().messages.find((m) => m.id === id);
+        const current =
+          msg?.reactions?.find((r) => r.emoji === emoji)?.count ?? 0;
+        applyReaction(id, emoji, Math.max(0, current + (mine ? -1 : 1)), !mine);
+        haptics.selection();
+      } else {
+        haptics.warning();
+      }
       setActionMessage(null);
     },
-    [sendReaction]
+    [sendReaction, applyReaction]
   );
 
   const handleReport = useCallback(

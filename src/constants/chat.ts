@@ -105,8 +105,10 @@ export type ServerEvent =
       messageId: string;
       emoji: ReactionEmoji;
       count: number;
-      actor: string;
-      op: 'add' | 'remove';
+      // Coalesced count broadcasts omit these; `count` is authoritative and the
+      // client owns `mine` optimistically (see ChatScreen handleToggleReaction).
+      actor?: string;
+      op?: 'add' | 'remove';
     }
   | { type: 'presence'; online: number }
   | { type: 'announcement'; body: string | null }

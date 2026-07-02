@@ -259,13 +259,15 @@ async function main(): Promise<void> {
 
       // Reactions (Phase 3).
       if (messageId) {
+        // Reaction broadcasts are coalesced to a count-only event (no actor/op),
+        // trailing the send by ~150ms — match on the authoritative count.
         authed.send({ type: 'react', messageId, emoji: '🔥', op: 'add' });
         const reactAdd = await b.waitFor(
           (e) =>
             e.type === 'react' &&
             e.messageId === messageId &&
             e.emoji === '🔥' &&
-            e.op === 'add'
+            e.count === 1
         );
         check(
           'reaction add broadcasts with count',
@@ -298,7 +300,7 @@ async function main(): Promise<void> {
             e.type === 'react' &&
             e.messageId === messageId &&
             e.emoji === '🔥' &&
-            e.op === 'remove'
+            e.count === 0
         );
         check(
           'reaction remove broadcasts count=0',
