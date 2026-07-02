@@ -324,6 +324,14 @@ async function main(): Promise<void> {
           `status=${reserved.status}`
         );
 
+        // Homoglyph bypass: "Yοu" uses a Greek omicron — must still be caught.
+        const homoglyph = await putNickname(args.http, session.token, 'Yοu');
+        check(
+          'homoglyph reserved nickname rejected (400)',
+          homoglyph.status === 400,
+          `status=${homoglyph.status}`
+        );
+
         await sleep(1600); // respect the 1.5s message min-gap
         const body2 = `smoke nick ${Date.now()}`;
         authed.send({ type: 'msg', body: body2 });
@@ -354,6 +362,32 @@ async function main(): Promise<void> {
         'excess line breaks collapsed',
         nlBroadcast?.type === 'msg' && nlBroadcast.body === 'smoke A\nB',
         nlBroadcast?.type === 'msg' ? JSON.stringify(nlBroadcast.body) : 'no broadcast'
+      );
+
+      // Unicode sanitize: bidi override (U+202E) + zero-width (U+200B) stripped.
+      await sleep(1600);
+      authed.send({ type: 'msg', body: 'inv‮test​42' });
+      const invBroadcast = await b.waitFor(
+        (e) => e.type === 'msg' && e.body.startsWith('inv') && e.body.includes('test')
+      );
+      check(
+        'bidi + zero-width chars stripped',
+        invBroadcast?.type === 'msg' && invBroadcast.body === 'invtest42',
+        invBroadcast?.type === 'msg' ? JSON.stringify(invBroadcast.body) : 'no broadcast'
+      );
+
+      // Unicode sanitize: zalgo combining-mark stack capped at two per cluster.
+      await sleep(1600);
+      authed.send({ type: 'msg', body: 'zal' + '̀'.repeat(8) });
+      const zalgoBroadcast = await b.waitFor(
+        (e) => e.type === 'msg' && e.body.startsWith('zal')
+      );
+      check(
+        'zalgo combining marks capped',
+        zalgoBroadcast?.type === 'msg' && zalgoBroadcast.body === 'zal' + '̀'.repeat(2),
+        zalgoBroadcast?.type === 'msg'
+          ? `${[...(zalgoBroadcast.body as string)].length} chars`
+          : 'no broadcast'
       );
 
       // Moderation (Phase 5): profane message rejected inline.
@@ -436,8 +470,14 @@ async function main(): Promise<void> {
             { method: 'DELETE', headers: { 'X-Admin-Secret': args.adminSecret } }
           );
           check('admin soft-delete message (200)', del.status === 200);
+          // The delete must reach live sockets so it disappears without a reload.
+          const delBroadcast = await b.waitFor(
+            (e) => e.type === 'delete' && e.id === messageId
+          );
+          check('delete broadcasts to clients', !!delBroadcast);
         } else {
           skip('admin soft-delete message (200)', 'no message id');
+          skip('delete broadcasts to clients', 'no message id');
         }
 
         // Announcement banner: set → broadcast + history; clear → broadcast null.

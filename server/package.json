@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx scripts/chat-smoke.ts"
+    "smoke": "tsx scripts/chat-smoke.ts",
+    "seed": "tsx scripts/chat-seed.ts"
   },
   "dependencies": {
     "@2toad/profanity": "^3.3.0",
