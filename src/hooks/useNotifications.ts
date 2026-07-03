@@ -237,6 +237,14 @@ export function useNotifications() {
       !pushToken
     ) return;
 
+    // Skip sync while a device registration is in flight. registerDevice sets
+    // the push token mid-flight, which retriggers this effect (pushToken dep)
+    // before the backend prefs have been fetched — syncing local defaults now
+    // would clobber account-wide prefs (the same class of bug e0921b2 fixed on
+    // /register, re-entering via the /preferences PATCH). Don't consume the
+    // flag; registration clears it in its finally block.
+    if (isRegistering.current) return;
+
     // Skip sync if preferences were just fetched from backend
     if (justFetchedPrefs.current) {
       justFetchedPrefs.current = false;
@@ -259,11 +267,16 @@ export function useNotifications() {
       ).catch((error) => {
         console.warn('Failed to sync notification preferences:', error);
       });
+      // Clear the ref once fired so the background-flush gate
+      // (handleAppStateChange) doesn't treat this expired timer as a pending
+      // sync and re-assert prefs on the next backgrounding.
+      prefsSyncTimeoutRef.current = null;
     }, 500);
 
     return () => {
       if (prefsSyncTimeoutRef.current) {
         clearTimeout(prefsSyncTimeoutRef.current);
+        prefsSyncTimeoutRef.current = null;
       }
     };
   }, [
