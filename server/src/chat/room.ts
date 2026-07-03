@@ -196,6 +196,11 @@ export class ChatRoom {
     rawBody: string
   ): Promise<void> {
     if (!address) return this.sendError(ws, 'not_authenticated');
+    // Guard a non-string body (e.g. {"type":"msg","body":42}) — `?? ''` below
+    // only coalesces null/undefined, so a number would reach normalizeBody and
+    // throw a TypeError out of webSocketMessage. Any gate-passing poster could
+    // otherwise trigger it.
+    if (typeof rawBody !== 'string') return this.sendError(ws, 'bad_body');
     // In-memory rate check first: a spammer shouldn't cost a D1 read per attempt.
     if (!this.allowSend(address)) return this.sendError(ws, 'rate_limited');
     // Cached ban + profile in one lookup (TTL'd) — no per-message D1 round-trip.
@@ -412,10 +417,24 @@ export class ChatRoom {
   private async flushReactions(): Promise<void> {
     const pending = [...this.pendingReactions.values()];
     this.pendingReactions.clear();
-    for (const { messageId, emoji } of pending) {
-      const count = await getReactionCount(this.env.DB, messageId, emoji);
-      this.broadcast({ type: 'react', messageId, emoji, count });
+    let anyFailed = false;
+    for (const entry of pending) {
+      const { messageId, emoji } = entry;
+      try {
+        const count = await getReactionCount(this.env.DB, messageId, emoji);
+        this.broadcast({ type: 'react', messageId, emoji, count });
+      } catch {
+        // A transient D1 failure must not drop this pending count (the map was
+        // already cleared) nor bubble as an unhandled rejection (we're called
+        // via `void`). Re-queue and retry, unless a newer reaction re-added it.
+        const key = `${messageId} ${emoji}`;
+        if (!this.pendingReactions.has(key)) {
+          this.pendingReactions.set(key, entry);
+        }
+        anyFailed = true;
+      }
     }
+    if (anyFailed) this.scheduleReactionFlush();
   }
 
   private sendError(ws: WebSocket, code: ChatErrorCode): void {

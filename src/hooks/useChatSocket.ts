@@ -105,6 +105,7 @@ export function useChatSocket(): UseChatSocketReturn {
   const setAnnouncement = useChatStore((s) => s.setAnnouncement);
   const setHistoryLoaded = useChatStore((s) => s.setHistoryLoaded);
   const resetMessages = useChatStore((s) => s.reset);
+  const clearFeed = useChatStore((s) => s.clearFeed);
 
   const [canPost, setCanPost] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -196,7 +197,10 @@ export function useChatSocket(): UseChatSocketReturn {
               Infinity
             );
             const newestStored = stored[stored.length - 1].ts;
-            if (oldestFetched > newestStored) resetMessages();
+            // Scoped clear only — the socket is live (this runs from onopen's
+            // backfill), so a full reset() would wrongly mark it disconnected,
+            // zero the unread baseline, and drop delete tombstones.
+            if (oldestFetched > newestStored) clearFeed();
           }
           addMessages(fetched);
           // A full page implies older messages may exist; a short page = we've
@@ -214,7 +218,7 @@ export function useChatSocket(): UseChatSocketReturn {
       // real content/empty state. A failed fetch must not leave a stuck skeleton.
       setHistoryLoaded(true);
     }
-  }, [addMessages, resetMessages, setAnnouncement, setHistoryLoaded]);
+  }, [addMessages, clearFeed, setAnnouncement, setHistoryLoaded]);
 
   /**
    * Page one screen further back on scroll-to-top. Guarded against concurrent
@@ -277,6 +281,13 @@ export function useChatSocket(): UseChatSocketReturn {
   const connect = useCallback(async () => {
     if (!shouldConnectRef.current) return;
     const gen = ++generationRef.current; // supersede any in-flight connect
+    // Cancel any pending backoff reconnect — otherwise a timer scheduled by an
+    // earlier failed attempt could later fire and tear down the socket we're
+    // about to (or just did) establish.
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
     // Tear down any existing socket first (silent — no reconnect).
     detachAndClose(wsRef.current);
     wsRef.current = null;

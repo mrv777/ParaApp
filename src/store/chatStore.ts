@@ -66,6 +66,13 @@ interface ChatActions {
   setAnnouncement: (announcement: string | null) => void;
   /** Mark everything currently loaded as seen (call while the Chat tab is focused). */
   markSeen: () => void;
+  /**
+   * Drop the loaded feed (messages + history-loaded flag) WITHOUT touching
+   * connection/presence/lastSeen/tombstone state. For rebuilding the feed on a
+   * live socket (e.g. a backfill gap) where a full reset() would wrongly flip
+   * the UI to disconnected, clear the unread baseline, and resurrect deletes.
+   */
+  clearFeed: () => void;
   reset: () => void;
 }
 
@@ -169,6 +176,9 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
         : 0;
       return newest > state.lastSeenTs ? { lastSeenTs: newest } : state;
     }),
+
+  clearFeed: () =>
+    set({ messages: EMPTY_MESSAGES, historyLoaded: false }),
 
   reset: () => {
     deletedIds.clear();

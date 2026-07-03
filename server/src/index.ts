@@ -357,14 +357,22 @@ app.get('/chat/history', async (c) => {
       // failing the backfill; live WS delivery still filters blocks.
       if (verified) address = verified.address;
     }
+    // Parse the cursor defensively: a non-numeric `before` (e.g. "abc") or a
+    // non-finite one ("Infinity") must degrade to "no cursor / first page",
+    // not silently serve page 1 with a bad state or bind a non-finite value to
+    // D1 (which throws → 500).
+    const beforeNum = before !== undefined ? Number(before) : NaN;
+    const hasBefore = Number.isFinite(beforeNum);
+    const limitNum = limit !== undefined ? Number(limit) : 50;
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : 50;
     const messages = await getRecentMessages(c.env.DB, {
-      before: before ? Number(before) : undefined,
+      before: hasBefore ? beforeNum : undefined,
       beforeId: beforeId || undefined,
-      limit: limit ? Number(limit) : 50,
+      limit: safeLimit,
       address,
     });
     // Only send the announcement on the first page (no `before` cursor).
-    const announcement = before ? undefined : await getAnnouncement(c.env.DB);
+    const announcement = hasBefore ? undefined : await getAnnouncement(c.env.DB);
     return c.json({ success: true, data: { messages, announcement } });
   } catch (error) {
     console.error('chat/history error:', error);

@@ -95,6 +95,16 @@ class Client {
     this.socket.send(JSON.stringify(event));
   }
 
+  /** Send a raw frame — for malformed-input tests the typed `send` can't express. */
+  sendRaw(data: string): void {
+    this.socket.send(data);
+  }
+
+  /** Whether the underlying socket is still open (survived the last frame). */
+  isOpen(): boolean {
+    return this.socket.readyState === WebSocket.OPEN;
+  }
+
   waitFor(
     predicate: (e: ServerEvent) => boolean,
     timeoutMs = 3000
@@ -248,6 +258,21 @@ async function main(): Promise<void> {
 
       const history2 = await getHistory(args.http);
       check('message persisted to history', history2.some((m) => m.body === body));
+
+      // Malformed input: a non-string body ({"type":"msg","body":42}) must be
+      // rejected with `bad_body`, not throw out of the DO's message handler.
+      // The guard runs before the rate-limit check, so this consumes no budget
+      // and persists nothing. Getting a response back proves the socket lived.
+      authed.sendRaw(JSON.stringify({ type: 'msg', body: 42 }));
+      const badBody = await authed.waitFor(
+        (e) => e.type === 'error' && e.code === 'bad_body'
+      );
+      check(
+        'non-string message body rejected (bad_body)',
+        badBody?.type === 'error' && badBody.code === 'bad_body',
+        badBody?.type === 'error' ? badBody.code : 'no error received'
+      );
+      check('socket survives non-string body', authed.isOpen());
 
       // Rapid burst → rate-limited (min gap 1.5s).
       authed.send({ type: 'msg', body: 'burst-1' });

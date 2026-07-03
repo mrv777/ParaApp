@@ -463,6 +463,10 @@ export function ChatScreen({ navigation }: Props) {
 
   const handleToggleReaction = useCallback(
     (id: string, emoji: ReactionEmoji, mine: boolean) => {
+      // A reaction shares the `rate_limited` error code with messages, and the
+      // error effect restores lastSentRef into the composer. Clear it here so a
+      // rate-limited reaction can't resurrect a long-delivered message.
+      lastSentRef.current = null;
       const ok = sendReaction(id, emoji, mine ? 'remove' : 'add');
       if (ok) {
         // Optimistic local update: the server echoes reactions only as a
