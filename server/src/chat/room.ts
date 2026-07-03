@@ -14,6 +14,7 @@ import type {
   ClientEvent,
   ServerEvent,
   ChatErrorCode,
+  ChatReplyQuote,
   ReactionEmoji,
 } from './protocol';
 import {
@@ -30,6 +31,8 @@ import {
   getReactionCount,
   getProfile,
   getBlockedBy,
+  getReplyParent,
+  getMessageSender,
 } from './db';
 import { isClean, moderateAI } from './moderation';
 
@@ -39,6 +42,10 @@ interface SocketAttachment {
   /** Addresses this viewer has blocked (loaded on connect; refreshed on reconnect). */
   blocked: string[];
 }
+
+/** Matches the v4 UUIDs crypto.randomUUID() mints for message ids. */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Collapse whitespace so a message can't be a wall of blank lines: strip
@@ -173,7 +180,7 @@ export class ChatRoom {
 
     switch (event.type) {
       case 'msg':
-        return this.handleMessage(ws, address, event.body);
+        return this.handleMessage(ws, address, event.body, event.replyToId);
       case 'react':
         return this.handleReaction(
           ws,
@@ -198,7 +205,8 @@ export class ChatRoom {
   private async handleMessage(
     ws: WebSocket,
     address: string,
-    rawBody: string
+    rawBody: string,
+    replyToId?: unknown
   ): Promise<void> {
     if (!address) return this.sendError(ws, 'not_authenticated');
     // Guard a non-string body (e.g. {"type":"msg","body":42}) — `?? ''` below
@@ -222,9 +230,35 @@ export class ChatRoom {
       return this.sendError(ws, 'blocked_content');
     }
 
+    // Resolve an optional reply target. Only a well-formed id that points at a
+    // live (non-deleted) message is honored; anything else (garbage id, deleted
+    // or pruned parent) is silently dropped and the message posts as a normal
+    // one — a vanished target must never block posting. Resolved without a block
+    // filter so `reply_to` is stored viewer-independently; per-viewer block
+    // filtering is applied later at history read time.
+    let replyParentId: string | null = null;
+    let replyTo: ChatReplyQuote | undefined;
+    // Full address of the quoted parent's author, so the live broadcast can strip
+    // the quote for viewers who've blocked them (their history already filters it).
+    let replyParentAuthor: string | null = null;
+    if (typeof replyToId === 'string' && UUID_RE.test(replyToId)) {
+      const quote = await getReplyParent(this.env.DB, replyToId, '');
+      if (quote) {
+        replyParentId = replyToId;
+        replyTo = quote;
+        replyParentAuthor = await getMessageSender(this.env.DB, replyToId);
+      }
+    }
+
     const id = crypto.randomUUID();
     const ts = Date.now();
-    await insertChatMessage(this.env.DB, { id, address, body, createdAt: ts });
+    await insertChatMessage(this.env.DB, {
+      id,
+      address,
+      body,
+      createdAt: ts,
+      replyTo: replyParentId,
+    });
     const { nickname, official } = identity;
 
     // Per-connection block filtering: a blocked sender's messages never reach
@@ -238,8 +272,10 @@ export class ChatRoom {
         nickname,
         official,
         body,
+        ...(replyParentId ? { replyToId: replyParentId, replyTo } : {}),
       },
-      address
+      address,
+      replyParentAuthor
     );
   }
 
@@ -354,14 +390,38 @@ export class ChatRoom {
     }
   }
 
-  /** Broadcast a message, skipping viewers who have blocked the sender. */
-  private broadcastMessage(event: ServerEvent, senderAddress: string): void {
+  /**
+   * Broadcast a message, skipping viewers who have blocked the sender. When the
+   * message quotes a reply parent, viewers who've blocked that parent's author
+   * receive a quote-stripped variant (replyToId kept → they see the "unavailable"
+   * placeholder) so a blocked user's text can't leak through someone else's reply.
+   */
+  private broadcastMessage(
+    event: ServerEvent,
+    senderAddress: string,
+    replyParentAuthor?: string | null
+  ): void {
     const payload = JSON.stringify(event);
+    // Built lazily only if some viewer actually blocked the parent author.
+    let strippedPayload: string | null = null;
     for (const ws of this.state.getWebSockets()) {
       const attachment = ws.deserializeAttachment() as SocketAttachment | null;
-      if (attachment?.blocked?.includes(senderAddress)) continue;
+      const blocked = attachment?.blocked;
+      if (blocked?.includes(senderAddress)) continue;
+      let out = payload;
+      if (
+        replyParentAuthor &&
+        event.type === 'msg' &&
+        blocked?.includes(replyParentAuthor)
+      ) {
+        if (strippedPayload === null) {
+          const { replyTo: _omit, ...rest } = event;
+          strippedPayload = JSON.stringify(rest);
+        }
+        out = strippedPayload;
+      }
       try {
-        ws.send(payload);
+        ws.send(out);
       } catch {
         // Socket already closing; ignore.
       }

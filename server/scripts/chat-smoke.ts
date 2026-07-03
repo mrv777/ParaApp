@@ -146,6 +146,8 @@ interface HistoryMessage {
   id: string;
   body: string;
   reactions?: { emoji: string; count: number; mine?: boolean }[];
+  replyToId?: string;
+  replyTo?: { senderDisplay: string; textPreview: string };
 }
 
 async function getHistory(
@@ -404,6 +406,86 @@ async function main(): Promise<void> {
         skip('message carries nickname', 'no token');
       }
 
+      // Replies: a message can reference a parent; the broadcast + history carry
+      // replyToId and a hydrated quote. The first broadcast message is the parent.
+      let replyMessageId: string | null = null;
+      if (messageId) {
+        await sleep(1600);
+        const replyBody = `smoke reply ${Date.now()}`;
+        authed.send({ type: 'msg', body: replyBody, replyToId: messageId });
+        const replyBroadcast = await b.waitFor(
+          (e) => e.type === 'msg' && e.body === replyBody
+        );
+        check(
+          'reply broadcasts with replyToId + hydrated quote',
+          replyBroadcast?.type === 'msg' &&
+            replyBroadcast.replyToId === messageId &&
+            !!replyBroadcast.replyTo &&
+            replyBroadcast.replyTo.textPreview === body,
+          replyBroadcast?.type === 'msg'
+            ? `replyToId=${replyBroadcast.replyToId} preview=${JSON.stringify(
+                replyBroadcast.replyTo?.textPreview
+              )}`
+            : 'no broadcast'
+        );
+        replyMessageId = replyBroadcast?.type === 'msg' ? replyBroadcast.id : null;
+
+        const histReply = await getHistory(args.http, session.token);
+        const storedReply = histReply.find((m) => m.id === replyMessageId);
+        check(
+          'history carries reply quote',
+          !!storedReply &&
+            storedReply.replyToId === messageId &&
+            storedReply.replyTo?.textPreview === body,
+          storedReply ? `replyToId=${storedReply.replyToId}` : 'reply not in history'
+        );
+
+        // Reply to a nonexistent parent → posts as a plain message, reference
+        // silently dropped (a vanished target must never block posting).
+        await sleep(1600);
+        const orphanBody = `smoke orphan ${Date.now()}`;
+        authed.send({
+          type: 'msg',
+          body: orphanBody,
+          replyToId: '00000000-0000-4000-8000-000000000000',
+        });
+        const orphanBroadcast = await b.waitFor(
+          (e) => e.type === 'msg' && e.body === orphanBody
+        );
+        check(
+          'reply to missing parent drops the reference',
+          orphanBroadcast?.type === 'msg' &&
+            orphanBroadcast.replyToId === undefined &&
+            orphanBroadcast.replyTo === undefined,
+          orphanBroadcast?.type === 'msg'
+            ? `replyToId=${orphanBroadcast.replyToId}`
+            : 'no broadcast'
+        );
+
+        // Non-UUID replyToId (raw frame) → ignored, message still posts, socket
+        // survives (never reaches a D1 lookup).
+        await sleep(1600);
+        const badRefBody = `smoke badref ${Date.now()}`;
+        authed.sendRaw(
+          JSON.stringify({ type: 'msg', body: badRefBody, replyToId: 12345 })
+        );
+        const badRefBroadcast = await b.waitFor(
+          (e) => e.type === 'msg' && e.body === badRefBody
+        );
+        check(
+          'non-UUID replyToId ignored (posts as plain)',
+          badRefBroadcast?.type === 'msg' &&
+            badRefBroadcast.replyToId === undefined
+        );
+        check('socket survives bad replyToId', authed.isOpen());
+      } else {
+        skip('reply broadcasts with replyToId + hydrated quote', 'no message id');
+        skip('history carries reply quote', 'no message id');
+        skip('reply to missing parent drops the reference', 'no message id');
+        skip('non-UUID replyToId ignored (posts as plain)', 'no message id');
+        skip('socket survives bad replyToId', 'no message id');
+      }
+
       // Whitespace normalization: runs of blank lines collapse to one newline.
       await sleep(1600);
       authed.send({ type: 'msg', body: 'smoke A\n\n\n\n\nB' });
@@ -528,6 +610,32 @@ async function main(): Promise<void> {
             (e) => e.type === 'delete' && e.id === messageId
           );
           check('delete broadcasts to clients', !!delBroadcast);
+
+          // A reply whose parent was just deleted keeps replyToId but loses the
+          // quote on the next read → the client shows the "unavailable"
+          // placeholder (messageId was the parent of replyMessageId).
+          if (replyMessageId) {
+            const histAfterDel = await getHistory(args.http, session.token);
+            const orphanedReply = histAfterDel.find(
+              (m) => m.id === replyMessageId
+            );
+            check(
+              'reply to a deleted parent keeps replyToId, drops the quote',
+              !!orphanedReply &&
+                orphanedReply.replyToId === messageId &&
+                orphanedReply.replyTo === undefined,
+              orphanedReply
+                ? `replyToId=${orphanedReply.replyToId} replyTo=${JSON.stringify(
+                    orphanedReply.replyTo
+                  )}`
+                : 'reply not in history'
+            );
+          } else {
+            skip(
+              'reply to a deleted parent keeps replyToId, drops the quote',
+              'no reply id'
+            );
+          }
         } else {
           skip('admin soft-delete message (200)', 'no message id');
           skip('delete broadcasts to clients', 'no message id');

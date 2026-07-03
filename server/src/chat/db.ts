@@ -7,8 +7,12 @@
  * cron must therefore prune with a millisecond threshold.
  */
 
-import type { ChatMessage, ReactionSummary } from './protocol';
-import { isReactionEmoji, truncateChatAddress } from './protocol';
+import type { ChatMessage, ChatReplyQuote, ReactionSummary } from './protocol';
+import {
+  isReactionEmoji,
+  replyPreview,
+  truncateChatAddress,
+} from './protocol';
 
 interface HistoryRow {
   id: string;
@@ -17,17 +21,30 @@ interface HistoryRow {
   created_at: number;
   nickname: string | null;
   official: number | null;
+  reply_to: string | null;
 }
 
 export async function insertChatMessage(
   db: D1Database,
-  message: { id: string; address: string; body: string; createdAt: number }
+  message: {
+    id: string;
+    address: string;
+    body: string;
+    createdAt: number;
+    replyTo?: string | null;
+  }
 ): Promise<void> {
   await db
     .prepare(
-      'INSERT INTO chat_messages (id, address, body, created_at) VALUES (?, ?, ?, ?)'
+      'INSERT INTO chat_messages (id, address, body, created_at, reply_to) VALUES (?, ?, ?, ?, ?)'
     )
-    .bind(message.id, message.address, message.body, message.createdAt)
+    .bind(
+      message.id,
+      message.address,
+      message.body,
+      message.createdAt,
+      message.replyTo ?? null
+    )
     .run();
 }
 
@@ -66,7 +83,7 @@ export async function getRecentMessages(
 
   const { results } = await db
     .prepare(
-      `SELECT m.id, m.address, m.body, m.created_at, p.nickname, p.official
+      `SELECT m.id, m.address, m.body, m.created_at, m.reply_to, p.nickname, p.official
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
        WHERE ${conditions.join(' AND ')}
@@ -84,6 +101,7 @@ export async function getRecentMessages(
     nickname: row.nickname ?? null,
     official: row.official === 1,
     body: row.body,
+    ...(row.reply_to ? { replyToId: row.reply_to } : {}),
   }));
 
   // Attach reaction summaries (with `mine` when an address is supplied).
@@ -96,7 +114,96 @@ export async function getRecentMessages(
     const summary = reactions.get(message.id);
     if (summary && summary.length) message.reactions = summary;
   }
+
+  // Hydrate reply quotes: batch-fetch the referenced parents (filtered for the
+  // viewer's blocks + soft-deletes). A parent that doesn't resolve leaves
+  // replyToId set with no quote — the client shows an "unavailable" placeholder.
+  const parentIds = messages
+    .map((m) => m.replyToId)
+    .filter((id): id is string => !!id);
+  if (parentIds.length) {
+    const quotes = await getReplyParents(db, parentIds, opts.address ?? '');
+    for (const message of messages) {
+      if (!message.replyToId) continue;
+      const quote = quotes.get(message.replyToId);
+      if (quote) message.replyTo = quote;
+    }
+  }
   return messages;
+}
+
+interface ReplyParentRow {
+  id: string;
+  address: string;
+  body: string;
+  nickname: string | null;
+}
+
+/** Build the display quote for a resolved parent row. */
+function toReplyQuote(row: {
+  address: string;
+  body: string;
+  nickname: string | null;
+}): ChatReplyQuote {
+  return {
+    senderDisplay: row.nickname ?? truncateChatAddress(row.address),
+    textPreview: replyPreview(row.body),
+  };
+}
+
+/**
+ * Batch-resolve reply-parent quotes for a set of parent ids. Skips soft-deleted
+ * parents and — when `viewerAddress` is supplied — parents from senders the
+ * viewer has blocked, so a blocked user's text never leaks through someone
+ * else's reply. Ids that don't resolve are simply absent from the map.
+ */
+export async function getReplyParents(
+  db: D1Database,
+  parentIds: string[],
+  viewerAddress: string
+): Promise<Map<string, ChatReplyQuote>> {
+  const byId = new Map<string, ChatReplyQuote>();
+  const unique = [...new Set(parentIds)];
+  if (unique.length === 0) return byId;
+
+  for (let i = 0; i < unique.length; i += REACTION_QUERY_CHUNK) {
+    const chunk = unique.slice(i, i + REACTION_QUERY_CHUNK);
+    const placeholders = chunk.map(() => '?').join(',');
+    const conditions = [`m.id IN (${placeholders})`, 'm.deleted = 0'];
+    const binds: unknown[] = [...chunk];
+    if (viewerAddress) {
+      conditions.push(
+        'm.address NOT IN (SELECT blocked FROM chat_blocks WHERE blocker = ?)'
+      );
+      binds.push(viewerAddress);
+    }
+    const { results } = await db
+      .prepare(
+        `SELECT m.id, m.address, m.body, p.nickname
+         FROM chat_messages m
+         LEFT JOIN chat_profiles p ON p.address = m.address
+         WHERE ${conditions.join(' AND ')}`
+      )
+      .bind(...binds)
+      .all<ReplyParentRow>();
+    for (const row of results) {
+      byId.set(row.id, toReplyQuote(row));
+    }
+  }
+  return byId;
+}
+
+/**
+ * Resolve a single reply-parent quote (used on the live send path). Same
+ * deleted/blocked rules as getReplyParents. Returns null when unresolved.
+ */
+export async function getReplyParent(
+  db: D1Database,
+  parentId: string,
+  viewerAddress: string
+): Promise<ChatReplyQuote | null> {
+  const quotes = await getReplyParents(db, [parentId], viewerAddress);
+  return quotes.get(parentId) ?? null;
 }
 
 // ============================================================================

@@ -48,8 +48,12 @@ function detachAndClose(ws: WebSocket | null): void {
 }
 
 export interface UseChatSocketReturn {
-  /** Send a chat message; returns false if not connected or not authenticated. */
-  sendMessage: (body: string) => boolean;
+  /**
+   * Send a chat message; returns false if not connected or not authenticated.
+   * Pass `replyToId` (a parent message id) to post it as a reply — the server
+   * validates the target and drops the reference if it's gone.
+   */
+  sendMessage: (body: string, replyToId?: string) => boolean;
   /** Toggle a fixed-set reaction on a message; returns false if not connected/authed. */
   sendReaction: (
     messageId: string,
@@ -340,6 +344,8 @@ export function useChatSocket(): UseChatSocketReturn {
               nickname: msg.nickname,
               official: msg.official,
               body: msg.body,
+              ...(msg.replyToId ? { replyToId: msg.replyToId } : {}),
+              ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
             },
           ]);
           break;
@@ -439,20 +445,29 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   }, [isActive, address, connect, clearTimers, setConnectionState, resetMessages]);
 
-  const sendMessage = useCallback((body: string): boolean => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN || !tokenRef.current) {
-      return false;
-    }
-    const trimmed = body.trim();
-    if (!trimmed) return false;
-    try {
-      ws.send(JSON.stringify({ type: 'msg', body: trimmed }));
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
+  const sendMessage = useCallback(
+    (body: string, replyToId?: string): boolean => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !tokenRef.current) {
+        return false;
+      }
+      const trimmed = body.trim();
+      if (!trimmed) return false;
+      try {
+        ws.send(
+          JSON.stringify({
+            type: 'msg',
+            body: trimmed,
+            ...(replyToId ? { replyToId } : {}),
+          })
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
 
   const sendReaction = useCallback(
     (messageId: string, emoji: ReactionEmoji, op: 'add' | 'remove'): boolean => {

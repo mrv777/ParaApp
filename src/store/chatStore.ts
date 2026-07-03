@@ -145,20 +145,52 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
 
   removeMessagesFrom: (address) =>
     set((state) => {
-      const filtered = state.messages.filter((m) => m.address !== address);
-      return filtered.length === state.messages.length
-        ? state
-        : { messages: filtered };
+      // Ids of the blocked user's own (loaded) messages, so replies that quote
+      // them lose the quote too — not just the messages themselves.
+      const removedIds = new Set(
+        state.messages.filter((m) => m.address === address).map((m) => m.id)
+      );
+      if (removedIds.size === 0) return state;
+      const next = [];
+      for (const m of state.messages) {
+        if (m.address === address) continue; // drop the blocked user's messages
+        if (m.replyToId && m.replyTo && removedIds.has(m.replyToId)) {
+          // Quoted a now-blocked sender → strip the quote; keep replyToId so the
+          // row shows the "unavailable" placeholder rather than the blocked text.
+          const stripped = { ...m };
+          delete stripped.replyTo;
+          next.push(stripped);
+        } else {
+          next.push(m);
+        }
+      }
+      return { messages: next };
     }),
 
   removeMessage: (id) =>
     set((state) => {
       if (deletedIds.size >= MAX_DELETED_IDS) deletedIds.clear();
       deletedIds.add(id); // block re-merge by an in-flight history fetch
-      const filtered = state.messages.filter((m) => m.id !== id);
-      return filtered.length === state.messages.length
-        ? state
-        : { messages: filtered };
+      let changed = false;
+      const next = [];
+      for (const m of state.messages) {
+        if (m.id === id) {
+          changed = true; // drop the deleted message itself
+          continue;
+        }
+        if (m.replyToId === id && m.replyTo) {
+          // Parent was just deleted (admin moderation) — drop the stale quote and
+          // keep replyToId so the reply immediately shows the "unavailable"
+          // placeholder instead of the removed text, without waiting for reconcile.
+          const stripped = { ...m };
+          delete stripped.replyTo;
+          next.push(stripped);
+          changed = true;
+        } else {
+          next.push(m);
+        }
+      }
+      return changed ? { messages: next } : state;
     }),
 
   setOnline: (online) => set({ online }),

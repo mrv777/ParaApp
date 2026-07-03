@@ -55,10 +55,10 @@ export interface ReactionSummary {
 }
 
 /**
- * Quoted parent shown above a reply's body. The design specifies reply-quotes,
- * but the server protocol does not carry a parent reference yet, so this stays
- * unpopulated for now — the UI render path is ready for when the backend adds
- * `replyTo` to the `msg` event + a D1 column. See the Chat screen handoff notes.
+ * Quoted parent shown above a reply's body. Hydrated by the server at
+ * read/broadcast time from the live parent row, so it is absent (while
+ * `replyToId` is still present) when the parent is deleted, pruned, or from a
+ * sender the viewer has blocked — the row then renders a generic placeholder.
  */
 export interface ChatReplyQuote {
   /** Display string of the replied-to sender (nickname or truncated address). */
@@ -77,12 +77,14 @@ export interface ChatMessage {
   official?: boolean;
   body: string;
   reactions?: ReactionSummary[];
-  /** Present only when this message is a reply (not yet wired server-side). */
+  /** Parent message id when this is a reply (present even if the quote isn't). */
+  replyToId?: string;
+  /** Hydrated parent quote; absent when the parent is unavailable to the viewer. */
   replyTo?: ChatReplyQuote;
 }
 
 export type ClientEvent =
-  | { type: 'msg'; body: string }
+  | { type: 'msg'; body: string; replyToId?: string }
   | {
       type: 'react';
       messageId: string;
@@ -99,6 +101,8 @@ export type ServerEvent =
       nickname: string | null;
       official?: boolean;
       body: string;
+      replyToId?: string;
+      replyTo?: ChatReplyQuote;
     }
   | {
       type: 'react';

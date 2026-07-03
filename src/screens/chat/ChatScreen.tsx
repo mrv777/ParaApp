@@ -24,6 +24,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -79,6 +80,7 @@ const MAX_INPUT_HEIGHT = 110;
 // Weighted font families the app ships (RN doesn't synthesize weights). Space
 // Grotesk = prose/titles; JetBrains Mono = addresses/labels/timestamps.
 const MONO = 'JetBrainsMono_400Regular';
+const MONO_BOLD = 'JetBrainsMono_700Bold';
 const GROTESK = 'SpaceGrotesk_400Regular';
 const GROTESK_BOLD = 'SpaceGrotesk_700Bold';
 
@@ -89,6 +91,8 @@ const PIN_BORDER = 'rgba(255,255,255,0.14)';
 const PIN_BG = 'rgba(255,255,255,0.03)';
 const IDENTICON_BORDER = 'rgba(255,255,255,0.16)';
 const REPLY_BAR = 'rgba(255,255,255,0.14)';
+// Brief flash when a reply-quote jump lands on the original message.
+const HIGHLIGHT_BG = 'rgba(255,255,255,0.06)';
 
 const TEXT_BODY = '#f2f2f3';
 const TEXT_PINNED = '#e0e0e2';
@@ -135,7 +139,13 @@ interface RowProps {
   canReact: boolean;
   /** Day-divider label to show above this row (first message of a new day), else null. */
   dateLabel: string | null;
+  /** Localized fallback shown in the quote when a reply's parent is unavailable. */
+  replyUnavailableLabel: string;
+  /** True while this row is briefly highlighted after a jump-to-original. */
+  highlighted: boolean;
   onLongPress: (message: ChatMessage) => void;
+  onReply: (message: ChatMessage) => void;
+  onJumpTo: (id: string | undefined) => void;
   onToggleReaction: (id: string, emoji: ReactionEmoji, mine: boolean) => void;
 }
 
@@ -145,17 +155,38 @@ const MessageRow = memo(function MessageRow({
   youLabel,
   canReact,
   dateLabel,
+  replyUnavailableLabel,
+  highlighted,
   onLongPress,
+  onReply,
+  onJumpTo,
   onToggleReaction,
 }: RowProps) {
   const { i18n } = useTranslation();
   const handle = isOwn ? youLabel : message.nickname || truncateAddress(message.address);
   const body = useMemo(() => sanitizeDisplayBody(message.body), [message.body]);
+  const swipeRef = useRef<Swipeable>(null);
+
+  // Swiped far enough → set this message as the reply target, then snap back
+  // (reply-and-reset; no persistent open state to manage).
+  const handleSwipeOpen = useCallback(() => {
+    onReply(message);
+    swipeRef.current?.close();
+  }, [onReply, message]);
+
+  const renderReplyAction = useCallback(
+    () => (
+      <View style={styles.swipeAction}>
+        <RNText style={styles.swipeGlyph}>↩</RNText>
+      </View>
+    ),
+    []
+  );
 
   return (
     <>
-      {/* Day divider — first message of each local day. Outside the Pressable
-          so a long-press here doesn't open the message actions. */}
+      {/* Day divider — first message of each local day. Outside the row so a
+          long-press / swipe here doesn't act on the message. */}
       {dateLabel ? (
         <View style={styles.dayDivider}>
           <View style={styles.dayRule} />
@@ -164,60 +195,82 @@ const MessageRow = memo(function MessageRow({
         </View>
       ) : null}
 
-      <Pressable
-        onLongPress={() => canReact && onLongPress(message)}
-        delayLongPress={300}
-        style={styles.row}
+      <Swipeable
+        ref={swipeRef}
+        enabled={canReact}
+        renderRightActions={canReact ? renderReplyAction : undefined}
+        rightThreshold={40}
+        friction={2}
+        onSwipeableOpen={handleSwipeOpen}
       >
-        {/* Meta line: identicon · handle · spacer · timestamp */}
-        <View style={styles.meta}>
-          <Identicon address={message.address} self={isOwn} />
-          {isOwn ? (
-            <RNText style={styles.handleSelf}>{handle}</RNText>
-          ) : (
-            <RNText style={styles.handle}>{handle}</RNText>
-          )}
-          {/* Admin-assigned (locked) official handle. */}
-          {message.official ? (
-            <RNText style={styles.official} accessibilityLabel="Official handle">
-              ✓
-            </RNText>
-          ) : null}
-          <View style={{ flex: 1 }} />
-          <RNText style={styles.time}>{formatTime(message.ts, i18n.language)}</RNText>
-        </View>
-
-        {/* Reply quote (only when the message references a parent). */}
-        {message.replyTo ? (
-          <View style={styles.replyQuote}>
-            <RNText style={styles.replyHandle}>{`↩ ${message.replyTo.senderDisplay}`}</RNText>
-            <RNText style={styles.replyPreview} numberOfLines={1}>
-              {message.replyTo.textPreview}
-            </RNText>
+        <Pressable
+          onLongPress={() => canReact && onLongPress(message)}
+          delayLongPress={300}
+          style={[styles.row, highlighted && styles.rowHighlight]}
+        >
+          {/* Meta line: identicon · handle · spacer · timestamp */}
+          <View style={styles.meta}>
+            <Identicon address={message.address} self={isOwn} />
+            {isOwn ? (
+              <RNText style={styles.handleSelf}>{handle}</RNText>
+            ) : (
+              <RNText style={styles.handle}>{handle}</RNText>
+            )}
+            {/* Admin-assigned (locked) official handle. */}
+            {message.official ? (
+              <RNText style={styles.official} accessibilityLabel="Official handle">
+                ✓
+              </RNText>
+            ) : null}
+            <View style={{ flex: 1 }} />
+            <RNText style={styles.time}>{formatTime(message.ts, i18n.language)}</RNText>
           </View>
-        ) : null}
 
-        {/* Body */}
-        <RNText style={styles.body}>{body}</RNText>
-
-        {/* Reaction chips (tap to toggle). */}
-        {message.reactions && message.reactions.length > 0 ? (
-          <View style={styles.reactions}>
-            {message.reactions.map((r) => (
-              <Pressable
-                key={r.emoji}
-                onPress={() => canReact && onToggleReaction(message.id, r.emoji, !!r.mine)}
-                style={[styles.chip, { borderColor: r.mine ? colors.primary : colors.border }]}
+          {/* Reply quote (any message that references a parent). Tapping jumps to
+              the original. When the quote itself is absent — parent deleted,
+              pruned, or from a blocked sender — show a muted placeholder. */}
+          {message.replyToId ? (
+            <Pressable
+              onPress={() => onJumpTo(message.replyToId)}
+              style={styles.replyQuote}
+            >
+              <RNText style={styles.replyHandle}>
+                {`↩ ${message.replyTo?.senderDisplay ?? ''}`}
+              </RNText>
+              <RNText
+                style={[
+                  styles.replyPreview,
+                  !message.replyTo && styles.replyPreviewMuted,
+                ]}
+                numberOfLines={1}
               >
-                {/* Monochrome vector icon (color emoji don't render reliably and
-                  clash with the theme); count stays mono. */}
-                <ReactionGlyph emoji={r.emoji} size={13} color={TEXT_BODY} />
-                <RNText style={styles.chipCount}>{` ${r.count}`}</RNText>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-      </Pressable>
+                {message.replyTo?.textPreview ?? replyUnavailableLabel}
+              </RNText>
+            </Pressable>
+          ) : null}
+
+          {/* Body */}
+          <RNText style={styles.body}>{body}</RNText>
+
+          {/* Reaction chips (tap to toggle). */}
+          {message.reactions && message.reactions.length > 0 ? (
+            <View style={styles.reactions}>
+              {message.reactions.map((r) => (
+                <Pressable
+                  key={r.emoji}
+                  onPress={() => canReact && onToggleReaction(message.id, r.emoji, !!r.mine)}
+                  style={[styles.chip, { borderColor: r.mine ? colors.primary : colors.border }]}
+                >
+                  {/* Monochrome vector icon (color emoji don't render reliably and
+                    clash with the theme); count stays mono. */}
+                  <ReactionGlyph emoji={r.emoji} size={13} color={TEXT_BODY} />
+                  <RNText style={styles.chipCount}>{` ${r.count}`}</RNText>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </Pressable>
+      </Swipeable>
     </>
   );
 });
@@ -346,6 +399,13 @@ export function ChatScreen({ navigation }: Props) {
   const [input, setInput] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const [actionMessage, setActionMessage] = useState<ChatMessage | null>(null);
+  // The message currently being replied to (composer banner + outgoing replyToId).
+  const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
+  // Row briefly flashed after a jump-to-original from a reply quote.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
+  const listRef = useRef<React.ComponentRef<typeof LegendList>>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The long-press snapshot goes stale if a reaction lands while the sheet is
   // open (its quick-react `mine` state would send the wrong op) — resolve the
   // live copy from the store; fall back to the snapshot if it was deleted.
@@ -355,7 +415,11 @@ export function ChatScreen({ navigation }: Props) {
   }, [actionMessage, messages]);
   const [nicknameOpen, setNicknameOpen] = useState(false);
   const [eulaOpen, setEulaOpen] = useState(false);
-  const [pendingSend, setPendingSend] = useState<string | null>(null);
+  // Body + reply target held across the first-post EULA gate.
+  const [pendingSend, setPendingSend] = useState<{
+    body: string;
+    replyTo: ChatMessage | null;
+  } | null>(null);
 
   const hasDraft = input.trim().length > 0;
 
@@ -363,6 +427,9 @@ export function ChatScreen({ navigation }: Props) {
   // succeeds, but the server may still reject it (rate limit, filter) via a
   // later `error` event — restore the text then so the user's draft isn't lost.
   const lastSentRef = useRef<string | null>(null);
+  // The reply target that accompanied lastSentRef, restored alongside the text
+  // if the send is rejected, so a bounced reply keeps its context.
+  const lastReplyRef = useRef<ChatMessage | null>(null);
 
   // Surface server errors (rate limited, blocked, etc.) as a toast.
   useEffect(() => {
@@ -374,9 +441,12 @@ export function ChatScreen({ navigation }: Props) {
       lastSentRef.current
     ) {
       const rejected = lastSentRef.current;
+      const rejectedReply = lastReplyRef.current;
       lastSentRef.current = null;
-      // Don't clobber anything the user has typed since.
+      lastReplyRef.current = null;
+      // Don't clobber anything the user has typed / a reply they've since started.
       setInput((current) => (current.trim() ? current : rejected));
+      setReplyTarget((current) => current ?? rejectedReply);
     }
     haptics.warning();
     Toast.show({
@@ -389,10 +459,12 @@ export function ChatScreen({ navigation }: Props) {
   }, [lastError, t, clearError]);
 
   const doSend = useCallback(
-    (body: string) => {
-      if (sendMessage(body)) {
+    (body: string, replyTo: ChatMessage | null) => {
+      if (sendMessage(body, replyTo?.id)) {
         lastSentRef.current = body;
+        lastReplyRef.current = replyTo;
         setInput('');
+        setReplyTarget(null); // consumed — clear the composer banner
         setInputHeight(MIN_INPUT_HEIGHT); // shrink back after sending
         haptics.light();
       } else {
@@ -407,12 +479,12 @@ export function ChatScreen({ navigation }: Props) {
     if (!body) return;
     // First post requires accepting the current community guidelines / EULA.
     if (eulaVersion !== CHAT_EULA_VERSION) {
-      setPendingSend(body);
+      setPendingSend({ body, replyTo: replyTarget });
       setEulaOpen(true);
       return;
     }
-    doSend(body);
-  }, [input, eulaVersion, doSend]);
+    doSend(body, replyTarget);
+  }, [input, eulaVersion, doSend, replyTarget]);
 
   const handleAcceptEula = useCallback(() => {
     // Set the local version + send immediately so the first post isn't gated on a
@@ -421,9 +493,9 @@ export function ChatScreen({ navigation }: Props) {
     // missing compliance record is visible rather than silently dropped.
     setChatEulaVersion(CHAT_EULA_VERSION);
     setEulaOpen(false);
-    const body = pendingSend;
+    const pending = pendingSend;
     setPendingSend(null);
-    if (body) doSend(body);
+    if (pending) doSend(pending.body, pending.replyTo);
     if (token) {
       void runTokenAction(token, refreshToken, (tk) =>
         acceptChatEula(tk, CHAT_EULA_VERSION)
@@ -446,12 +518,53 @@ export function ChatScreen({ navigation }: Props) {
     setActionMessage(message);
   }, []);
 
+  // Start a reply: set the target, close any open action sheet, and focus the
+  // composer so the keyboard is up ready to type.
+  const handleReply = useCallback((message: ChatMessage) => {
+    setActionMessage(null);
+    setReplyTarget(message);
+    haptics.selection();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  // Jump from a reply quote to the original message, if it's in the loaded
+  // buffer; briefly highlight it. Older-than-buffer parents can't be targeted.
+  const handleJumpTo = useCallback(
+    (id: string | undefined) => {
+      if (!id) return;
+      const idx = messages.findIndex((m) => m.id === id);
+      if (idx === -1) {
+        haptics.warning();
+        Toast.show({ type: 'info', text1: t('chat.replyNotLoaded') });
+        return;
+      }
+      listRef.current?.scrollToIndex?.({
+        index: idx,
+        animated: true,
+        viewPosition: 0.5,
+      });
+      setHighlightedId(id);
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+      highlightTimer.current = setTimeout(() => setHighlightedId(null), 1400);
+      haptics.selection();
+    },
+    [messages, t]
+  );
+
+  // Clear a pending highlight timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    };
+  }, []);
+
   const handleToggleReaction = useCallback(
     (id: string, emoji: ReactionEmoji, mine: boolean) => {
       // A reaction shares the `rate_limited` error code with messages, and the
       // error effect restores lastSentRef into the composer. Clear it here so a
-      // rate-limited reaction can't resurrect a long-delivered message.
+      // rate-limited reaction can't resurrect a long-delivered message / reply.
       lastSentRef.current = null;
+      lastReplyRef.current = null;
       const ok = sendReaction(id, emoji, mine ? 'remove' : 'add');
       if (ok) {
         // Optimistic local update: the server echoes reactions only as a
@@ -519,12 +632,34 @@ export function ChatScreen({ navigation }: Props) {
         youLabel={t('common.you')}
         canReact={canPost}
         dateLabel={dividerById.get(item.id) ?? null}
+        replyUnavailableLabel={t('chat.replyUnavailable')}
+        highlighted={highlightedId === item.id}
         onLongPress={handleLongPress}
+        onReply={handleReply}
+        onJumpTo={handleJumpTo}
         onToggleReaction={handleToggleReaction}
       />
     ),
-    [selfKey, t, canPost, dividerById, handleLongPress, handleToggleReaction]
+    [
+      selfKey,
+      t,
+      canPost,
+      dividerById,
+      highlightedId,
+      handleLongPress,
+      handleReply,
+      handleJumpTo,
+      handleToggleReaction,
+    ]
   );
+
+  // Composer reply-banner display values.
+  const replySenderDisplay = replyTarget
+    ? !!selfKey && replyTarget.address === selfKey
+      ? t('common.you')
+      : replyTarget.nickname || truncateAddress(replyTarget.address)
+    : '';
+  const replyPreviewText = replyTarget ? sanitizeDisplayBody(replyTarget.body) : '';
 
   const online_ =
     connectionState === 'connected'
@@ -575,6 +710,7 @@ export function ChatScreen({ navigation }: Props) {
             Scroll to the top pages older history; maintainVisibleContentPosition
             keeps the viewport steady as older messages prepend. */}
         <LegendList
+          ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
@@ -606,14 +742,41 @@ export function ChatScreen({ navigation }: Props) {
 
         {/* Composer, or a read-only bar explaining why posting is unavailable. */}
         {canPost ? (
-          <View style={styles.composer}>
-            <RNText style={styles.caret}>{'>'}</RNText>
-            <TextInput
-              style={[styles.composerInput, { height: inputHeight }]}
-              placeholder={t('chat.composerPlaceholder')}
-              placeholderTextColor={TEXT_TIME}
-              value={input}
-              onChangeText={setInput}
+          <View>
+            {/* Reply banner: shown above the input while composing a reply. */}
+            {replyTarget ? (
+              <View style={styles.replyBanner}>
+                <View style={styles.replyBannerText}>
+                  <RNText style={styles.replyBannerHandle} numberOfLines={1}>
+                    {`↩ ${t('chat.replyingToLabel')} `}
+                    <RNText style={styles.replyBannerSender}>
+                      {replySenderDisplay}
+                    </RNText>
+                  </RNText>
+                  <RNText style={styles.replyBannerPreview} numberOfLines={1}>
+                    {replyPreviewText}
+                  </RNText>
+                </View>
+                <Pressable
+                  onPress={() => setReplyTarget(null)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('chat.cancelReply')}
+                  style={styles.replyCancel}
+                >
+                  <Ionicons name="close" size={16} color={TEXT_MUTED} />
+                </Pressable>
+              </View>
+            ) : null}
+            <View style={styles.composer}>
+              <RNText style={styles.caret}>{'>'}</RNText>
+              <TextInput
+                ref={inputRef}
+                style={[styles.composerInput, { height: inputHeight }]}
+                placeholder={t('chat.composerPlaceholder')}
+                placeholderTextColor={TEXT_TIME}
+                value={input}
+                onChangeText={setInput}
               multiline
               maxLength={MAX_MESSAGE_LENGTH}
               onContentSizeChange={(e) =>
@@ -644,6 +807,7 @@ export function ChatScreen({ navigation }: Props) {
                 {'↵'}
               </RNText>
             </Pressable>
+            </View>
           </View>
         ) : !hasAddress ? (
           // No address → prompt to add one.
@@ -696,6 +860,7 @@ export function ChatScreen({ navigation }: Props) {
         message={liveActionMessage}
         isOwn={!!selfKey && liveActionMessage?.address === selfKey}
         onClose={() => setActionMessage(null)}
+        onReply={handleReply}
         onReact={handleToggleReaction}
         onReport={handleReport}
         onBlock={handleBlock}
@@ -784,7 +949,21 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     textTransform: 'uppercase',
   },
-  row: { paddingVertical: 9, paddingHorizontal: 20 },
+  row: {
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+    // Opaque so the swipe-reveal action behind the row isn't visible at rest.
+    backgroundColor: colors.background,
+  },
+  rowHighlight: { backgroundColor: HIGHLIGHT_BG },
+  // Right-swipe reveal: a reply glyph in a full-height strip.
+  swipeAction: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 24,
+    backgroundColor: colors.background,
+  },
+  swipeGlyph: { fontFamily: MONO, fontSize: 20, color: TEXT_MUTED },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   identicon: {
     width: 18,
@@ -828,6 +1007,8 @@ const styles = StyleSheet.create({
     color: TEXT_REPLY_PREVIEW,
     lineHeight: 15,
   },
+  // Muted/italic placeholder when the quoted parent is unavailable.
+  replyPreviewMuted: { color: TEXT_REPLY_HANDLE, fontStyle: 'italic' },
 
   // Body
   body: {
@@ -851,6 +1032,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipCount: { fontFamily: MONO, fontSize: 12, color: TEXT_BODY },
+
+  // Composer reply banner
+  // Full-width band above the composer (not an inset box): a top hairline
+  // separates it from the feed, and the composer's own top border closes it
+  // off below — matching the edge-to-edge dividers used elsewhere.
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: EDGE,
+  },
+  replyBannerText: {
+    flex: 1,
+    borderLeftWidth: 2,
+    borderLeftColor: REPLY_BAR,
+    paddingLeft: 10,
+  },
+  replyBannerHandle: { fontFamily: MONO, fontSize: 11, color: TEXT_MUTED },
+  // Bold, bright sender in the "Replying to <sender>" line.
+  replyBannerSender: { fontFamily: MONO_BOLD, color: TEXT_BODY },
+  replyBannerPreview: {
+    fontFamily: GROTESK,
+    fontSize: 12.5,
+    color: TEXT_REPLY_PREVIEW,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  replyCancel: { borderWidth: 1, borderColor: colors.border, padding: 6 },
 
   // Composer
   composer: {

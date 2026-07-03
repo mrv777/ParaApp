@@ -80,7 +80,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   address TEXT NOT NULL,
   body TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  deleted INTEGER DEFAULT 0
+  deleted INTEGER DEFAULT 0,
+  reply_to TEXT              -- parent message id when this is a reply (see 0009)
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
 

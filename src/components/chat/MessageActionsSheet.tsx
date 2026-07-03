@@ -27,6 +27,7 @@ interface MessageActionsSheetProps {
   message: ChatMessage | null;
   isOwn: boolean;
   onClose: () => void;
+  onReply: (message: ChatMessage) => void;
   onReact: (id: string, emoji: ReactionEmoji, mine: boolean) => void;
   onReport: (message: ChatMessage) => void;
   onBlock: (message: ChatMessage) => void;
@@ -38,6 +39,7 @@ export function MessageActionsSheet({
   message,
   isOwn,
   onClose,
+  onReply,
   onReact,
   onReport,
   onBlock,
@@ -113,6 +115,12 @@ export function MessageActionsSheet({
         </View>
 
         {/* Actions */}
+        <ActionRow
+          icon="arrow-undo-outline"
+          label={t('chat.reply')}
+          color={colors.textValue}
+          onPress={() => onReply(shown)}
+        />
         <ActionRow
           icon="copy-outline"
           label={t('chat.copy')}

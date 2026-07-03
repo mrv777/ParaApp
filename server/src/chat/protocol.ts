@@ -33,6 +33,34 @@ export interface ReactionSummary {
   mine?: boolean;
 }
 
+/** Max characters in a reply-quote preview (post-collapse). */
+export const REPLY_PREVIEW_LENGTH = 120;
+
+/**
+ * One-line preview of a parent message body for a reply quote: collapse all
+ * whitespace runs to single spaces and clamp the length. Keeps the quote a
+ * single tidy line regardless of the original's line breaks.
+ */
+export function replyPreview(body: string): string {
+  const oneLine = body.replace(/\s+/g, ' ').trim();
+  return oneLine.length > REPLY_PREVIEW_LENGTH
+    ? oneLine.slice(0, REPLY_PREVIEW_LENGTH)
+    : oneLine;
+}
+
+/**
+ * Quoted parent shown above a reply's body. Hydrated at read/broadcast time
+ * from the live parent row — omitted entirely when the parent is deleted,
+ * pruned, or from a sender the viewer has blocked (the client then renders a
+ * generic "unavailable" placeholder using `replyToId` alone).
+ */
+export interface ChatReplyQuote {
+  /** Display string of the replied-to sender (nickname or truncated address). */
+  senderDisplay: string;
+  /** One-line preview of the replied-to message body (see replyPreview). */
+  textPreview: string;
+}
+
 /** A message as returned by history/broadcast (reactions present once Phase 3 lands). */
 export interface ChatMessage {
   id: string;
@@ -44,11 +72,15 @@ export interface ChatMessage {
   official?: boolean;
   body: string;
   reactions?: ReactionSummary[];
+  /** Parent message id when this is a reply (present even if the quote isn't). */
+  replyToId?: string;
+  /** Hydrated parent quote; absent when the parent is unavailable to the viewer. */
+  replyTo?: ChatReplyQuote;
 }
 
 // Client → server
 export type ClientEvent =
-  | { type: 'msg'; body: string }
+  | { type: 'msg'; body: string; replyToId?: string }
   | {
       type: 'react';
       messageId: string;
@@ -66,6 +98,8 @@ export type ServerEvent =
       nickname: string | null;
       official?: boolean;
       body: string;
+      replyToId?: string;
+      replyTo?: ChatReplyQuote;
     }
   | {
       type: 'react';
