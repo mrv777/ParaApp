@@ -239,6 +239,11 @@ export function SettingsMainScreen({ navigation }: Props) {
     openNotificationSettings();
   }, []);
 
+  const handleOpenBlockedUsers = useCallback(() => {
+    haptics.light();
+    navigation.navigate('BlockedUsers');
+  }, [navigation]);
+
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <ScrollView
@@ -407,6 +412,28 @@ export function SettingsMainScreen({ navigation }: Props) {
                 font="grotesk"
               />
             </View>
+          </SettingsCard>
+
+          {/* ── Chat ──────────────────────────────────────── */}
+          <SettingsCard header={t('settings.chat')}>
+            <Pressable
+              onPress={handleOpenBlockedUsers}
+              className="flex-row items-center justify-between active:opacity-70"
+              style={{ paddingHorizontal: ROW_H_PAD, paddingVertical: 14 }}
+            >
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="body" style={{ fontSize: 16, color: LABEL_COLOR }}>
+                  {t('settings.blockedUsers')}
+                </Text>
+                <Text
+                  variant="mono"
+                  style={{ fontSize: 11, lineHeight: 17, color: colors.textDim, marginTop: 5 }}
+                >
+                  {t('settings.blockedUsersSettingsHint')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
+            </Pressable>
           </SettingsCard>
 
           {/* ── Notifications (kept, restyled) ─────────────── */}

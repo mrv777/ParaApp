@@ -62,6 +62,11 @@ export const chatBlockSchema = z.object({
   messageId: z.string().uuid(),
 });
 
+export const chatUnblockSchema = z.object({
+  token: z.string().min(1),
+  blockId: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
 export const chatEulaSchema = z.object({
   token: z.string().min(1),
   version: z.string().min(1).max(20),

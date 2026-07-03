@@ -41,6 +41,7 @@ export type MinersStackParamList = {
  */
 export type SettingsStackParamList = {
   SettingsMain: undefined;
+  BlockedUsers: undefined;
   QRScanner: undefined;
 };
 

@@ -9,6 +9,7 @@ import {
   chatNicknameSchema,
   chatReportSchema,
   chatBlockSchema,
+  chatUnblockSchema,
   chatEulaSchema,
   chatAdminBanSchema,
   chatAdminNicknameSchema,
@@ -29,6 +30,7 @@ import {
   addReport,
   addBlock,
   removeBlock,
+  getBlockedUsers,
   getMessageSender,
   recordEulaAcceptance,
   softDeleteMessage,
@@ -42,6 +44,7 @@ import { isClean } from './chat/moderation';
 import { isReservedNickname, nicknameKey } from './chat/reserved-nicknames';
 import { stripInvisible } from './chat/sanitize';
 import { adminPageHtml } from './chat/admin-page';
+import { truncateChatAddress } from './chat/protocol';
 import {
   upsertSubscription,
   deleteSubscription,
@@ -66,9 +69,32 @@ import {
 
 const app = new Hono<{ Bindings: Env }>();
 const WIDGET_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+const encoder = new TextEncoder();
 
 // Enable CORS for mobile app
 app.use('*', cors());
+
+async function blockIdFor(
+  secret: string,
+  blocker: string,
+  blocked: string
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(`${blocker}\n${blocked}`)
+  );
+  return Array.from(new Uint8Array(signature), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('');
+}
 
 // Health check
 app.get('/', (c) =>
@@ -530,24 +556,69 @@ app.post('/chat/block', async (c) => {
   }
 });
 
+app.get('/chat/blocks', async (c) => {
+  try {
+    const token = c.req.query('token');
+    if (!token) {
+      return c.json({ success: false, error: 'Missing token' }, 400);
+    }
+    const verified = await verifySessionToken(token, c.env.SESSION_SECRET);
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+
+    const blocked = await getBlockedUsers(c.env.DB, verified.address);
+    const users = await Promise.all(
+      blocked.map(async (row) => ({
+        id: await blockIdFor(c.env.SESSION_SECRET, verified.address, row.address),
+        address: truncateChatAddress(row.address),
+        nickname: row.nickname,
+        official: row.official,
+        createdAt: row.createdAt,
+      }))
+    );
+    return c.json({ success: true, data: { users } });
+  } catch (error) {
+    console.error('chat/blocks error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
 app.delete('/chat/block', async (c) => {
   try {
-    const result = chatBlockSchema.safeParse(await c.req.json());
-    if (!result.success) {
-      return c.json({ success: false, error: result.error.flatten() }, 400);
+    const body = await c.req.json();
+    const unblockResult = chatUnblockSchema.safeParse(body);
+    const legacyResult = chatBlockSchema.safeParse(body);
+    if (!unblockResult.success && !legacyResult.success) {
+      return c.json({ success: false, error: unblockResult.error.flatten() }, 400);
     }
+    const token = unblockResult.success
+      ? unblockResult.data.token
+      : legacyResult.data.token;
     const verified = await verifySessionToken(
-      result.data.token,
+      token,
       c.env.SESSION_SECRET
     );
     if (!verified) {
       return c.json({ success: false, error: 'Invalid or expired token' }, 401);
     }
-    const sender = await getMessageSender(c.env.DB, result.data.messageId);
-    if (!sender) {
-      return c.json({ success: false, error: 'Message not found' }, 404);
+    let target: string | null = null;
+    if (unblockResult.success) {
+      const blocked = await getBlockedUsers(c.env.DB, verified.address);
+      for (const row of blocked) {
+        const id = await blockIdFor(c.env.SESSION_SECRET, verified.address, row.address);
+        if (id === unblockResult.data.blockId) {
+          target = row.address;
+          break;
+        }
+      }
+    } else {
+      target = await getMessageSender(c.env.DB, legacyResult.data.messageId);
     }
-    await removeBlock(c.env.DB, verified.address, sender);
+    if (!target) {
+      return c.json({ success: false, error: 'Block not found' }, 404);
+    }
+    await removeBlock(c.env.DB, verified.address, target);
     return c.json({ success: true });
   } catch (error) {
     console.error('chat/block delete error:', error);

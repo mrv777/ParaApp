@@ -316,6 +316,40 @@ export async function getBlockedBy(
   return results.map((r) => r.blocked);
 }
 
+export interface BlockedUserRow {
+  address: string;
+  nickname: string | null;
+  official: boolean;
+  createdAt: number;
+}
+
+export async function getBlockedUsers(
+  db: D1Database,
+  blocker: string
+): Promise<BlockedUserRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT b.blocked AS address, b.created_at, p.nickname, p.official
+       FROM chat_blocks b
+       LEFT JOIN chat_profiles p ON p.address = b.blocked
+       WHERE b.blocker = ?
+       ORDER BY b.created_at DESC, b.blocked ASC`
+    )
+    .bind(blocker)
+    .all<{
+      address: string;
+      created_at: number;
+      nickname: string | null;
+      official: number | null;
+    }>();
+  return results.map((row) => ({
+    address: row.address,
+    nickname: row.nickname ?? null,
+    official: row.official === 1,
+    createdAt: row.created_at,
+  }));
+}
+
 export async function addBlock(
   db: D1Database,
   blocker: string,

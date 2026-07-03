@@ -46,6 +46,21 @@ interface ChatNicknameResponse {
   error?: unknown;
 }
 
+export interface BlockedChatUser {
+  id: string;
+  /** Truncated public address key, never the full address. */
+  address: string;
+  nickname: string | null;
+  official?: boolean;
+  createdAt: number;
+}
+
+interface ChatBlocksResponse {
+  success: boolean;
+  data?: { users: BlockedChatUser[] };
+  error?: unknown;
+}
+
 /**
  * Exchange a pool address for a short-lived posting token. Returns a 403 (via
  * ApiError.status) when the address fails the activity gate or is banned; no
@@ -132,14 +147,24 @@ export async function blockChatSender(
   );
 }
 
-export async function unblockChatSender(
+export async function fetchBlockedChatUsers(
+  token: string
+): Promise<ApiResult<ChatBlocksResponse>> {
+  const params = new URLSearchParams({ token });
+  return fetchWithTimeout<ChatBlocksResponse>(
+    `${CHAT_HTTP_BASE}/chat/blocks?${params.toString()}`,
+    { retries: 0 }
+  );
+}
+
+export async function unblockChatUser(
   token: string,
-  messageId: string
+  blockId: string
 ): Promise<ApiResult<ChatOkResponse>> {
   return fetchWithTimeout<ChatOkResponse>(`${CHAT_HTTP_BASE}/chat/block`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, messageId }),
+    body: JSON.stringify({ token, blockId }),
     retries: 0,
   });
 }

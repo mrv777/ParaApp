@@ -3,7 +3,11 @@
  */
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { SettingsMainScreen, QRScannerScreen } from '@/screens/settings';
+import {
+  SettingsMainScreen,
+  BlockedUsersScreen,
+  QRScannerScreen,
+} from '@/screens/settings';
 import { colors } from '@/constants/colors';
 import type { SettingsStackParamList } from '@/types/navigation';
 
@@ -19,6 +23,7 @@ export function SettingsStack() {
       }}
     >
       <Stack.Screen name="SettingsMain" component={SettingsMainScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen
         name="QRScanner"
         component={QRScannerScreen}
