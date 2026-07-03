@@ -66,6 +66,8 @@ export interface UseChatSocketReturn {
   token: string | null;
   /** The caller's current nickname (null = none / read-only), for prefilling the editor. */
   selfNickname: string | null;
+  /** Update the cached nickname immediately after a save (before the next re-mint). */
+  setSelfNickname: (nickname: string | null) => void;
   /** True when the caller's handle is admin-assigned (locked — not user-editable). */
   selfOfficial: boolean;
   /** True when an address is set but failed the activity gate (or is banned). */
@@ -527,6 +529,7 @@ export function useChatSocket(): UseChatSocketReturn {
     canPost,
     token,
     selfNickname,
+    setSelfNickname,
     selfOfficial,
     gateDenied,
     lastError,

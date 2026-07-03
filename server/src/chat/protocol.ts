@@ -132,7 +132,11 @@ export type ChatErrorCode =
   | 'bad_body'
   | 'blocked_content'
   | 'bad_emoji'
-  | 'not_supported';
+  | 'not_supported'
+  // An internal failure (e.g. the D1 write threw) prevented the message from
+  // being persisted/broadcast. Lets the client surface a retry instead of the
+  // message silently vanishing.
+  | 'server_error';
 
 export function isReactionEmoji(value: string): value is ReactionEmoji {
   return (REACTION_EMOJIS as readonly string[]).includes(value);

@@ -8,8 +8,8 @@
  * handoff's Space Mono) for addresses/labels/timestamps.
  *
  * Data is real (WebSocket + chatStore); only the presentation follows the
- * design. Reply-quotes are rendered when present but the backend does not carry
- * a parent reference yet, so `replyTo` is currently never populated.
+ * design. Replies are fully wired: the backend carries the parent reference and
+ * `replyTo` quote, and tapping a quote jumps to the original when it's loaded.
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -332,6 +332,7 @@ export function ChatScreen({ navigation }: Props) {
     canPost,
     token,
     selfNickname,
+    setSelfNickname,
     selfOfficial,
     gateDenied,
     lastError,
@@ -445,7 +446,10 @@ export function ChatScreen({ navigation }: Props) {
     if (
       (lastError === 'rate_limited' ||
         lastError === 'blocked_content' ||
-        lastError === 'bad_body') &&
+        lastError === 'bad_body' ||
+        // The server failed to persist/broadcast the message — restore the
+        // draft so the user can retry rather than losing what they typed.
+        lastError === 'server_error') &&
       lastSentRef.current
     ) {
       const rejected = lastSentRef.current;
@@ -862,6 +866,7 @@ export function ChatScreen({ navigation }: Props) {
         refreshToken={refreshToken}
         initialNickname={selfNickname ?? ''}
         locked={selfOfficial}
+        onSaved={setSelfNickname}
       />
 
       <MessageActionsSheet

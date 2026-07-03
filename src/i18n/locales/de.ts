@@ -400,6 +400,7 @@ const de = {
     eulaAccept: 'Zustimmen & posten',
     errors: {
       generic: 'Nachricht konnte nicht gesendet werden',
+      server_error: 'Serverfehler – bitte erneut versuchen',
       rate_limited: 'Etwas langsamer',
       blocked_content: 'Nachricht blockiert',
       banned: 'Du bist vom Chat gesperrt',

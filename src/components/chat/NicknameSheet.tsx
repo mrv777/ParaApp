@@ -26,6 +26,12 @@ interface NicknameSheetProps {
   initialNickname?: string;
   /** True when the handle is admin-assigned (locked); the editor is read-only. */
   locked?: boolean;
+  /**
+   * Fired with the server's authoritative nickname after a successful save so
+   * the parent can update its cached handle immediately — otherwise the prefill
+   * stays stale until the socket next re-mints its token.
+   */
+  onSaved?: (nickname: string | null) => void;
 }
 
 export function NicknameSheet({
@@ -35,6 +41,7 @@ export function NicknameSheet({
   refreshToken,
   initialNickname = '',
   locked = false,
+  onSaved,
 }: NicknameSheetProps) {
   const { t } = useTranslation();
   const [value, setValue] = useState(initialNickname);
@@ -75,6 +82,9 @@ export function NicknameSheet({
     }
     haptics.success();
     Toast.show({ type: 'success', text1: t('chat.nicknameSaved') });
+    // Propagate the authoritative handle (null = cleared → truncated address)
+    // so the parent's prefill reflects the save without waiting for a re-mint.
+    onSaved?.(result.data.data?.nickname ?? null);
     onClose();
   };
 

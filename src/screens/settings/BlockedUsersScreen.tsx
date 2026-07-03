@@ -76,15 +76,25 @@ export function BlockedUsersScreen({ navigation }: Props) {
       setError(null);
       setAccessDenied(false);
 
-      const freshToken = await refreshToken();
-      if (!freshToken) {
+      // Fetch the session directly (rather than via refreshToken) so we can read
+      // the status: a 403 means this address isn't eligible for chat (the locked
+      // panel), whereas a network/timeout/5xx failure is transient and should
+      // offer a retry instead of misreporting "not eligible".
+      const session = await fetchChatSession(bitcoinAddress);
+      if (isError(session) || !session.data.data?.token) {
         setToken(null);
         setUsers([]);
-        setAccessDenied(true);
+        if (isError(session) && session.error.status === 403) {
+          setAccessDenied(true);
+        } else {
+          setError(t('settings.blockedUsersLoadFailed'));
+        }
         setLoading(false);
         setRefreshing(false);
         return;
       }
+      const freshToken = session.data.data.token;
+      setToken(freshToken);
 
       const blocks = await fetchBlockedChatUsers(freshToken);
       if (isError(blocks) || !blocks.data.success || !blocks.data.data) {
@@ -96,7 +106,7 @@ export function BlockedUsersScreen({ navigation }: Props) {
       setLoading(false);
       setRefreshing(false);
     },
-    [bitcoinAddress, refreshToken, t]
+    [bitcoinAddress, t]
   );
 
   useEffect(() => {

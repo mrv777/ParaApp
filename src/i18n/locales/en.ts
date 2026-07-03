@@ -441,6 +441,7 @@ const en = {
     eulaAccept: 'Agree & Post',
     errors: {
       generic: "Couldn't send message",
+      server_error: 'Server error — try again',
       rate_limited: 'Slow down a moment',
       blocked_content: 'Message blocked',
       banned: "You're banned from chat",

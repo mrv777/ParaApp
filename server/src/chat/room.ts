@@ -178,19 +178,33 @@ export class ChatRoom {
       return this.sendError(ws, 'bad_json');
     }
 
-    switch (event.type) {
-      case 'msg':
-        return this.handleMessage(ws, address, event.body, event.replyToId);
-      case 'react':
-        return this.handleReaction(
-          ws,
-          address,
-          event.messageId,
-          event.emoji,
-          event.op
-        );
-      default:
-        return this.sendError(ws, 'unknown_type');
+    // `await` inside the try so a handler rejection (e.g. the D1 insert throws)
+    // is caught here rather than escaping as an unhandled rejection. Without
+    // this the message is silently dropped — no broadcast echo, no error — and
+    // the client clears the user's draft having delivered nothing.
+    try {
+      switch (event.type) {
+        case 'msg':
+          return await this.handleMessage(
+            ws,
+            address,
+            event.body,
+            event.replyToId
+          );
+        case 'react':
+          return await this.handleReaction(
+            ws,
+            address,
+            event.messageId,
+            event.emoji,
+            event.op
+          );
+        default:
+          return this.sendError(ws, 'unknown_type');
+      }
+    } catch (err) {
+      console.error('chat: message handler failed', err);
+      return this.sendError(ws, 'server_error');
     }
   }
 

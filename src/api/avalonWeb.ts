@@ -133,8 +133,11 @@ export async function login(
 }
 
 /**
- * Configure pool slots via the web UI. Avalon supports up to 3 pool
- * slots; pass empty strings for unused slots to clear them.
+ * Configure pool slots via the web UI. Avalon supports up to 3 pool slots.
+ * A slot passed as `undefined` is omitted from the POST entirely, leaving the
+ * device's existing value for that slot untouched; a slot with an empty `url`
+ * IS posted and clears that slot on the device. (See the inline note below for
+ * the failover caveat on slot 1.)
  *
  * The CGI returns the pool config page HTML on success. We only check
  * for HTTP 200 since the device gives no machine-readable

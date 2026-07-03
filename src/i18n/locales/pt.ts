@@ -400,6 +400,7 @@ const pt = {
     eulaAccept: 'Concordar e publicar',
     errors: {
       generic: 'Não foi possível enviar a mensagem',
+      server_error: 'Erro do servidor — tente novamente',
       rate_limited: 'Vá com calma',
       blocked_content: 'Mensagem bloqueada',
       banned: 'Você está banido do chat',

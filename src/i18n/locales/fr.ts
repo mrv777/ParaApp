@@ -402,6 +402,7 @@ const fr = {
     eulaAccept: 'Accepter et publier',
     errors: {
       generic: 'Impossible d’envoyer le message',
+      server_error: 'Erreur du serveur — réessayez',
       rate_limited: 'Doucement',
       blocked_content: 'Message bloqué',
       banned: 'Vous êtes banni du chat',

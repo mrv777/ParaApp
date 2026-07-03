@@ -136,7 +136,9 @@ export type ChatErrorCode =
   | 'bad_body'
   | 'blocked_content'
   | 'bad_emoji'
-  | 'not_supported';
+  | 'not_supported'
+  // An internal server failure blocked the send (see server protocol.ts).
+  | 'server_error';
 
 export function isReactionEmoji(value: string): value is ReactionEmoji {
   return (REACTION_EMOJIS as readonly string[]).includes(value);

@@ -398,6 +398,7 @@ const es = {
     eulaAccept: 'Aceptar y publicar',
     errors: {
       generic: 'No se pudo enviar el mensaje',
+      server_error: 'Error del servidor: inténtalo de nuevo',
       rate_limited: 'Ve más despacio',
       blocked_content: 'Mensaje bloqueado',
       banned: 'Estás vetado del chat',
