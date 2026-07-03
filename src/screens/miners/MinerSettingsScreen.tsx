@@ -177,6 +177,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   // Track whether form has been initialized (prevents background poll from resetting form)
   const formInitialized = useRef(false);
   const hwInitialized = useRef(false);
+  const prevTempUnitRef = useRef(temperatureUnit);
 
   // Apply state
   const [applying, setApplying] = useState(false);
@@ -232,13 +233,35 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     }
     // Fallback stratum (Hammer)
     if (miner.minerType === 'hammer') {
+      const hasFallback = !!miner.fallbackStratumUrl?.trim();
       setFallbackStratumUrl(miner.fallbackStratumUrl || '');
-      const fbPort = miner.fallbackStratumPort || 3333;
+      // Don't fabricate a port when no fallback is configured — a phantom
+      // port makes the all-or-nothing fallback validation report "incomplete"
+      // and blocks every apply. 0 → the port field reads as unset.
+      const fbPort = hasFallback
+        ? miner.fallbackStratumPort || 3333
+        : miner.fallbackStratumPort || 0;
       setFallbackStratumPort(fbPort);
-      setFallbackStratumPortInput(String(fbPort));
+      setFallbackStratumPortInput(fbPort ? String(fbPort) : '');
       setFallbackStratumUser(miner.fallbackStratumUser || '');
     }
   }, [miner, temperatureUnit]);
+
+  // The target-temp input is seeded once (above), so a mid-session C↔F switch
+  // in Settings would leave the same digits to be re-read in the new unit
+  // (e.g. "70°C" parsed as 70°F → 21°C sent to the device). Reformat the input
+  // on unit change so the same physical temperature is preserved.
+  useEffect(() => {
+    const prev = prevTempUnitRef.current;
+    if (prev === temperatureUnit) return;
+    prevTempUnitRef.current = temperatureUnit;
+    setTargetTempInput((current) => {
+      if (!current.trim()) return current;
+      const c = displayToCelsius(current, prev);
+      if (c === null) return current;
+      return String(celsiusToDisplay(c, temperatureUnit));
+    });
+  }, [temperatureUnit]);
 
   // Initialize frequency/voltage when asicConfig is available (once only)
   useEffect(() => {
@@ -283,8 +306,13 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
       values.coreVoltage = miner.voltage || asicConfig.defaultVoltage;
     }
     if (miner.minerType === 'hammer') {
+      // Keep symmetric with the seed effect above so no phantom pending change
+      // appears (fabricating 3333 here while the seed uses 0 would diff).
+      const hasFallback = !!miner.fallbackStratumUrl?.trim();
       values.fallbackStratumUrl = miner.fallbackStratumUrl || '';
-      values.fallbackStratumPort = miner.fallbackStratumPort || 3333;
+      values.fallbackStratumPort = hasFallback
+        ? miner.fallbackStratumPort || 3333
+        : miner.fallbackStratumPort || 0;
       values.fallbackStratumUser = miner.fallbackStratumUser || '';
     }
     setOriginalValues(values);
@@ -541,18 +569,88 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     setPasswordTouched(true);
   }, [bitcoinAddress, stratumUser]);
 
+  // Strict numeric parse — reject "640abc" rather than silently truncating to 640.
+  // Returns the validated number, or null (and sets the error) if invalid so
+  // callers (blur/submit and handleApply) share one validation path. Declared
+  // before handleApply because handleApply depends on them.
+  const validateCustomFrequency = useCallback((): number | null => {
+    const trimmed = customFrequencyInput.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      setCustomFrequencyError(t('miners.numberOnly'));
+      return null;
+    }
+    const value = Number(trimmed);
+    if (!Number.isFinite(value) || value <= 0) {
+      setCustomFrequencyError(t('miners.numberOnly'));
+      return null;
+    }
+    // Bound to a safe range so an order-of-magnitude typo can't reach the ASIC.
+    if (asicConfig && asicConfig.frequencyOptions.length > 0 && asicConfig.absMaxFrequency > 0) {
+      const min = Math.floor(Math.min(...asicConfig.frequencyOptions) / 2);
+      const max = asicConfig.absMaxFrequency;
+      if (value < min || value > max) {
+        setCustomFrequencyError(t('miners.valueOutOfRange', { min, max }));
+        return null;
+      }
+    }
+    setCustomFrequencyError(null);
+    return value;
+  }, [customFrequencyInput, asicConfig, t]);
+
+  const validateCustomVoltage = useCallback((): number | null => {
+    const trimmed = customVoltageInput.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      setCustomVoltageError(t('miners.numberOnly'));
+      return null;
+    }
+    const value = Number(trimmed);
+    if (!Number.isFinite(value) || value <= 0) {
+      setCustomVoltageError(t('miners.numberOnly'));
+      return null;
+    }
+    // Bound to a safe range so e.g. "12" (meaning 1.2 V) can't PATCH 12 mV.
+    if (asicConfig && asicConfig.voltageOptions.length > 0 && asicConfig.absMaxVoltage > 0) {
+      const min = Math.floor(Math.min(...asicConfig.voltageOptions) / 2);
+      const max = asicConfig.absMaxVoltage;
+      if (value < min || value > max) {
+        setCustomVoltageError(t('miners.valueOutOfRange', { min, max }));
+        return null;
+      }
+    }
+    setCustomVoltageError(null);
+    return value;
+  }, [customVoltageInput, asicConfig, t]);
+
   const handleApply = useCallback(async () => {
     if (!hasChanges || !isFormValid) return;
+
+    // Commit any custom freq/voltage typed but not yet blurred — the footer
+    // swipe gesture doesn't reliably blur the focused input, so the value
+    // could otherwise be dropped. Use the returned value (setState is async).
+    let effectiveFrequency = frequency;
+    let effectiveVoltage = voltage;
+    if (customFrequency) {
+      const v = validateCustomFrequency();
+      if (v === null) return; // invalid — error shown, block apply
+      effectiveFrequency = v;
+      setFrequency(v);
+    }
+    if (customVoltage) {
+      const v = validateCustomVoltage();
+      if (v === null) return;
+      effectiveVoltage = v;
+      setVoltage(v);
+    }
 
     setApplying(true);
     setApplyError(null);
 
     const settings: MinerSettings = {};
-    if (frequency !== originalValues?.frequency) {
-      settings.frequency = frequency;
+    if (effectiveFrequency !== originalValues?.frequency) {
+      settings.frequency = effectiveFrequency;
     }
-    if (voltage !== originalValues?.coreVoltage) {
-      settings.coreVoltage = voltage;
+    if (effectiveVoltage !== originalValues?.coreVoltage) {
+      settings.coreVoltage = effectiveVoltage;
     }
     const autoFanWas = (originalValues?.autoFanSpeed ?? 0) > 0;
     if (autoFan !== autoFanWas) {
@@ -625,6 +723,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     miner,
     frequency,
     voltage,
+    customFrequency,
+    customVoltage,
+    validateCustomFrequency,
+    validateCustomVoltage,
     fanSpeed,
     autoFan,
     parsedTargetTempC,
@@ -686,36 +788,15 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     setCustomVoltageInput(String(voltage));
   }, [voltage]);
 
-  // Strict numeric parse — reject "640abc" rather than silently truncating to 640.
   const handleCustomFrequencySubmit = useCallback(() => {
-    const trimmed = customFrequencyInput.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      setCustomFrequencyError(t('miners.numberOnly'));
-      return;
-    }
-    const value = Number(trimmed);
-    if (!Number.isFinite(value) || value <= 0) {
-      setCustomFrequencyError(t('miners.numberOnly'));
-      return;
-    }
-    setCustomFrequencyError(null);
-    setFrequency(value);
-  }, [customFrequencyInput, t]);
+    const value = validateCustomFrequency();
+    if (value !== null) setFrequency(value);
+  }, [validateCustomFrequency]);
 
   const handleCustomVoltageSubmit = useCallback(() => {
-    const trimmed = customVoltageInput.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      setCustomVoltageError(t('miners.numberOnly'));
-      return;
-    }
-    const value = Number(trimmed);
-    if (!Number.isFinite(value) || value <= 0) {
-      setCustomVoltageError(t('miners.numberOnly'));
-      return;
-    }
-    setCustomVoltageError(null);
-    setVoltage(value);
-  }, [customVoltageInput, t]);
+    const value = validateCustomVoltage();
+    if (value !== null) setVoltage(value);
+  }, [validateCustomVoltage]);
 
   const handleCustomFrequencyInputChange = useCallback((text: string) => {
     setCustomFrequencyInput(text);

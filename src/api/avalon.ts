@@ -220,9 +220,17 @@ export function sendCommand(
   ip: string,
   command: string,
   parameter?: string,
-  timeoutMs: number = AVALON_TIMEOUT
+  timeoutMs: number = AVALON_TIMEOUT,
+  signal?: AbortSignal
 ): Promise<ApiResult<CgminerEnvelope>> {
   return new Promise((resolve) => {
+    // Bail before opening a socket if the caller already aborted (e.g. a
+    // discovery scan was cancelled/backgrounded while this was queued).
+    if (signal?.aborted) {
+      resolve({ success: false, error: { message: 'Aborted', code: 'ABORTED' } });
+      return;
+    }
+
     const payload = JSON.stringify(
       parameter !== undefined ? { command, parameter } : { command }
     );
@@ -233,6 +241,7 @@ export function sendCommand(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       try {
         socket.destroy();
       } catch {
@@ -247,6 +256,14 @@ export function sendCommand(
         socket.write(payload);
       }
     );
+
+    // Abort mid-flight destroys the socket so a cancelled scan doesn't leave
+    // native TCP connections dangling (the window the tcp-socket nil-host
+    // patch guards).
+    const onAbort = () => {
+      settle({ success: false, error: { message: 'Aborted', code: 'ABORTED' } });
+    };
+    signal?.addEventListener('abort', onAbort);
 
     const timer = setTimeout(() => {
       settle({
@@ -339,9 +356,10 @@ function unwrap<TSection>(
 
 export async function getVersion(
   ip: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  signal?: AbortSignal
 ): Promise<ApiResult<AvalonVersion>> {
-  const env = await sendCommand(ip, 'version', undefined, timeoutMs);
+  const env = await sendCommand(ip, 'version', undefined, timeoutMs, signal);
   if (!env.success) return env;
   const list = unwrap<AvalonVersion>(env.data, 'VERSION');
   if (!list.success) return list;
@@ -655,8 +673,8 @@ export async function getCapabilities(
  * Check whether the host at `ip` looks like an Avalon. Used by the
  * subnet scanner; intentionally cheap and fast-failing.
  */
-export async function isAvalon(ip: string): Promise<boolean> {
-  const result = await getVersion(ip, AVALON_DISCOVERY_TIMEOUT);
+export async function isAvalon(ip: string, signal?: AbortSignal): Promise<boolean> {
+  const result = await getVersion(ip, AVALON_DISCOVERY_TIMEOUT, signal);
   if (!result.success) return false;
   return (
     typeof result.data.PROD === 'string' &&

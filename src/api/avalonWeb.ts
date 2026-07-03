@@ -99,6 +99,14 @@ export async function login(
       },
       body: `passwd=${encodeURIComponent(cookie)}`,
     });
+    // A server/HTTP error must not be mistaken for a successful login just
+    // because the error body happens to lack the `loginform` marker.
+    if (!res.ok) {
+      return {
+        success: false,
+        error: { message: `HTTP ${res.status}`, status: res.status },
+      };
+    }
     const html = await res.text();
     // Successful login lands on the dashboard; the failure path
     // re-renders the login page (which contains a `loginform`).
@@ -144,11 +152,19 @@ export async function setPools(
   slots: [PoolSlot, PoolSlot?, PoolSlot?]
 ): Promise<ApiResult<void>> {
   const params = new URLSearchParams();
+  // Only emit params for slots we actually have. A blank slot posted as
+  // `poolN=''` would CLEAR that slot on the device (see the empty-string
+  // note above) — but callers pass `undefined` for slots the app never
+  // loaded, so skipping them leaves the device's existing pool table
+  // untouched. (Slot 1 is still hydrated from the active pool upstream, so
+  // a save right after a device failover can write the failover URL into
+  // slot 1 — fixing that needs reading the live 3-slot table first.)
   slots.forEach((slot, i) => {
+    if (!slot) return;
     const n = i + 1;
-    params.set(`pool${n}`, slot?.url ?? '');
-    params.set(`worker${n}`, slot?.worker ?? '');
-    params.set(`passwd${n}`, slot?.password ?? '');
+    params.set(`pool${n}`, slot.url ?? '');
+    params.set(`worker${n}`, slot.worker ?? '');
+    params.set(`passwd${n}`, slot.password ?? '');
   });
   return postCgi(ip, session, '/cgpools.cgi', params.toString());
 }
@@ -212,19 +228,26 @@ async function postCgi(
 }
 
 /**
- * Promise-race-based timeout wrapper. RN's fetch supports AbortSignal
- * but not all Hermes versions wire it through cleanly; we use
- * Promise.race to be safe across versions.
+ * Timeout wrapper that actually aborts the underlying request, so a
+ * timed-out CGI write can't land late and interleave with a retry. Mirrors
+ * the AbortController pattern in `client.ts` (proven on this RN stack).
  */
-function fetchWithTimeout(
+async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number = AVALON_WEB_TIMEOUT
 ): Promise<Response> {
-  return Promise.race([
-    fetch(url, init),
-    new Promise<Response>((_, reject) =>
-      setTimeout(() => reject(new Error('Timeout')), timeoutMs)
-    ),
-  ]);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    // Normalize an abort into the same "Timeout" error the old race threw.
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Timeout');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

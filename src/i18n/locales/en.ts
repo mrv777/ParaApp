@@ -221,6 +221,7 @@ const en = {
     exceedsMaximum: 'Exceeds absolute maximum!',
     exceedsRecommended: 'Exceeds recommended range',
     numberOnly: 'Numbers only',
+    valueOutOfRange: 'Must be between {{min}} and {{max}}',
     fanControl: 'Fan Control',
     fanMode: 'Fan Mode',
     autoFanEnabled: 'Automatic fan control enabled',
