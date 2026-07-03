@@ -4,9 +4,29 @@
  * session (activity-gated) and backfill history (open read).
  */
 
-import { postJson, fetchWithTimeout } from './client';
+import { postJson, fetchWithTimeout, isError } from './client';
 import type { ApiResult } from '@/types';
 import { CHAT_HTTP_BASE, type ChatMessage } from '@/constants/chat';
+
+/**
+ * Run a token-authed REST action, re-minting the session token and retrying once
+ * if it 401s. The posting token expires ~1h into a session; the open socket stays
+ * valid (authed at upgrade) but REST calls need a fresh token. Returns null only
+ * when there was no token to begin with.
+ */
+export async function runTokenAction<T>(
+  token: string | null,
+  refreshToken: () => Promise<string | null>,
+  action: (token: string) => Promise<ApiResult<T>>
+): Promise<ApiResult<T> | null> {
+  if (!token) return null;
+  let result = await action(token);
+  if (isError(result) && result.error.status === 401) {
+    const fresh = await refreshToken();
+    if (fresh) result = await action(fresh);
+  }
+  return result;
+}
 
 interface ChatSessionResponse {
   success: boolean;

@@ -10,7 +10,7 @@ import Toast from 'react-native-toast-message';
 import { Sheet } from '@/components/Sheet';
 import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
-import { putChatNickname } from '@/api/chat';
+import { putChatNickname, runTokenAction } from '@/api/chat';
 import { isError } from '@/api/client';
 import { colors } from '@/constants/colors';
 import { MAX_NICKNAME_LENGTH } from '@/constants/chat';
@@ -21,6 +21,8 @@ interface NicknameSheetProps {
   visible: boolean;
   onClose: () => void;
   token: string | null;
+  /** Re-mints an expired session token so a save can retry after a 401. */
+  refreshToken: () => Promise<string | null>;
   initialNickname?: string;
   /** True when the handle is admin-assigned (locked); the editor is read-only. */
   locked?: boolean;
@@ -30,6 +32,7 @@ export function NicknameSheet({
   visible,
   onClose,
   token,
+  refreshToken,
   initialNickname = '',
   locked = false,
 }: NicknameSheetProps) {
@@ -49,14 +52,16 @@ export function NicknameSheet({
       return;
     }
     setSaving(true);
-    const result = await putChatNickname(token, value.trim());
+    const result = await runTokenAction(token, refreshToken, (tk) =>
+      putChatNickname(tk, value.trim())
+    );
     setSaving(false);
-    if (isError(result) || !result.data.success) {
+    if (!result || isError(result) || !result.data.success) {
       haptics.warning();
       // Map the server's status to a specific reason where we have one. A 403
       // is ambiguous (banned vs admin-locked handle): if this editor isn't
       // showing a locked handle, the address is banned.
-      const status = isError(result) ? result.error.status : undefined;
+      const status = result && isError(result) ? result.error.status : undefined;
       const text1 =
         status === 409
           ? t('chat.nicknameTaken')

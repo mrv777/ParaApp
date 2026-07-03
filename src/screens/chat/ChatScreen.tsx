@@ -33,7 +33,12 @@ import { NicknameSheet } from '@/components/chat/NicknameSheet';
 import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
 import { EulaSheet } from '@/components/chat/EulaSheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
-import { reportChatMessage, blockChatSender, acceptChatEula } from '@/api/chat';
+import {
+  reportChatMessage,
+  blockChatSender,
+  acceptChatEula,
+  runTokenAction,
+} from '@/api/chat';
 import { isError } from '@/api/client';
 import type { ApiResult } from '@/types';
 import {
@@ -256,26 +261,6 @@ const LoadingOlder = () => (
     <ActivityIndicator size="small" color={TEXT_MUTED} />
   </View>
 );
-
-/**
- * Run a token-authed REST action, re-minting the session token and retrying once
- * if it 401s. The posting token expires ~1h into a session; the open socket stays
- * valid (authed at upgrade) but REST calls need a fresh token. Returns null only
- * when there was no token to begin with.
- */
-async function runTokenAction<T>(
-  token: string | null,
-  refreshToken: () => Promise<string | null>,
-  action: (token: string) => Promise<ApiResult<T>>
-): Promise<ApiResult<T> | null> {
-  if (!token) return null;
-  let result = await action(token);
-  if (isError(result) && result.error.status === 401) {
-    const fresh = await refreshToken();
-    if (fresh) result = await action(fresh);
-  }
-  return result;
-}
 
 /** True when a REST action resolved to a successful `{success:true}` body. */
 function actionSucceeded(
@@ -702,6 +687,7 @@ export function ChatScreen({ navigation }: Props) {
         visible={nicknameOpen}
         onClose={() => setNicknameOpen(false)}
         token={token}
+        refreshToken={refreshToken}
         initialNickname={selfNickname ?? ''}
         locked={selfOfficial}
       />

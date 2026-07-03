@@ -70,6 +70,11 @@ const PRESENCE_DEBOUNCE_MS = 750;
 // a pile-on collapses to a single COUNT query + a single fan-out.
 const REACTION_FLUSH_MS = 150;
 
+/** pendingReactions map key — NUL separator can't collide with id/emoji content. */
+function reactionKey(messageId: string, emoji: string): string {
+  return `${messageId}\u0000${emoji}`;
+}
+
 export class ChatRoom {
   private readonly state: DurableObjectState;
   private readonly env: Env;
@@ -299,7 +304,7 @@ export class ChatRoom {
     // single COUNT query + fan-out per REACTION_FLUSH_MS window. The acting
     // client updates its own chip optimistically, so the server no longer needs
     // to echo actor/op for `mine`.
-    this.pendingReactions.set(`${messageId} ${emoji}`, { messageId, emoji });
+    this.pendingReactions.set(reactionKey(messageId, emoji), { messageId, emoji });
     this.scheduleReactionFlush();
   }
 
@@ -427,7 +432,7 @@ export class ChatRoom {
         // A transient D1 failure must not drop this pending count (the map was
         // already cleared) nor bubble as an unhandled rejection (we're called
         // via `void`). Re-queue and retry, unless a newer reaction re-added it.
-        const key = `${messageId} ${emoji}`;
+        const key = reactionKey(messageId, emoji);
         if (!this.pendingReactions.has(key)) {
           this.pendingReactions.set(key, entry);
         }
