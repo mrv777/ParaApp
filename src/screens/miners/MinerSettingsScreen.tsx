@@ -8,10 +8,9 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -880,10 +879,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" automaticOffset>
         {/* Header */}
         <View className="flex-row items-center px-4 py-3 border-b border-border">
           <Pressable

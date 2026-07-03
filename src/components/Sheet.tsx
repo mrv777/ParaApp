@@ -15,10 +15,9 @@ import {
   View,
   ScrollView,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   type LayoutChangeEvent,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   GestureHandlerRootView,
@@ -174,12 +173,12 @@ export function Sheet({
         {/* Dimmed backdrop — tap to dismiss */}
         <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={onClose} />
 
+        {/* RNKC KeyboardAvoidingView: works inside RN Modal (Android incl.
+            statusBarTranslucent) where RN core's KAV breaks under edge-to-edge. */}
         <KbWrapper
           style={styles.fill}
           pointerEvents="box-none"
-          {...(avoidKeyboard
-            ? { behavior: Platform.OS === 'ios' ? ('padding' as const) : ('height' as const) }
-            : {})}
+          {...(avoidKeyboard ? { behavior: 'padding' as const } : {})}
         >
           <View style={styles.bottom} pointerEvents="box-none">
             {panel}

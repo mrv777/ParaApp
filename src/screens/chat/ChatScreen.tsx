@@ -18,11 +18,10 @@ import {
   Text as RNText,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -714,9 +713,14 @@ export function ChatScreen({ navigation }: Props) {
         </View>
       ) : null}
 
+      {/* react-native-keyboard-controller KAV: RN core's is a no-op on Android
+          under SDK 56 edge-to-edge (adjustResize no longer resizes the window).
+          automaticOffset measures this view's frame, accounting for the tab bar
+          below without a hardcoded keyboardVerticalOffset. */}
       <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.fill}
+        behavior="padding"
+        automaticOffset
       >
         {/* Bottom-anchored feed (newest at the bottom via alignItemsAtEnd).
             Scroll to the top pages older history; maintainVisibleContentPosition
@@ -892,6 +896,7 @@ export function ChatScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1 },
   // Header
   header: {
     flexDirection: 'row',
