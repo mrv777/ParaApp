@@ -147,6 +147,7 @@ function toReplyQuote(row: {
 }): ChatReplyQuote {
   return {
     senderDisplay: row.nickname ?? truncateChatAddress(row.address),
+    senderKey: truncateChatAddress(row.address),
     textPreview: replyPreview(row.body),
   };
 }

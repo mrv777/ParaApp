@@ -39,6 +39,14 @@ interface ChatState {
    * Drives the tab-bar unread dot. Session-only, like the feed itself.
    */
   lastSeenTs: number;
+  /**
+   * Set when the block list changed off the Chat screen (e.g. unblock from
+   * Settings), where there's no live socket to reconnect. The Chat screen forces
+   * one reconnect on its next focus so the Durable Object reloads the block list
+   * (it's only read at connect); the block-from-chat path reconnects inline, so
+   * it never needs this. Session-only; cleared on reset().
+   */
+  blockListStale: boolean;
 }
 
 interface ChatActions {
@@ -64,6 +72,8 @@ interface ChatActions {
   /** Mark the initial history backfill as resolved (or re-arm with false). */
   setHistoryLoaded: (loaded: boolean) => void;
   setAnnouncement: (announcement: string | null) => void;
+  /** Flag/clear a block-list change made off the Chat screen (drives a focus reconnect). */
+  setBlockListStale: (stale: boolean) => void;
   /** Mark everything currently loaded as seen (call while the Chat tab is focused). */
   markSeen: () => void;
   /**
@@ -91,6 +101,7 @@ const initialState: ChatState = {
   historyLoaded: false,
   announcement: null,
   lastSeenTs: 0,
+  blockListStale: false,
 };
 
 export const useChatStore = create<ChatState & ChatActions>()((set) => ({
@@ -154,9 +165,15 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
       const next = [];
       for (const m of state.messages) {
         if (m.address === address) continue; // drop the blocked user's messages
-        if (m.replyToId && m.replyTo && removedIds.has(m.replyToId)) {
+        if (
+          m.replyToId &&
+          m.replyTo &&
+          (removedIds.has(m.replyToId) || m.replyTo.senderKey === address)
+        ) {
           // Quoted a now-blocked sender → strip the quote; keep replyToId so the
           // row shows the "unavailable" placeholder rather than the blocked text.
+          // Match by loaded parent id OR the quote's own sender key, so a reply
+          // to an unloaded/older parent from the blocked user is scrubbed too.
           const stripped = { ...m };
           delete stripped.replyTo;
           next.push(stripped);
@@ -201,6 +218,8 @@ export const useChatStore = create<ChatState & ChatActions>()((set) => ({
 
   setAnnouncement: (announcement) => set({ announcement }),
 
+  setBlockListStale: (blockListStale) => set({ blockListStale }),
+
   markSeen: () =>
     set((state) => {
       const newest = state.messages.length
@@ -226,6 +245,8 @@ export const selectChatConnectionState = (state: ChatState) =>
 /** True once the first history backfill of the session has resolved. */
 export const selectChatHistoryLoaded = (state: ChatState) => state.historyLoaded;
 export const selectChatAnnouncement = (state: ChatState) => state.announcement;
+/** True when an off-screen block-list change needs a Chat-focus reconnect. */
+export const selectBlockListStale = (state: ChatState) => state.blockListStale;
 /** True when messages newer than the last focused view exist (tab-bar dot). */
 export const selectHasUnread = (state: ChatState): boolean =>
   state.messages.length > 0 &&

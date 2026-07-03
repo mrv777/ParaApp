@@ -349,8 +349,16 @@ export function ChatScreen({ navigation }: Props) {
   // a hiccup — only surface on a fresh fetch.
   useFocusEffect(
     useCallback(() => {
-      refresh();
-    }, [refresh])
+      // A block-list change made off this screen (unblock from Settings) can't
+      // reach the live socket, whose block list is fixed at connect. Force one
+      // full reconnect so the Durable Object reloads it; otherwise just backfill.
+      if (useChatStore.getState().blockListStale) {
+        useChatStore.getState().setBlockListStale(false);
+        reconnect();
+      } else {
+        refresh();
+      }
+    }, [refresh, reconnect])
   );
 
   const messages = useChatStore(selectChatMessages);

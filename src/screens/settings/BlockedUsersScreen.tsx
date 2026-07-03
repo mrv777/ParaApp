@@ -23,6 +23,7 @@ import { SkeletonLoader } from '@/components/SkeletonLoader';
 import { Text } from '@/components/Text';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
+import { useChatStore } from '@/store/chatStore';
 import {
   selectBitcoinAddress,
   useSettingsStore,
@@ -115,6 +116,10 @@ export function BlockedUsersScreen({ navigation }: Props) {
     );
     if (res && !isError(res) && res.data.success) {
       setUsers((current) => current.filter((user) => user.id !== selected.id));
+      // The live chat socket (if any) loaded its block list at connect and won't
+      // pick up this removal until it reconnects — flag it so the Chat screen
+      // forces a reconnect on its next focus (see chatStore.blockListStale).
+      useChatStore.getState().setBlockListStale(true);
       setSelected(null);
       haptics.success();
       Toast.show({ type: 'success', text1: t('settings.blockedUsersUnblocked') });

@@ -63,6 +63,13 @@ export interface ReactionSummary {
 export interface ChatReplyQuote {
   /** Display string of the replied-to sender (nickname or truncated address). */
   senderDisplay: string;
+  /**
+   * Truncated public sender key of the quoted parent's author (matches
+   * ChatMessage.address). Lets a block strip this quote even when the parent
+   * message isn't loaded. Optional so an older server that omits it degrades
+   * gracefully to parent-loaded-only stripping.
+   */
+  senderKey?: string;
   /** One-line preview of the replied-to message body. */
   textPreview: string;
 }

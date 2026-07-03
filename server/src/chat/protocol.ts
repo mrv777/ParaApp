@@ -57,6 +57,12 @@ export function replyPreview(body: string): string {
 export interface ChatReplyQuote {
   /** Display string of the replied-to sender (nickname or truncated address). */
   senderDisplay: string;
+  /**
+   * Truncated public sender key of the quoted parent's author (see
+   * truncateChatAddress). Lets the client strip a quote when it blocks that
+   * author even if the parent message itself isn't loaded — never the full address.
+   */
+  senderKey: string;
   /** One-line preview of the replied-to message body (see replyPreview). */
   textPreview: string;
 }
