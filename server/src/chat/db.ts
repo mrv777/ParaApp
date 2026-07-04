@@ -359,6 +359,45 @@ export async function getProfile(
   return { nickname: row?.nickname ?? null, official: row?.official === 1 };
 }
 
+export interface ChatProfileRow {
+  address: string;
+  nickname: string;
+  official: boolean;
+  updated_at: number;
+}
+
+/**
+ * Assigned handles (rows with a nickname), newest first — powers the admin
+ * Nicknames tab. Rows with a null nickname are cleared handles and excluded.
+ */
+export async function listProfiles(
+  db: D1Database,
+  opts: { limit?: number } = {}
+): Promise<ChatProfileRow[]> {
+  const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
+  const { results } = await db
+    .prepare(
+      `SELECT address, nickname, official, updated_at
+       FROM chat_profiles
+       WHERE nickname IS NOT NULL
+       ORDER BY updated_at DESC, address ASC
+       LIMIT ?`
+    )
+    .bind(limit)
+    .all<{
+      address: string;
+      nickname: string;
+      official: number | null;
+      updated_at: number;
+    }>();
+  return results.map((r) => ({
+    address: r.address,
+    nickname: r.nickname,
+    official: r.official === 1,
+    updated_at: r.updated_at,
+  }));
+}
+
 /** The address currently holding a given norm key, or null. Used to enforce
  *  nickname uniqueness (no two addresses may share a folded key). */
 export async function nicknameOwner(
@@ -602,6 +641,41 @@ export async function banAddress(
     )
     .bind(address, reason)
     .run();
+}
+
+export interface ChatBanRow {
+  address: string;
+  reason: string | null;
+  created_at: number;
+}
+
+/** Current bans, newest first — powers the admin Bans tab. */
+export async function listBans(
+  db: D1Database,
+  limit = 200
+): Promise<ChatBanRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT address, reason, created_at
+       FROM chat_bans
+       ORDER BY created_at DESC, address ASC
+       LIMIT ?`
+    )
+    .bind(Math.min(Math.max(limit, 1), 500))
+    .all<ChatBanRow>();
+  return results;
+}
+
+/** Lift a ban. Returns true only if a row was actually removed. */
+export async function removeBan(
+  db: D1Database,
+  address: string
+): Promise<boolean> {
+  const result = await db
+    .prepare('DELETE FROM chat_bans WHERE address = ?')
+    .bind(address)
+    .run();
+  return (result.meta?.changes ?? 0) === 1;
 }
 
 export interface ChatReportRow {

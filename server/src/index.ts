@@ -13,7 +13,10 @@ import {
   chatEulaSchema,
   chatAdminBanSchema,
   chatAdminNicknameSchema,
+  chatAdminMessageBanSchema,
+  chatAdminMessageNicknameSchema,
   chatAnnouncementSchema,
+  chatAddressSchema,
 } from './validation';
 import {
   passesActivityGate,
@@ -35,6 +38,9 @@ import {
   recordEulaAcceptance,
   softDeleteMessage,
   banAddress,
+  listBans,
+  removeBan,
+  listProfiles,
   getOpenReports,
   resolveReport,
   getAnnouncement,
@@ -589,12 +595,10 @@ app.delete('/chat/block', async (c) => {
     const body = await c.req.json();
     const unblockResult = chatUnblockSchema.safeParse(body);
     const legacyResult = chatBlockSchema.safeParse(body);
-    if (!unblockResult.success && !legacyResult.success) {
-      return c.json({ success: false, error: unblockResult.error.flatten() }, 400);
-    }
-    const token = unblockResult.success
-      ? unblockResult.data.token
-      : legacyResult.data.token;
+    let token: string;
+    if (unblockResult.success) token = unblockResult.data.token;
+    else if (legacyResult.success) token = legacyResult.data.token;
+    else return c.json({ success: false, error: unblockResult.error.flatten() }, 400);
     const verified = await verifySessionToken(
       token,
       c.env.SESSION_SECRET
@@ -612,7 +616,7 @@ app.delete('/chat/block', async (c) => {
           break;
         }
       }
-    } else {
+    } else if (legacyResult.success) {
       target = await getMessageSender(c.env.DB, legacyResult.data.messageId);
     }
     if (!target) {
@@ -701,6 +705,50 @@ async function invalidateChatIdentity(env: Env, address: string): Promise<void> 
   );
 }
 
+// Core of the admin nickname-assign logic, shared by the address-based route and
+// the message-id route. Strips invisible chars, enforces nickname uniqueness
+// (clearing a non-official holder, protecting an official one with a 409), and
+// returns the HTTP status + JSON body the caller should emit. Empty name clears.
+async function assignNickname(
+  env: Env,
+  address: string,
+  rawNickname: string,
+  official: boolean | undefined
+): Promise<{ status: 200 | 409; body: Record<string, unknown> }> {
+  const trimmed = stripInvisible(rawNickname).trim();
+
+  // Empty ⇒ release the handle (fall back to truncated address).
+  if (!trimmed) {
+    await setNickname(env.DB, address, null);
+    await invalidateChatIdentity(env, address);
+    return { status: 200, body: { success: true, data: { nickname: null } } };
+  }
+
+  const norm = nicknameKey(trimmed);
+  if (norm) {
+    const owner = await nicknameOwner(env.DB, norm);
+    if (owner && owner !== address) {
+      // Admin wins over a non-official holder (their name is cleared), but an
+      // existing official handle is protected — reject so the admin decides.
+      if ((await getProfile(env.DB, owner)).official) {
+        return {
+          status: 409,
+          body: {
+            success: false,
+            error: `Nickname held by another official handle (${owner})`,
+          },
+        };
+      }
+      await setNickname(env.DB, owner, null);
+      await invalidateChatIdentity(env, owner);
+    }
+  }
+
+  await setNickname(env.DB, address, trimmed, { norm, official: official ?? true });
+  await invalidateChatIdentity(env, address);
+  return { status: 200, body: { success: true, data: { nickname: trimmed } } };
+}
+
 // ---- Admin (guarded) --------------------------------------------------------
 
 // The admin PAGE is public HTML; it prompts for the secret and calls the guarded
@@ -734,6 +782,44 @@ app.delete('/chat/admin/message/:id', async (c) => {
   return c.json({ success: true, data: { deleted } });
 });
 
+// Ban the sender of a specific message. The client only ever sees truncated
+// addresses, so it can't ban by address from the message list — the server
+// resolves the full sender from the id here. 404 when the id is unknown.
+app.post('/chat/admin/message/:id/ban', async (c) => {
+  const result = chatAdminMessageBanSchema.safeParse(
+    await c.req.json().catch(() => ({}))
+  );
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const sender = await getMessageSender(c.env.DB, c.req.param('id'));
+  if (!sender) return c.json({ success: false, error: 'Message not found' }, 404);
+  await banAddress(c.env.DB, sender, result.data.reason ?? '');
+  await invalidateChatIdentity(c.env, sender);
+  return c.json({
+    success: true,
+    data: { banned: true, sender: truncateChatAddress(sender) },
+  });
+});
+
+// Assign/clear a nickname for the sender of a specific message (address resolved
+// server-side from the id — same reason as ban-by-message above).
+app.post('/chat/admin/message/:id/nickname', async (c) => {
+  const result = chatAdminMessageNicknameSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const sender = await getMessageSender(c.env.DB, c.req.param('id'));
+  if (!sender) return c.json({ success: false, error: 'Message not found' }, 404);
+  const { status, body } = await assignNickname(
+    c.env,
+    sender,
+    result.data.nickname,
+    result.data.official
+  );
+  return c.json(body, status);
+});
+
 app.post('/chat/admin/ban', async (c) => {
   const result = chatAdminBanSchema.safeParse(await c.req.json());
   if (!result.success) {
@@ -742,6 +828,23 @@ app.post('/chat/admin/ban', async (c) => {
   await banAddress(c.env.DB, result.data.address, result.data.reason ?? '');
   await invalidateChatIdentity(c.env, result.data.address);
   return c.json({ success: true });
+});
+
+app.get('/chat/admin/bans', async (c) => {
+  const bans = await listBans(c.env.DB);
+  return c.json({ success: true, data: { bans } });
+});
+
+// Lift a ban. The address is a path segment, so validate it with the same strict
+// charset used everywhere else before it reaches the DB layer.
+app.delete('/chat/admin/ban/:address', async (c) => {
+  const parsed = chatAddressSchema.safeParse(c.req.param('address'));
+  if (!parsed.success) {
+    return c.json({ success: false, error: 'Invalid address' }, 400);
+  }
+  const unbanned = await removeBan(c.env.DB, parsed.data);
+  if (unbanned) await invalidateChatIdentity(c.env, parsed.data);
+  return c.json({ success: true, data: { unbanned } });
 });
 
 // Assign (or clear) a nickname for any address. Bypasses the reserved-word and
@@ -753,42 +856,18 @@ app.post('/chat/admin/nickname', async (c) => {
   if (!result.success) {
     return c.json({ success: false, error: result.error.flatten() }, 400);
   }
-  const { address } = result.data;
-  const trimmed = stripInvisible(result.data.nickname).trim();
+  const { status, body } = await assignNickname(
+    c.env,
+    result.data.address,
+    result.data.nickname,
+    result.data.official
+  );
+  return c.json(body, status);
+});
 
-  // Empty ⇒ release the handle (fall back to truncated address).
-  if (!trimmed) {
-    await setNickname(c.env.DB, address, null);
-    await invalidateChatIdentity(c.env, address);
-    return c.json({ success: true, data: { nickname: null } });
-  }
-
-  const norm = nicknameKey(trimmed);
-  if (norm) {
-    const owner = await nicknameOwner(c.env.DB, norm);
-    if (owner && owner !== address) {
-      // Admin wins over a non-official holder (their name is cleared), but an
-      // existing official handle is protected — reject so the admin decides.
-      if ((await getProfile(c.env.DB, owner)).official) {
-        return c.json(
-          {
-            success: false,
-            error: `Nickname held by another official handle (${owner})`,
-          },
-          409
-        );
-      }
-      await setNickname(c.env.DB, owner, null);
-      await invalidateChatIdentity(c.env, owner);
-    }
-  }
-
-  await setNickname(c.env.DB, address, trimmed, {
-    norm,
-    official: result.data.official ?? true,
-  });
-  await invalidateChatIdentity(c.env, address);
-  return c.json({ success: true, data: { nickname: trimmed } });
+app.get('/chat/admin/profiles', async (c) => {
+  const profiles = await listProfiles(c.env.DB);
+  return c.json({ success: true, data: { profiles } });
 });
 
 app.post('/chat/admin/reports/:id/resolve', async (c) => {

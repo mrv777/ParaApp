@@ -34,7 +34,7 @@ export const preferencesSchema = z.object({
 // sent to the pool API. Without this, `realAddr#x` / `realAddr?x=1` resolve the
 // real user upstream (fragment/query stripped by fetch) yet count as distinct
 // chat identities — unlimited ban evasion.
-const chatAddressSchema = z.string().regex(/^[a-zA-Z0-9]{26,62}$/);
+export const chatAddressSchema = z.string().regex(/^[a-zA-Z0-9]{26,62}$/);
 
 export const chatSessionSchema = z.object({
   btcAddress: chatAddressSchema,
@@ -83,6 +83,19 @@ export const chatAdminNicknameSchema = z.object({
   nickname: z.string().max(MAX_NICKNAME_LENGTH),
   // Assigned handles are locked (official) by default; pass false for a plain,
   // user-overwritable name.
+  official: z.boolean().optional(),
+});
+
+// Ban the sender of a specific message; the server resolves the (full) address
+// from the id, so the client never supplies one. Reason is optional.
+export const chatAdminMessageBanSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+// Assign/clear a nickname for the sender of a specific message. Same shape as
+// chatAdminNicknameSchema minus the address (resolved server-side from the id).
+export const chatAdminMessageNicknameSchema = z.object({
+  nickname: z.string().max(MAX_NICKNAME_LENGTH),
   official: z.boolean().optional(),
 });
 

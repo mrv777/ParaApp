@@ -675,6 +675,117 @@ async function main(): Promise<void> {
           (e) => e.type === 'announcement' && e.body === null
         );
         check('announcement clear broadcasts null', !!annCleared);
+
+        // Bans + profiles admin tooling. The list endpoints always work; the
+        // per-message ban/nickname resolve the sender server-side. This flow
+        // cleans up after itself (unban + clear the handle) so it's re-runnable.
+        const adminHdr = { 'X-Admin-Secret': args.adminSecret };
+        const adminJsonHdr = { ...adminHdr, 'content-type': 'application/json' };
+
+        check(
+          'admin bans list (200)',
+          (await fetch(`${args.http}/chat/admin/bans`, { headers: adminHdr }))
+            .status === 200
+        );
+        check(
+          'admin profiles list (200)',
+          (
+            await fetch(`${args.http}/chat/admin/profiles`, {
+              headers: adminHdr,
+            })
+          ).status === 200
+        );
+
+        if (messageId) {
+          // Ban the sender of a message by id, confirm it lists, then unban.
+          const mban = await fetch(
+            `${args.http}/chat/admin/message/${encodeURIComponent(
+              messageId
+            )}/ban`,
+            {
+              method: 'POST',
+              headers: adminJsonHdr,
+              body: JSON.stringify({ reason: 'smoke' }),
+            }
+          );
+          check('admin ban sender by message id (200)', mban.status === 200);
+
+          const bansAfter = (await (
+            await fetch(`${args.http}/chat/admin/bans`, { headers: adminHdr })
+          ).json()) as { data?: { bans?: { address: string }[] } };
+          check(
+            'banned address appears in bans list',
+            !!bansAfter.data?.bans?.some((x) => x.address === args.addrA)
+          );
+
+          const unban = await fetch(
+            `${args.http}/chat/admin/ban/${encodeURIComponent(args.addrA!)}`,
+            { method: 'DELETE', headers: adminHdr }
+          );
+          const unbanJson = (await unban.json()) as {
+            data?: { unbanned?: boolean };
+          };
+          check(
+            'admin unban lifts the ban (200)',
+            unban.status === 200 && unbanJson.data?.unbanned === true
+          );
+
+          const bansCleared = (await (
+            await fetch(`${args.http}/chat/admin/bans`, { headers: adminHdr })
+          ).json()) as { data?: { bans?: { address: string }[] } };
+          check(
+            'unbanned address is gone from bans list',
+            !bansCleared.data?.bans?.some((x) => x.address === args.addrA)
+          );
+
+          // Assign a nickname to the sender by message id, confirm it lists,
+          // then clear it (blank name) to restore state.
+          const smokeNick = `smoke_${Date.now()}`;
+          const mnick = await fetch(
+            `${args.http}/chat/admin/message/${encodeURIComponent(
+              messageId
+            )}/nickname`,
+            {
+              method: 'POST',
+              headers: adminJsonHdr,
+              body: JSON.stringify({ nickname: smokeNick, official: true }),
+            }
+          );
+          check('admin set nickname by message id (200)', mnick.status === 200);
+
+          const profAfter = (await (
+            await fetch(`${args.http}/chat/admin/profiles`, {
+              headers: adminHdr,
+            })
+          ).json()) as {
+            data?: { profiles?: { address: string; nickname: string }[] };
+          };
+          check(
+            'assigned handle appears in profiles list',
+            !!profAfter.data?.profiles?.some(
+              (p) => p.address === args.addrA && p.nickname === smokeNick
+            )
+          );
+
+          // Blank name releases the handle — leaves state clean for re-runs.
+          await fetch(
+            `${args.http}/chat/admin/message/${encodeURIComponent(
+              messageId
+            )}/nickname`,
+            {
+              method: 'POST',
+              headers: adminJsonHdr,
+              body: JSON.stringify({ nickname: '', official: false }),
+            }
+          );
+        } else {
+          skip('admin ban sender by message id (200)', 'no message id');
+          skip('banned address appears in bans list', 'no message id');
+          skip('admin unban lifts the ban (200)', 'no message id');
+          skip('unbanned address is gone from bans list', 'no message id');
+          skip('admin set nickname by message id (200)', 'no message id');
+          skip('assigned handle appears in profiles list', 'no message id');
+        }
       } else {
         skip('admin reports load with secret (200)', 'pass --admin-secret');
         skip('admin soft-delete message (200)', 'pass --admin-secret');
@@ -682,6 +793,14 @@ async function main(): Promise<void> {
         skip('announcement broadcasts to clients', 'pass --admin-secret');
         skip('history includes announcement', 'pass --admin-secret');
         skip('announcement clear broadcasts null', 'pass --admin-secret');
+        skip('admin bans list (200)', 'pass --admin-secret');
+        skip('admin profiles list (200)', 'pass --admin-secret');
+        skip('admin ban sender by message id (200)', 'pass --admin-secret');
+        skip('banned address appears in bans list', 'pass --admin-secret');
+        skip('admin unban lifts the ban (200)', 'pass --admin-secret');
+        skip('unbanned address is gone from bans list', 'pass --admin-secret');
+        skip('admin set nickname by message id (200)', 'pass --admin-secret');
+        skip('assigned handle appears in profiles list', 'pass --admin-secret');
       }
 
       authed.close();
