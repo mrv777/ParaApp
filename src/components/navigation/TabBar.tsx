@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '@/constants/colors';
+import { useChatStore, selectHasUnread } from '@/store/chatStore';
+import { ChatBubbleIcon } from './ChatBubbleIcon';
 
 type IoniconsName = keyof typeof Ionicons.glyphMap;
 
@@ -12,6 +14,7 @@ interface TabIconConfig {
   inactive: IoniconsName;
 }
 
+// Chat has no entry here — it renders the custom ChatBubbleIcon below.
 const TAB_ICONS: Record<string, TabIconConfig> = {
   Home: { active: 'home', inactive: 'home-outline' },
   Pool: { active: 'stats-chart', inactive: 'stats-chart-outline' },
@@ -26,6 +29,7 @@ const INACTIVE_ICON = '#555555';
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const chatUnread = useChatStore(selectHasUnread);
 
   return (
     <View
@@ -68,11 +72,35 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             accessibilityLabel={route.name}
             className="flex-1 items-center justify-center"
           >
-            <Ionicons
-              name={isFocused ? icons.active : icons.inactive}
-              size={ICON_SIZE}
-              color={isFocused ? colors.text : INACTIVE_ICON}
-            />
+            {route.name === 'Chat' ? (
+              // Custom square speech bubble (Ionicons only has rounded ones),
+              // with a sharp-cornered unread dot while unseen messages exist.
+              <View>
+                <ChatBubbleIcon
+                  size={ICON_SIZE}
+                  color={isFocused ? colors.text : INACTIVE_ICON}
+                  filled={isFocused}
+                />
+                {chatUnread && !isFocused ? (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -1,
+                      right: -3,
+                      width: 7,
+                      height: 7,
+                      backgroundColor: colors.primary,
+                    }}
+                  />
+                ) : null}
+              </View>
+            ) : (
+              <Ionicons
+                name={isFocused ? icons.active : icons.inactive}
+                size={ICON_SIZE}
+                color={isFocused ? colors.text : INACTIVE_ICON}
+              />
+            )}
           </Pressable>
         );
       })}

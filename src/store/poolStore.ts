@@ -79,8 +79,10 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
   ...initialState,
 
   fetchPoolStats: async (options) => {
-    // Only show loading indicator for user-initiated refresh, not background polls
-    if (!options?.silent) {
+    // Show the loading state for user-initiated refreshes AND the very first
+    // load (no cached data yet); stay silent for background polls once we have
+    // data, so live values update in place without a skeleton flicker.
+    if (!options?.silent || !get().stats) {
       set({ isLoading: true, error: null });
     } else {
       set({ error: null });

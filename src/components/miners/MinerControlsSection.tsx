@@ -31,7 +31,8 @@ export interface MinerControlsSectionProps {
 }
 
 const IDENTIFY_DURATION_MS = 15000; // 15 seconds
-const RECONNECT_TIMEOUT_MS = 60000; // 60 seconds
+const RECONNECT_TIMEOUT_MS = 60000; // 60 seconds (AxeOS/Bitaxe reboot fast)
+const RECONNECT_TIMEOUT_AVALON_MS = 240000; // 4 min — Avalon reboots are slow
 
 export function MinerControlsSection({
   miner,
@@ -52,6 +53,17 @@ export function MinerControlsSection({
   const identifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set once the miner is actually observed offline after a restart. Without
+  // this, `restartMiner` never flips `isOnline`, so the clear-effect below
+  // would fire immediately (miner still shows online) — instantly ending the
+  // reconnecting state and firing a false "reconnected" haptic.
+  const sawOfflineRef = useRef(false);
+  // Single-owner guard for the reconnect outcome: both the poll-driven
+  // clear-effect and the timeout's final probe check-and-clear this, so
+  // whichever observes the result first handles it (no double haptic / setState).
+  const reconnectingRef = useRef(false);
+  // Prevents a setState after unmount from the timeout probe's async tail.
+  const mountedRef = useRef(true);
 
   // Pulsing animation for identify
   const pulseOpacity = useSharedValue(1);
@@ -88,9 +100,33 @@ export function MinerControlsSection({
     };
   }, [stopPulsing]);
 
-  // Clear reconnecting state when miner comes back online
+  // Track mount state on its own [] effect so it flips only on real unmount
+  // (the cleanup effect above re-runs whenever stopPulsing changes).
   useEffect(() => {
-    if (isReconnecting && miner.isOnline) {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Track that we've actually seen the miner drop offline post-restart.
+  useEffect(() => {
+    if (isReconnecting && !miner.isOnline) {
+      sawOfflineRef.current = true;
+    }
+  }, [miner.isOnline, isReconnecting]);
+
+  // Clear reconnecting state once the miner has gone offline AND come back.
+  // Gating on sawOfflineRef prevents the effect from firing on the very next
+  // render (while the miner still reads online right after the restart call).
+  useEffect(() => {
+    if (
+      isReconnecting &&
+      reconnectingRef.current &&
+      sawOfflineRef.current &&
+      miner.isOnline
+    ) {
+      reconnectingRef.current = false;
       setIsReconnecting(false);
       onReconnecting?.(false);
       if (reconnectTimeoutRef.current) {
@@ -178,21 +214,41 @@ export function MinerControlsSection({
     if (success) {
       // Note: haptics.success() already called by SwipeToConfirm
       setIsRestarting(false);
+      sawOfflineRef.current = false; // arm: wait for offline→online round trip
+      reconnectingRef.current = true;
       setIsReconnecting(true);
       onReconnecting?.(true);
 
-      // Set a timeout for reconnection failure
-      reconnectTimeoutRef.current = setTimeout(() => {
+      // Set a timeout for reconnection failure. Avalon reboots take much longer
+      // than AxeOS, so give them a wider window before declaring failure.
+      const reconnectTimeout =
+        miner.minerType === 'avalon'
+          ? RECONNECT_TIMEOUT_AVALON_MS
+          : RECONNECT_TIMEOUT_MS;
+      reconnectTimeoutRef.current = setTimeout(async () => {
+        // A reboot faster than the poll cycle can return before the miner is
+        // ever observed offline, leaving sawOfflineRef false so the clear-effect
+        // never fires. Do one final direct probe before declaring failure.
+        await useMinerStore.getState().refreshMiner(miner.ip);
+        if (!mountedRef.current || !reconnectingRef.current) return;
+        reconnectingRef.current = false;
+        const online = useMinerStore
+          .getState()
+          .miners.find((m) => m.ip === miner.ip)?.isOnline;
         setIsReconnecting(false);
         onReconnecting?.(false);
-        showError(t('errors.failedToReconnect'));
-      }, RECONNECT_TIMEOUT_MS);
+        if (online) {
+          haptics.success();
+        } else {
+          showError(t('errors.failedToReconnect'));
+        }
+      }, reconnectTimeout);
     } else {
       haptics.error();
       setIsRestarting(false);
       showError(t('errors.failedToRestart'));
     }
-  }, [miner.ip, restartMiner, dismissError, showError, onReconnecting]);
+  }, [miner.ip, miner.minerType, restartMiner, dismissError, showError, onReconnecting, t]);
 
   // Don't show controls if miner is offline (unless reconnecting)
   if (!miner.isOnline && !isReconnecting) {

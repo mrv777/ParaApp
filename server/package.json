@@ -6,15 +6,22 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx scripts/chat-smoke.ts",
+    "seed": "tsx scripts/chat-seed.ts"
   },
   "dependencies": {
+    "@2toad/profanity": "^3.3.0",
     "hono": "^4.12.0",
+    "obscenity": "^0.4.6",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260630.1",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "wrangler": "^4.106.0"
+    "wrangler": "^4.106.0",
+    "ws": "^8.18.0"
   }
 }

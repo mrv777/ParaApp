@@ -143,6 +143,11 @@ export function MinerDetailScreen({ route, navigation }: Props) {
               {t('common.offline')}
             </Text>
           )}
+          {miner.isOnline && miner.isStandby && (
+            <Text variant="mono" style={{ fontSize: 11, color: colors.warning }}>
+              {t('miners.standby')}
+            </Text>
+          )}
         </View>
         {miner.isOnline && (
           <Pressable

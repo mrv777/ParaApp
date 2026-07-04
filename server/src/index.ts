@@ -5,11 +5,57 @@ import {
   registerSchema,
   unregisterSchema,
   preferencesSchema,
+  chatSessionSchema,
+  chatNicknameSchema,
+  chatReportSchema,
+  chatBlockSchema,
+  chatUnblockSchema,
+  chatEulaSchema,
+  chatAdminBanSchema,
+  chatAdminNicknameSchema,
+  chatAdminMessageBanSchema,
+  chatAdminMessageNicknameSchema,
+  chatAnnouncementSchema,
+  chatAddressSchema,
 } from './validation';
+import {
+  passesActivityGate,
+  issueSessionToken,
+  verifySessionToken,
+  timingSafeEqual,
+} from './chat/identity';
+import {
+  getRecentMessages,
+  isBanned,
+  setNickname,
+  getProfile,
+  nicknameOwner,
+  addReport,
+  addBlock,
+  removeBlock,
+  getBlockedUsers,
+  getMessageSender,
+  recordEulaAcceptance,
+  softDeleteMessage,
+  banAddress,
+  listBans,
+  removeBan,
+  listProfiles,
+  getOpenReports,
+  resolveReport,
+  getAnnouncement,
+  setAnnouncement,
+} from './chat/db';
+import { isClean } from './chat/moderation';
+import { isReservedNickname, nicknameKey } from './chat/reserved-nicknames';
+import { stripInvisible } from './chat/sanitize';
+import { adminPageHtml } from './chat/admin-page';
+import { truncateChatAddress } from './chat/protocol';
 import {
   upsertSubscription,
   deleteSubscription,
   upsertPreferences,
+  ensurePreferences,
   getPreferences,
   verifyTokenOwnership,
   MaxDevicesExceededError,
@@ -29,9 +75,32 @@ import {
 
 const app = new Hono<{ Bindings: Env }>();
 const WIDGET_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+const encoder = new TextEncoder();
 
 // Enable CORS for mobile app
 app.use('*', cors());
+
+async function blockIdFor(
+  secret: string,
+  blocker: string,
+  blocked: string
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(`${blocker}\n${blocked}`)
+  );
+  return Array.from(new Uint8Array(signature), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('');
+}
 
 // Health check
 app.get('/', (c) =>
@@ -119,7 +188,10 @@ app.post('/register', async (c) => {
     });
 
     if (preferences) {
-      await upsertPreferences(c.env.DB, btcAddress, preferences);
+      // Registration must not overwrite a user's prefs (they're account-wide and
+      // may have been set OFF on another device). Seed a row only if missing;
+      // explicit changes go through PATCH /preferences.
+      await ensurePreferences(c.env.DB, btcAddress, preferences);
     }
 
     // Return current preferences for cross-device sync
@@ -262,6 +334,564 @@ app.get('/widget/user/:address', async (c) => {
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
 });
+
+// ============================================================================
+// Community chat
+// ============================================================================
+
+// Mint a short-lived session token for posting. Reading needs no session.
+app.post('/chat/session', async (c) => {
+  try {
+    const body = await c.req.json();
+    const result = chatSessionSchema.safeParse(body);
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const { btcAddress } = result.data;
+
+    if (await isBanned(c.env.DB, btcAddress)) {
+      return c.json({ success: false, error: 'This address is banned from chat' }, 403);
+    }
+    if (!(await passesActivityGate(c.env, btcAddress))) {
+      return c.json(
+        { success: false, error: 'Address has no activity on Parasite Pool' },
+        403
+      );
+    }
+
+    const token = await issueSessionToken(btcAddress, c.env.SESSION_SECRET);
+    // Return the caller's current profile so the client can prefill the nickname
+    // editor and lock it when the handle is admin-assigned.
+    const profile = await getProfile(c.env.DB, btcAddress);
+    return c.json({
+      success: true,
+      data: { token, nickname: profile.nickname, official: profile.official },
+    });
+  } catch (error) {
+    console.error('chat/session error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Open-read history with an exclusive millisecond `before` cursor. Block
+// filtering + `mine` flags key off the caller's session token — a bare
+// address param is forgeable and would let anyone enumerate block lists.
+app.get('/chat/history', async (c) => {
+  try {
+    const before = c.req.query('before');
+    const beforeId = c.req.query('beforeId');
+    const limit = c.req.query('limit');
+    const token = c.req.query('token');
+    let address: string | undefined;
+    if (token) {
+      const verified = await verifySessionToken(token, c.env.SESSION_SECRET);
+      // Expired/invalid token → serve the open unfiltered read rather than
+      // failing the backfill; live WS delivery still filters blocks.
+      if (verified) address = verified.address;
+    }
+    // Parse the cursor defensively: a non-numeric `before` (e.g. "abc") or a
+    // non-finite one ("Infinity") must degrade to "no cursor / first page",
+    // not silently serve page 1 with a bad state or bind a non-finite value to
+    // D1 (which throws → 500).
+    const beforeNum = before !== undefined ? Number(before) : NaN;
+    const hasBefore = Number.isFinite(beforeNum);
+    const limitNum = limit !== undefined ? Number(limit) : 50;
+    const safeLimit = Number.isFinite(limitNum) && limitNum > 0 ? limitNum : 50;
+    const messages = await getRecentMessages(c.env.DB, {
+      before: hasBefore ? beforeNum : undefined,
+      beforeId: beforeId || undefined,
+      limit: safeLimit,
+      address,
+    });
+    // Only send the announcement on the first page (no `before` cursor).
+    const announcement = hasBefore ? undefined : await getAnnouncement(c.env.DB);
+    return c.json({ success: true, data: { messages, announcement } });
+  } catch (error) {
+    console.error('chat/history error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// WebSocket upgrade. Optional `token` → posting allowed; absent → read-only.
+// Validated address is forwarded to the DO via a query param it trusts (the DO
+// is only reachable through this route).
+app.get('/chat/ws', async (c) => {
+  if (c.req.header('Upgrade') !== 'websocket') {
+    return c.json({ success: false, error: 'Expected websocket' }, 426);
+  }
+
+  const token = c.req.query('token');
+  let address = '';
+  if (token) {
+    const verified = await verifySessionToken(token, c.env.SESSION_SECRET);
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    address = verified.address;
+  }
+
+  // Forward the upgrade to the DO. Clone via a Headers object (incoming request
+  // headers are immutable) so the `Upgrade: websocket` header is preserved and
+  // the validated address rides along in a header the DO trusts — reconstructing
+  // the Request with a new URL drops the upgrade on the production runtime.
+  const headers = new Headers(c.req.raw.headers);
+  headers.set('X-Chat-Address', address);
+  const stub = c.env.CHAT_ROOM.get(c.env.CHAT_ROOM.idFromName('global'));
+  return stub.fetch(new Request(c.req.url, { method: 'GET', headers }));
+});
+
+// Set or clear a moderated nickname (falls back to truncated address).
+app.put('/chat/nickname', async (c) => {
+  try {
+    const body = await c.req.json();
+    const result = chatNicknameSchema.safeParse(body);
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    if (await isBanned(c.env.DB, verified.address)) {
+      return c.json({ success: false, error: 'This address is banned from chat' }, 403);
+    }
+
+    // Users cannot overwrite an admin-assigned (locked) official handle.
+    if ((await getProfile(c.env.DB, verified.address)).official) {
+      return c.json(
+        { success: false, error: 'This handle is managed by an admin' },
+        403
+      );
+    }
+
+    const trimmed = stripInvisible(result.data.nickname).trim();
+    if (trimmed && (!isClean(trimmed) || isReservedNickname(trimmed))) {
+      return c.json({ success: false, error: 'Nickname not allowed' }, 400);
+    }
+    // Global uniqueness on the folded key: no two addresses may share a name
+    // (or a leetspeak / homoglyph look-alike of it).
+    const norm = trimmed ? nicknameKey(trimmed) : '';
+    if (norm) {
+      const owner = await nicknameOwner(c.env.DB, norm);
+      if (owner && owner !== verified.address) {
+        return c.json({ success: false, error: 'Nickname already taken' }, 409);
+      }
+    }
+    try {
+      await setNickname(
+        c.env.DB,
+        verified.address,
+        trimmed.length ? trimmed : null,
+        { norm, official: false }
+      );
+    } catch (error) {
+      // Concurrent claim: both passed the pre-check, the unique index on norm
+      // caught the loser — report "taken", not a 500.
+      if (String(error).includes('UNIQUE')) {
+        return c.json({ success: false, error: 'Nickname already taken' }, 409);
+      }
+      throw error;
+    }
+    await invalidateChatIdentity(c.env, verified.address);
+    return c.json({ success: true, data: { nickname: trimmed || null } });
+  } catch (error) {
+    console.error('chat/nickname error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Report a message → queued in chat_reports for admin triage.
+app.post('/chat/report', async (c) => {
+  try {
+    const result = chatReportSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    if (await isBanned(c.env.DB, verified.address)) {
+      return c.json({ success: false, error: 'This address is banned from chat' }, 403);
+    }
+    const reported = await addReport(c.env.DB, {
+      id: crypto.randomUUID(),
+      messageId: result.data.messageId,
+      reporter: verified.address,
+      reason: result.data.reason ?? '',
+    });
+    if (!reported) {
+      return c.json({ success: false, error: 'Message not found' }, 404);
+    }
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/report error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Block / unblock an address (server-enforced in history + live delivery).
+app.post('/chat/block', async (c) => {
+  try {
+    const result = chatBlockSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    const sender = await getMessageSender(c.env.DB, result.data.messageId);
+    if (!sender) {
+      return c.json({ success: false, error: 'Message not found' }, 404);
+    }
+    await addBlock(c.env.DB, verified.address, sender);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/block error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+app.get('/chat/blocks', async (c) => {
+  try {
+    const token = c.req.query('token');
+    if (!token) {
+      return c.json({ success: false, error: 'Missing token' }, 400);
+    }
+    const verified = await verifySessionToken(token, c.env.SESSION_SECRET);
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+
+    const blocked = await getBlockedUsers(c.env.DB, verified.address);
+    const users = await Promise.all(
+      blocked.map(async (row) => ({
+        id: await blockIdFor(c.env.SESSION_SECRET, verified.address, row.address),
+        address: truncateChatAddress(row.address),
+        nickname: row.nickname,
+        official: row.official,
+        createdAt: row.createdAt,
+      }))
+    );
+    return c.json({ success: true, data: { users } });
+  } catch (error) {
+    console.error('chat/blocks error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+app.delete('/chat/block', async (c) => {
+  try {
+    const body = await c.req.json();
+    const unblockResult = chatUnblockSchema.safeParse(body);
+    const legacyResult = chatBlockSchema.safeParse(body);
+    let token: string;
+    if (unblockResult.success) token = unblockResult.data.token;
+    else if (legacyResult.success) token = legacyResult.data.token;
+    else return c.json({ success: false, error: unblockResult.error.flatten() }, 400);
+    const verified = await verifySessionToken(
+      token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    let target: string | null = null;
+    if (unblockResult.success) {
+      const blocked = await getBlockedUsers(c.env.DB, verified.address);
+      for (const row of blocked) {
+        const id = await blockIdFor(c.env.SESSION_SECRET, verified.address, row.address);
+        if (id === unblockResult.data.blockId) {
+          target = row.address;
+          break;
+        }
+      }
+    } else if (legacyResult.success) {
+      target = await getMessageSender(c.env.DB, legacyResult.data.messageId);
+    }
+    if (!target) {
+      return c.json({ success: false, error: 'Block not found' }, 404);
+    }
+    await removeBlock(c.env.DB, verified.address, target);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/block delete error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Record one-time EULA / community-guidelines acceptance. Best-effort compliance
+// record only — posting is client-gated, not blocked server-side on this.
+app.post('/chat/eula', async (c) => {
+  try {
+    const result = chatEulaSchema.safeParse(await c.req.json());
+    if (!result.success) {
+      return c.json({ success: false, error: result.error.flatten() }, 400);
+    }
+    const verified = await verifySessionToken(
+      result.data.token,
+      c.env.SESSION_SECRET
+    );
+    if (!verified) {
+      return c.json({ success: false, error: 'Invalid or expired token' }, 401);
+    }
+    await recordEulaAcceptance(c.env.DB, verified.address, result.data.version);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('chat/eula error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Current announcement banner (open read).
+app.get('/chat/announcement', async (c) => {
+  try {
+    const announcement = await getAnnouncement(c.env.DB);
+    return c.json({ success: true, data: { announcement } });
+  } catch (error) {
+    console.error('chat/announcement error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+// Push an announcement change to all live sockets via the DO.
+async function broadcastAnnouncement(
+  env: Env,
+  body: string | null
+): Promise<void> {
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/announcement', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ body }),
+    })
+  );
+}
+
+// Tell live sockets a message was removed so it disappears without a reload.
+async function broadcastDelete(env: Env, id: string): Promise<void> {
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+  );
+}
+
+// Evict the DO's cached identity for an address after its profile or ban status
+// changes, so the next message re-reads it (nickname/ban changes stay instant
+// despite the per-message read cache).
+async function invalidateChatIdentity(env: Env, address: string): Promise<void> {
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/identity', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ address }),
+    })
+  );
+}
+
+// Core of the admin nickname-assign logic, shared by the address-based route and
+// the message-id route. Strips invisible chars, enforces nickname uniqueness
+// (clearing a non-official holder, protecting an official one with a 409), and
+// returns the HTTP status + JSON body the caller should emit. Empty name clears.
+async function assignNickname(
+  env: Env,
+  address: string,
+  rawNickname: string,
+  official: boolean | undefined
+): Promise<{ status: 200 | 409; body: Record<string, unknown> }> {
+  const trimmed = stripInvisible(rawNickname).trim();
+
+  // Empty ⇒ release the handle (fall back to truncated address).
+  if (!trimmed) {
+    await setNickname(env.DB, address, null);
+    await invalidateChatIdentity(env, address);
+    return { status: 200, body: { success: true, data: { nickname: null } } };
+  }
+
+  const norm = nicknameKey(trimmed);
+  if (norm) {
+    const owner = await nicknameOwner(env.DB, norm);
+    if (owner && owner !== address) {
+      // Admin wins over a non-official holder (their name is cleared), but an
+      // existing official handle is protected — reject so the admin decides.
+      if ((await getProfile(env.DB, owner)).official) {
+        return {
+          status: 409,
+          body: {
+            success: false,
+            error: `Nickname held by another official handle (${owner})`,
+          },
+        };
+      }
+      await setNickname(env.DB, owner, null);
+      await invalidateChatIdentity(env, owner);
+    }
+  }
+
+  await setNickname(env.DB, address, trimmed, { norm, official: official ?? true });
+  await invalidateChatIdentity(env, address);
+  return { status: 200, body: { success: true, data: { nickname: trimmed } } };
+}
+
+// ---- Admin (guarded) --------------------------------------------------------
+
+// The admin PAGE is public HTML; it prompts for the secret and calls the guarded
+// API below with it. The API (/chat/admin/*) requires the ADMIN_SECRET header.
+app.get('/chat/admin', (c) => c.html(adminPageHtml()));
+
+app.use('/chat/admin/*', async (c, next) => {
+  const secret = c.req.header('X-Admin-Secret');
+  if (!secret || !timingSafeEqual(secret, c.env.ADMIN_SECRET ?? '')) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  // One shared error boundary so every admin handler returns the same JSON
+  // error shape the admin page expects (matches the public chat routes).
+  try {
+    await next();
+  } catch (error) {
+    console.error('chat/admin error:', error);
+    return c.json({ success: false, error: 'Internal server error' }, 500);
+  }
+});
+
+app.get('/chat/admin/reports', async (c) => {
+  const reports = await getOpenReports(c.env.DB);
+  return c.json({ success: true, data: { reports } });
+});
+
+app.delete('/chat/admin/message/:id', async (c) => {
+  const id = c.req.param('id');
+  const deleted = await softDeleteMessage(c.env.DB, id);
+  if (deleted) await broadcastDelete(c.env, id); // drop it from live sockets
+  return c.json({ success: true, data: { deleted } });
+});
+
+// Ban the sender of a specific message. The client only ever sees truncated
+// addresses, so it can't ban by address from the message list — the server
+// resolves the full sender from the id here. 404 when the id is unknown.
+app.post('/chat/admin/message/:id/ban', async (c) => {
+  const result = chatAdminMessageBanSchema.safeParse(
+    await c.req.json().catch(() => ({}))
+  );
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const sender = await getMessageSender(c.env.DB, c.req.param('id'));
+  if (!sender) return c.json({ success: false, error: 'Message not found' }, 404);
+  await banAddress(c.env.DB, sender, result.data.reason ?? '');
+  await invalidateChatIdentity(c.env, sender);
+  return c.json({
+    success: true,
+    data: { banned: true, sender: truncateChatAddress(sender) },
+  });
+});
+
+// Assign/clear a nickname for the sender of a specific message (address resolved
+// server-side from the id — same reason as ban-by-message above).
+app.post('/chat/admin/message/:id/nickname', async (c) => {
+  const result = chatAdminMessageNicknameSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const sender = await getMessageSender(c.env.DB, c.req.param('id'));
+  if (!sender) return c.json({ success: false, error: 'Message not found' }, 404);
+  const { status, body } = await assignNickname(
+    c.env,
+    sender,
+    result.data.nickname,
+    result.data.official
+  );
+  return c.json(body, status);
+});
+
+app.post('/chat/admin/ban', async (c) => {
+  const result = chatAdminBanSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  await banAddress(c.env.DB, result.data.address, result.data.reason ?? '');
+  await invalidateChatIdentity(c.env, result.data.address);
+  return c.json({ success: true });
+});
+
+app.get('/chat/admin/bans', async (c) => {
+  const bans = await listBans(c.env.DB);
+  return c.json({ success: true, data: { bans } });
+});
+
+// Lift a ban. The address is a path segment, so validate it with the same strict
+// charset used everywhere else before it reaches the DB layer.
+app.delete('/chat/admin/ban/:address', async (c) => {
+  const parsed = chatAddressSchema.safeParse(c.req.param('address'));
+  if (!parsed.success) {
+    return c.json({ success: false, error: 'Invalid address' }, 400);
+  }
+  const unbanned = await removeBan(c.env.DB, parsed.data);
+  if (unbanned) await invalidateChatIdentity(c.env, parsed.data);
+  return c.json({ success: true, data: { unbanned } });
+});
+
+// Assign (or clear) a nickname for any address. Bypasses the reserved-word and
+// profanity checks (admin is trusted and may grant "official" authority handles),
+// but still strips invisible chars and enforces the length cap. Assigned handles
+// default to locked (official) so users can't overwrite them.
+app.post('/chat/admin/nickname', async (c) => {
+  const result = chatAdminNicknameSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const { status, body } = await assignNickname(
+    c.env,
+    result.data.address,
+    result.data.nickname,
+    result.data.official
+  );
+  return c.json(body, status);
+});
+
+app.get('/chat/admin/profiles', async (c) => {
+  const profiles = await listProfiles(c.env.DB);
+  return c.json({ success: true, data: { profiles } });
+});
+
+app.post('/chat/admin/reports/:id/resolve', async (c) => {
+  const resolved = await resolveReport(c.env.DB, c.req.param('id'));
+  return c.json({ success: true, data: { resolved } });
+});
+
+app.post('/chat/admin/announcement', async (c) => {
+  const result = chatAnnouncementSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  await setAnnouncement(c.env.DB, result.data.body);
+  await broadcastAnnouncement(c.env, result.data.body);
+  return c.json({ success: true });
+});
+
+app.delete('/chat/admin/announcement', async (c) => {
+  await setAnnouncement(c.env.DB, null);
+  await broadcastAnnouncement(c.env, null);
+  return c.json({ success: true });
+});
+
+export { ChatRoom } from './chat/room';
 
 export default {
   fetch: app.fetch,

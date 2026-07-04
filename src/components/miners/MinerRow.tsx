@@ -52,6 +52,7 @@ export function MinerRow({
 }: MinerRowProps) {
   const { t } = useTranslation();
   const displayName = miner.alias || miner.hostname || miner.ip;
+  const standby = miner.isStandby === true;
 
   const nameColor = miner.isOnline ? colors.textHigh : colors.dangerTint;
   const hasModel = miner.deviceModel && miner.deviceModel !== 'Unknown';
@@ -93,11 +94,16 @@ export function MinerRow({
       className={`bg-background flex-row items-center ${className}`}
       style={{ paddingHorizontal: 16, paddingVertical: 12 }}
     >
-      {/* Status indicator */}
+      {/* Status indicator — red offline, amber standby, green hashing */}
       <View
-        className={`w-2 h-2 rounded-full mr-3 ${
-          miner.isOnline ? 'bg-success' : 'bg-danger'
-        }`}
+        className="w-2 h-2 rounded-full mr-3"
+        style={{
+          backgroundColor: !miner.isOnline
+            ? colors.danger
+            : standby
+              ? colors.warning
+              : colors.success,
+        }}
       />
 
       {/* Main content */}
@@ -172,8 +178,14 @@ export function MinerRow({
       {/* Hashrate + chevron */}
       <View className="flex-row items-center" style={{ gap: 6 }}>
         {miner.isOnline && (
-          <Text variant="mono" style={{ fontSize: 13, color: colors.textValue }}>
-            {formatHashrate(miner.hashRate * 1e9)}
+          <Text
+            variant="mono"
+            style={{
+              fontSize: 13,
+              color: standby ? colors.textMuted : colors.textValue,
+            }}
+          >
+            {standby ? t('miners.standby') : formatHashrate(miner.hashRate * 1e9)}
           </Text>
         )}
         {onPress && (

@@ -19,8 +19,9 @@ import type { LinkingOptions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
-import { PoolScreen } from '@/screens';
+import { PoolScreen, ChatScreen } from '@/screens';
 import { TabBar } from '@/components/navigation/TabBar';
 import { Toast } from '@/components/Toast';
 import { HomeStack, MinersStack, SettingsStack } from '@/navigation';
@@ -59,6 +60,7 @@ const linking: LinkingOptions<MainTabParamList> = {
         },
       },
       Pool: 'pool',
+      Chat: 'chat',
       Miners: 'miners',
       Settings: {
         path: 'settings',
@@ -112,26 +114,29 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <NavigationContainer theme={navigationTheme} linking={linking}>
-          <Tab.Navigator
-            tabBar={(props) => <TabBar {...props} />}
-            screenOptions={{
-              headerShown: false,
-              // Expo SDK 54 / React Navigation 7 can intermittently blank tab scenes
-              // during animated tab transitions. Keep the default non-animated switch.
-              animation: 'none',
-            }}
-          >
-            <Tab.Screen name="Home" component={HomeStack} />
-            <Tab.Screen name="Pool" component={PoolScreen} />
-            <Tab.Screen name="Miners" component={MinersStack} />
-            <Tab.Screen name="Settings" component={SettingsStack} />
-          </Tab.Navigator>
-          <Toast />
-        </NavigationContainer>
-        <StatusBar style="light" />
-      </SafeAreaProvider>
+      <KeyboardProvider>
+        <SafeAreaProvider>
+          <NavigationContainer theme={navigationTheme} linking={linking}>
+            <Tab.Navigator
+              tabBar={(props) => <TabBar {...props} />}
+              screenOptions={{
+                headerShown: false,
+                // Expo SDK 54 / React Navigation 7 can intermittently blank tab scenes
+                // during animated tab transitions. Keep the default non-animated switch.
+                animation: 'none',
+              }}
+            >
+              <Tab.Screen name="Home" component={HomeStack} />
+              <Tab.Screen name="Pool" component={PoolScreen} />
+              <Tab.Screen name="Chat" component={ChatScreen} />
+              <Tab.Screen name="Miners" component={MinersStack} />
+              <Tab.Screen name="Settings" component={SettingsStack} />
+            </Tab.Navigator>
+            <Toast />
+          </NavigationContainer>
+          <StatusBar style="light" />
+        </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

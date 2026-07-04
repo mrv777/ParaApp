@@ -2,6 +2,37 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.5.0] - 2026-07-02
+
+### Added
+- **Community Chat** - New Chat tab for real-time conversation across the pool, backed by a Durable Object chat room over native WebSockets with D1-persisted history and scroll-back pagination
+  - Moderated nicknames with unique handles and a truncated-address fallback; admin-assigned official handles
+  - Fixed-set emoji reactions with server-side aggregation and quick-react UI
+  - Reply to messages: swipe or long-press to quote a message, tap a quote to jump to the original
+  - Admin announcement banner as the official channel, with a reserved-nickname blacklist
+  - Inline moderation: server-enforced report and block, EULA gate, and a Blocked Users screen in Settings with unblock
+  - Admin login gating with a delete-any-message browser and live delete broadcast
+  - 30-day message retention prune in cron (cascading to reactions)
+- **Cold-start skeletons** - Loading skeletons on Home, Pool, and Chat for a smoother startup
+
+### Changed
+- Chat feed rebuilt on LegendList with day dividers and scroll-back pagination; hi-fi design pass on the Chat screen
+- Send icon swapped to a mono ↵ glyph; toast themed to the terminal aesthetic
+- Legal links point at the mrv777.com/paraapp/ subdirectory
+
+### Fixed
+- Avalon miners in standby/idle mode now handled correctly
+- Notification preference sync no longer overwrites account-wide prefs on device register
+- Reactions and reports guarded to real messages; feed resets cleanly on identity switch
+- Expired token refreshed on nickname save; reaction echo to sibling sockets on the same address
+- Hardened WebSocket / Durable Object edge cases and device-layer miner writes
+
+### Performance
+- Cached chat identity, debounced presence, and coalesced reactions to cut chatter
+
+### Security
+- Sender keys truncated on the wire; block, report, and history paths hardened
+
 ## [0.4.0] - 2026-07-01
 
 ### Added

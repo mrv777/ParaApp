@@ -1,0 +1,6 @@
+# Copy to `.dev.vars` (gitignored) for local `wrangler dev`.
+# In production set these with:
+#   wrangler secret put SESSION_SECRET
+#   wrangler secret put ADMIN_SECRET
+SESSION_SECRET = "dev-session-secret-change-me"
+ADMIN_SECRET = "dev-admin-secret-change-me"

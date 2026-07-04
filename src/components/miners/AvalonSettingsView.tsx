@@ -13,10 +13,9 @@ import {
   View,
   ScrollView,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Text } from '@/components/Text';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
@@ -273,10 +272,7 @@ export function AvalonSettingsView({ miner, onSaved }: AvalonSettingsViewProps) 
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" automaticOffset>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}

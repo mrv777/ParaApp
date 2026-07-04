@@ -77,7 +77,13 @@ export async function fetchWithTimeout<T>(
           `HTTP ${response.status}: ${response.statusText}`,
           response.status
         );
-        continue;
+        // Only retry transient failures: server errors (5xx) and rate limits
+        // (429). Other 4xx are deterministic — retrying just wastes attempts
+        // and backoff (e.g. a 404 for an unknown address).
+        if (response.status >= 500 || response.status === 429) {
+          continue;
+        }
+        return { success: false, error: lastError };
       }
 
       // Note: AxeOS API returns Content-Type: text/html but body is valid JSON

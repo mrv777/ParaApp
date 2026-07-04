@@ -97,8 +97,10 @@ async function probeAxeOS(ip: string, signal?: AbortSignal): Promise<boolean> {
  * run concurrently so scan wall-clock time stays close to the original
  * AxeOS-only path.
  *
- * AbortSignal is honored by the AxeOS probe; the Avalon TCP probe
- * uses its own short timeout via `isAvalon`.
+ * AbortSignal is honored by both probes: the AxeOS fetch aborts, and the
+ * Avalon TCP probe destroys its socket on abort (in addition to its own
+ * short timeout), so a cancelled/backgrounded scan leaves no dangling
+ * native connections.
  */
 async function probeMiner(
   ip: string,
@@ -111,7 +113,7 @@ async function probeMiner(
     probeAxeOS(ip, signal).then((ok) =>
       ok ? ('unknown' as MinerType) : Promise.reject()
     ),
-    isAvalon(ip).then((ok) =>
+    isAvalon(ip, signal).then((ok) =>
       ok ? ('avalon' as MinerType) : Promise.reject()
     ),
   ];

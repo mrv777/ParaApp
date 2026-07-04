@@ -60,6 +60,7 @@ export function MinerCard({
   const temperatureUnit = useSettingsStore((s) => s.temperatureUnit);
 
   const online = miner.isOnline;
+  const standby = miner.isStandby === true;
   const displayName = miner.alias || miner.hostname || miner.ip;
   const nameColor = online ? colors.textHigh : colors.dangerTint;
   const hasModel = miner.deviceModel && miner.deviceModel !== 'Unknown';
@@ -141,7 +142,11 @@ export function MinerCard({
             width: 7,
             height: 7,
             borderRadius: 3.5,
-            backgroundColor: online ? colors.success : colors.danger,
+            backgroundColor: !online
+              ? colors.danger
+              : standby
+                ? colors.warning
+                : colors.success,
           }}
         />
         <Text
@@ -169,15 +174,15 @@ export function MinerCard({
           variant="mono"
           className="font-bold"
           style={{
-            fontSize: 24,
+            fontSize: standby ? 15 : 24,
             lineHeight: 28,
-            color: online ? colors.text : colors.textMuted,
+            color: online && !standby ? colors.text : colors.textMuted,
           }}
           numberOfLines={1}
         >
-          {online ? hrValue : DASH}
+          {!online ? DASH : standby ? t('miners.standby') : hrValue}
         </Text>
-        {online && (
+        {online && !standby && (
           <Text
             variant="mono"
             style={{ fontSize: 11, color: colors.textMuted }}

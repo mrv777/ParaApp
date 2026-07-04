@@ -67,13 +67,18 @@ export function MinerStatsSection({
       : '0';
 
   const isAvalon = miner.minerType === 'avalon';
+  const standby = miner.isStandby === true;
 
   const entries: StatEntry[] = [
     {
       label: t('miners.hashrate'),
-      value: formatHashrate(hashrateHs),
-      subValue:
-        expectedHs > 0
+      // In standby the miner isn't hashing; `hashrateHs` is a decaying
+      // lifetime average, so show the standby label and demote the
+      // average to a clearly-secondary sub-value.
+      value: standby ? t('miners.standby') : formatHashrate(hashrateHs),
+      subValue: standby
+        ? formatHashrate(hashrateHs)
+        : expectedHs > 0
           ? t('miners.expected', { value: formatHashrate(expectedHs) })
           : undefined,
     },

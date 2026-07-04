@@ -1,6 +1,6 @@
 {
   "name": "parasite-app",
-  "version": "0.4.0",
+  "version": "0.5.1",
   "license": "GPL-3.0-or-later",
   "main": "index.ts",
   "pnpm": {
@@ -41,6 +41,7 @@
     "@expo-google-fonts/space-mono": "^0.4.2",
     "@expo/ui": "~56.0.17",
     "@expo/vector-icons": "^15.0.3",
+    "@legendapp/list": "^3.3.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/netinfo": "^12.0.1",
     "@react-navigation/bottom-tabs": "^7.9.0",
@@ -78,6 +79,7 @@
     "react-native-android-widget": "^0.20.3",
     "react-native-css-interop": "^0.2.6",
     "react-native-gesture-handler": "^2.31.2",
+    "react-native-keyboard-controller": "1.21.6",
     "react-native-reanimated": "^4.3.1",
     "react-native-safe-area-context": "^5.8.0",
     "react-native-screens": "^4.25.2",

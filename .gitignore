@@ -65,3 +65,16 @@ yarn-error.*
 
 # Cloudflare Workers
 .wrangler/
+server/.dev.vars
+
+# Community-chat planning docs — kept locally as working references during the
+# build; not committed to this public repo (see CHAT_BUILD_PLAN.md decision).
+CHAT_SPEC.md
+CHAT_BUILD_PLAN.md
+
+# Local-only hardware API reference notes (kept on disk, not tracked).
+CANAAN_AVALON_API.md
+HAMMER_API.md
+
+# Legal pages to upload to mrv777.com (website content, not app code).
+legal/

@@ -136,6 +136,36 @@ export async function upsertPreferences(
   }
 }
 
+/**
+ * Seed a preferences row from the submitted prefs ONLY if none exists; never
+ * overwrite an existing row. Used by device registration, which must not clobber
+ * an account-wide preference that may have been set OFF on another device.
+ * Explicit user changes go through upsertPreferences (PATCH /preferences).
+ * ON CONFLICT DO NOTHING makes this a safe no-op when a row already exists
+ * (btc_address is the PK), avoiding a check-then-insert race.
+ */
+export async function ensurePreferences(
+  db: D1Database,
+  btcAddress: string,
+  prefs: { blocks?: boolean; workers?: boolean; bestDiff?: boolean }
+): Promise<void> {
+  await db
+    .prepare(
+      `
+      INSERT INTO notification_preferences (btc_address, notify_blocks, notify_workers, notify_best_diff)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(btc_address) DO NOTHING
+    `
+    )
+    .bind(
+      btcAddress,
+      prefs.blocks !== undefined ? (prefs.blocks ? 1 : 0) : 1,
+      prefs.workers !== undefined ? (prefs.workers ? 1 : 0) : 1,
+      prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : 1
+    )
+    .run();
+}
+
 export async function updateSubscriptionWidgetUpdates(
   db: D1Database,
   pushToken: string,

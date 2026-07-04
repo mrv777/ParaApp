@@ -1,14 +1,28 @@
 name = "paraapp-notifications"
 main = "src/index.ts"
-compatibility_date = "2024-12-01"
+compatibility_date = "2025-04-01"  # bumped for SQLite-backed DOs + WS Hibernation
 
 [vars]
 PARASITE_API_URL = "https://parasite.space"
+CHAT_MODERATION_AI = "off"  # v1: inline filters only; AI layer stubbed/disabled
 
 [[d1_databases]]
 binding = "DB"
 database_name = "paraapp-notifications-db"
 database_id = "8ae5c792-c025-4c35-a0b5-5872a8f63094"
+
+# Community chat room (single global instance, id "global")
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoom"
+
+[[migrations]]
+tag = "v1-chat"
+new_sqlite_classes = ["ChatRoom"]
+
+# Secrets (set via `wrangler secret put` in prod; `.dev.vars` locally):
+#   SESSION_SECRET  — HMAC key for chat session tokens
+#   ADMIN_SECRET    — guards /chat/admin/* + the web admin page
 
 [triggers]
 crons = ["* * * * *"]  # Every minute

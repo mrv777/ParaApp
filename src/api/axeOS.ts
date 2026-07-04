@@ -91,6 +91,7 @@ export async function updateSettings(
   return patchJson<void>(`${minerUrl(ip)}/api/system`, payload, {
     timeout: MINER_TIMEOUT,
     responseType: 'text', // Some miners (Hammer) return empty body on success
+    retries: 0, // non-idempotent write — don't re-send on transient failure
   });
 }
 
@@ -99,30 +100,45 @@ export async function updateSettings(
  * Hammer firmware requires the full settings object in every PATCH —
  * partial updates are silently ignored. Frequency/voltage/boot_mode
  * changes only take effect after a restart.
+ *
+ * We GET the device's current config first so the unchanged fields in the
+ * full payload reflect the live device state, not a possibly-stale poll
+ * snapshot (which would revert any change made on the device since the last
+ * poll) and so optional fields aren't fabricated from hardcoded defaults.
+ * If the GET fails we fall back to the last snapshot (miner.rawConfig / miner
+ * fields), i.e. the prior behavior.
  */
 export async function updateHammerSettings(
   ip: string,
   settings: MinerSettings,
   miner: LocalMiner
 ): Promise<ApiResult<void>> {
+  const freshResult = await getSystemInfo(ip);
+  const fresh = freshResult.success ? freshResult.data : undefined;
   const raw = miner.rawConfig;
 
-  // Build full payload with current values as defaults
+  // Build full payload. Precedence per field: explicit change → fresh device
+  // value → last poll snapshot → safe hardcoded default. `??` preserves a
+  // legitimate 0 (only null/undefined fall through).
   const payload: Record<string, unknown> = {
-    frequency: settings.frequency ?? miner.frequency,
-    coreVoltage: settings.coreVoltage ?? miner.voltage,
-    fanspeed: settings.fanSpeed ?? miner.fanSpeed,
-    autofanspeed: settings.autoFanSpeed ?? miner.autoFanSpeed,
-    flipscreen: raw?.flipscreen ?? 1,
-    invertfanpolarity: raw?.invertfanpolarity ?? 0,
-    overheat_mode: raw?.overheat_mode ?? 0,
-    boot_mode: miner.bootMode ?? 0,
-    ntpServer: raw?.ntpServer ?? 'pool.ntp.org',
-    ntpServerBackup: raw?.ntpServerBackup ?? 'ntp.aliyun.com',
+    frequency: settings.frequency ?? fresh?.frequency ?? miner.frequency,
+    coreVoltage: settings.coreVoltage ?? fresh?.coreVoltage ?? miner.voltage,
+    fanspeed: settings.fanSpeed ?? fresh?.fanspeed ?? miner.fanSpeed,
+    autofanspeed:
+      settings.autoFanSpeed ?? fresh?.autofanspeed ?? miner.autoFanSpeed,
+    flipscreen: fresh?.flipscreen ?? raw?.flipscreen ?? 1,
+    invertfanpolarity:
+      fresh?.invertfanpolarity ?? raw?.invertfanpolarity ?? 0,
+    overheat_mode: fresh?.overheat_mode ?? raw?.overheat_mode ?? 0,
+    boot_mode: fresh?.boot_mode ?? miner.bootMode ?? 0,
+    ntpServer: fresh?.ntpServer ?? raw?.ntpServer ?? 'pool.ntp.org',
+    ntpServerBackup:
+      fresh?.ntpServerBackup ?? raw?.ntpServerBackup ?? 'ntp.aliyun.com',
   };
 
   // targetTemp only included when device exposes it (firmware support varies)
-  const effectiveTargetTemp = settings.targetTemp ?? miner.targetTemp;
+  const effectiveTargetTemp =
+    settings.targetTemp ?? fresh?.temptarget ?? miner.targetTemp;
   if (effectiveTargetTemp !== undefined) {
     payload.temptarget = effectiveTargetTemp;
   }
@@ -135,6 +151,7 @@ export async function updateHammerSettings(
   const result = await patchJson<void>(`${minerUrl(ip)}/api/system`, payload, {
     timeout: MINER_TIMEOUT,
     responseType: 'text',
+    retries: 0, // non-idempotent write — don't re-send on transient failure
   });
 
   if (!result.success) return result;
@@ -173,9 +190,15 @@ export async function updateHammerSettings(
   }
 
   if (hasPoolChanges) {
+    // TODO(needs-device): This pool PATCH sends only the changed pool fields,
+    // which contradicts the "full settings object in every PATCH" note above.
+    // If Hammer really ignores partial PATCHes, pool changes are silently
+    // dropped here — confirm on hardware before folding these into the full
+    // payload above.
     return patchJson<void>(`${minerUrl(ip)}/api/system`, poolPayload, {
       timeout: MINER_TIMEOUT,
       responseType: 'text',
+      retries: 0, // non-idempotent write — don't re-send on transient failure
     });
   }
 
@@ -216,6 +239,7 @@ export async function restart(ip: string): Promise<ApiResult<void>> {
 export async function identify(ip: string): Promise<ApiResult<string>> {
   return postText(`${minerUrl(ip)}/api/system/identify`, {}, {
     timeout: MINER_TIMEOUT,
+    retries: 0, // non-idempotent — a retry flashes the LED again
   });
 }
 

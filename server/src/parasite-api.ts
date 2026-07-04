@@ -64,7 +64,7 @@ export async function getUser(
   address: string
 ): Promise<FetchResult<ParasiteUserResponse>> {
   return fetchWithTimeout<ParasiteUserResponse>(
-    `${baseUrl}/api/user/${address}`
+    `${baseUrl}/api/user/${encodeURIComponent(address)}`
   );
 }
 
