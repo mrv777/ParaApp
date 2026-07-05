@@ -73,8 +73,11 @@ import {
 } from '@/constants/chat';
 import type { MainTabScreenProps } from '@/types/navigation';
 
-const MIN_INPUT_HEIGHT = 22;
-const MAX_INPUT_HEIGHT = 110;
+// Composer grows with its content up to this many lines, then scrolls
+// internally. Growth is native (multiline TextInput with no fixed height) —
+// driving `height` from onContentSizeChange is unreliable on Fabric.
+const COMPOSER_LINE_HEIGHT = 20;
+const MAX_COMPOSER_LINES = 3;
 
 // Weighted font families the app ships (RN doesn't synthesize weights). Space
 // Grotesk = prose/titles; JetBrains Mono = addresses/labels/timestamps.
@@ -405,7 +408,6 @@ export function ChatScreen({ navigation }: Props) {
   const setChatEulaVersion = useSettingsStore((s) => s.setChatEulaVersion);
 
   const [input, setInput] = useState('');
-  const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
   const [actionMessage, setActionMessage] = useState<ChatMessage | null>(null);
   // The message currently being replied to (composer banner + outgoing replyToId).
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
@@ -476,7 +478,6 @@ export function ChatScreen({ navigation }: Props) {
         lastReplyRef.current = replyTo;
         setInput('');
         setReplyTarget(null); // consumed — clear the composer banner
-        setInputHeight(MIN_INPUT_HEIGHT); // shrink back after sending
         haptics.light();
       } else {
         haptics.warning();
@@ -788,25 +789,14 @@ export function ChatScreen({ navigation }: Props) {
               <RNText style={styles.caret}>{'>'}</RNText>
               <TextInput
                 ref={inputRef}
-                style={[styles.composerInput, { height: inputHeight }]}
+                style={styles.composerInput}
                 placeholder={t('chat.composerPlaceholder')}
                 placeholderTextColor={TEXT_TIME}
                 value={input}
                 onChangeText={setInput}
-              multiline
-              maxLength={MAX_MESSAGE_LENGTH}
-              onContentSizeChange={(e) =>
-                setInputHeight(
-                  Math.min(
-                    MAX_INPUT_HEIGHT,
-                    Math.max(MIN_INPUT_HEIGHT, e.nativeEvent.contentSize.height)
-                  )
-                )
-              }
-              onSubmitEditing={handleSend}
-              blurOnSubmit={false}
-              returnKeyType="send"
-            />
+                multiline
+                maxLength={MAX_MESSAGE_LENGTH}
+              />
             <Pressable
               onPress={handleSend}
               disabled={!hasDraft}
@@ -1085,22 +1075,31 @@ const styles = StyleSheet.create({
   // Composer
   composer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // Bottom-anchor the caret/send glyph so they stay by the newest line as
+    // the input grows.
+    alignItems: 'flex-end',
     borderTopWidth: 1,
     borderTopColor: EDGE,
     paddingVertical: 14,
     paddingHorizontal: 20,
     gap: 10,
   },
-  caret: { fontFamily: MONO, fontSize: 15, color: '#ffffff' },
-  sendGlyph: { fontFamily: MONO, fontSize: 20, lineHeight: 24 },
+  caret: {
+    fontFamily: MONO,
+    fontSize: 15,
+    lineHeight: COMPOSER_LINE_HEIGHT,
+    color: '#ffffff',
+  },
+  sendGlyph: { fontFamily: MONO, fontSize: 20, lineHeight: COMPOSER_LINE_HEIGHT },
   composerInput: {
     flex: 1,
     fontFamily: MONO,
     fontSize: 14,
+    lineHeight: COMPOSER_LINE_HEIGHT,
     color: TEXT_BODY,
     padding: 0,
-    maxHeight: MAX_INPUT_HEIGHT,
+    maxHeight: COMPOSER_LINE_HEIGHT * MAX_COMPOSER_LINES,
+    textAlignVertical: 'top', // Android: pin text to the top when grown
   },
 
   // Read-only / gate bars
