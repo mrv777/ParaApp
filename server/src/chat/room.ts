@@ -34,7 +34,7 @@ import {
   getReplyParent,
   getMessageSender,
 } from './db';
-import { isClean, moderateAI } from './moderation';
+import { classifyText, moderateAI } from './moderation';
 
 interface SocketAttachment {
   /** Empty string = anonymous read-only viewer (may not post). */
@@ -238,9 +238,20 @@ export class ChatRoom {
     if (!body || body.length > MAX_MESSAGE_LENGTH) {
       return this.sendError(ws, 'bad_body');
     }
-    // Inline moderation (sync) + AI hook (disabled in v1).
-    if (!isClean(body)) return this.sendError(ws, 'blocked_content');
+    // Inline moderation (sync) + AI hook (disabled in v1). Log blocks with the
+    // matcher + full body so `wrangler tail` surfaces false positives (the
+    // filter lists have junk short tokens); this is the only visibility we get.
+    const reason = classifyText(body);
+    if (reason) {
+      console.warn(
+        `chat: blocked message (${reason}) from ${address}: ${JSON.stringify(body)}`,
+      );
+      return this.sendError(ws, 'blocked_content');
+    }
     if (!(await moderateAI(this.env, body))) {
+      console.warn(
+        `chat: blocked message (ai) from ${address}: ${JSON.stringify(body)}`,
+      );
       return this.sendError(ws, 'blocked_content');
     }
 
