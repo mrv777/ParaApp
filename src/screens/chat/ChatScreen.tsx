@@ -20,6 +20,9 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -415,6 +418,32 @@ export function ChatScreen({ navigation }: Props) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
   const listRef = useRef<React.ComponentRef<typeof LegendList>>(null);
+  // Keep the newest message visible when the list itself gets shorter/taller
+  // (keyboard opening via the KAV, composer growing to more lines).
+  // maintainScrollAtEnd only reacts to CONTENT changes, not viewport changes,
+  // so without this the keyboard covers the latest messages. Pin only when the
+  // user was already at/near the end — never yank them out of scrolled-back
+  // history (ChatGPT-style "whenAtEnd" behavior). The KAV animates its padding
+  // on both platforms, so onLayout fires through the animation and the re-pin
+  // tracks the keyboard smoothly.
+  const atEndRef = useRef(true); // starts at end (initialScrollAtEnd)
+  const listHeightRef = useRef<number | null>(null);
+
+  const handleFeedScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromEnd = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    // Same 10%-of-viewport notion of "at end" as maintainScrollAtEndThreshold.
+    atEndRef.current = distanceFromEnd <= layoutMeasurement.height * 0.1;
+  }, []);
+
+  const handleFeedLayout = useCallback((e: LayoutChangeEvent) => {
+    const { height } = e.nativeEvent.layout;
+    const previous = listHeightRef.current;
+    listHeightRef.current = height;
+    if (previous !== null && height !== previous && atEndRef.current) {
+      listRef.current?.scrollToEnd({ animated: false });
+    }
+  }, []);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The long-press snapshot goes stale if a reaction lands while the sheet is
   // open (its quick-react `mine` state would send the wrong op) — resolve the
@@ -741,6 +770,9 @@ export function ChatScreen({ navigation }: Props) {
           maintainScrollAtEnd
           maintainScrollAtEndThreshold={0.1}
           maintainVisibleContentPosition={{ size: true, data: true }}
+          onScroll={handleFeedScroll}
+          scrollEventThrottle={16}
+          onLayout={handleFeedLayout}
           onStartReached={loadOlder}
           onStartReachedThreshold={0.2}
           ListHeaderComponent={loadingOlder ? <LoadingOlder /> : null}
