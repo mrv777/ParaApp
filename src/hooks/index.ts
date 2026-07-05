@@ -18,3 +18,4 @@ export {
 export { useShareStats, type UseShareStatsReturn } from './useShareStats';
 export { useWorkerHealth } from './useWorkerHealth';
 export { useWidgetUpdates } from './useWidgetUpdates';
+export { useChatUnreadCheck } from './useChatUnreadCheck';

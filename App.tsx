@@ -30,6 +30,7 @@ import { changeLanguage } from '@/i18n';
 import { useSettingsStore, selectIsHydrated, selectLanguage } from '@/store/settingsStore';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useWidgetUpdates } from '@/hooks/useWidgetUpdates';
+import { useChatUnreadCheck } from '@/hooks/useChatUnreadCheck';
 import type { MainTabParamList } from '@/types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -98,6 +99,8 @@ export default function App() {
   // Initialize push notifications
   useNotifications();
   useWidgetUpdates();
+  // Chat unread probe — lights the tab-bar dot without ChatScreen ever mounting
+  useChatUnreadCheck();
 
   // Sync language preference on app startup
   useEffect(() => {
