@@ -75,6 +75,9 @@ export function adminPageHtml(): string {
   .auth { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; justify-content: flex-end; flex-wrap: wrap; }
   #secret { flex: 1 1 200px; min-width: 0; max-width: 300px; }
   #status { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .online { display: none; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; letter-spacing: .06em; white-space: nowrap; }
+  .online.on { display: inline-flex; }
+  .online .dot { color: var(--ok); font-size: 8px; }
 
   main { max-width: 920px; margin: 0 auto; padding: 22px 18px 90px; }
 
@@ -136,6 +139,7 @@ export function adminPageHtml(): string {
   .copy { cursor: pointer; border-bottom: 1px dotted var(--line); }
   .copy:hover { color: var(--text); }
   .ok-mark { color: var(--ok); }
+  .dim { color: var(--dim); }
 
   .chip { display: inline-block; padding: 1px 7px; border: 1px solid var(--line); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .chip.warn { color: var(--warn); border-color: rgba(250,204,21,.4); }
@@ -152,10 +156,14 @@ export function adminPageHtml(): string {
 
   #toasts { position: fixed; top: 14px; right: 14px; z-index: 200; display: flex; flex-direction: column; gap: 8px; max-width: min(340px, 92vw); }
   .toast {
+    display: flex; align-items: flex-start; gap: 10px;
     border: 1px solid var(--line); border-left-width: 3px; background: var(--panel2);
     padding: 10px 13px; font-size: 12.5px; word-break: break-word;
     box-shadow: 0 10px 30px rgba(0,0,0,.55); animation: tIn .2s ease;
   }
+  .toast-msg { flex: 1 1 auto; }
+  .toast-x { flex: 0 0 auto; background: none; border: none; color: var(--muted); cursor: pointer; padding: 0; font: inherit; line-height: 1.3; }
+  .toast-x:hover { color: var(--text); }
   .toast.ok { border-left-color: var(--ok); }
   .toast.err { border-left-color: var(--danger); }
   .toast.out { animation: tOut .25s ease forwards; }
@@ -177,6 +185,7 @@ export function adminPageHtml(): string {
 
 <header>
   <div class="brand"><span class="mark">&#9622;&#9630;</span> chat<span class="slash">/</span>admin <span id="led" class="led"></span></div>
+  <span id="online" class="online" title="viewers connected to chat"></span>
   <div class="auth">
     <input id="secret" type="password" placeholder="ADMIN_SECRET" autocomplete="off" spellcheck="false" />
     <button id="loginBtn" class="primary" onclick="login()">connect</button>
@@ -257,6 +266,7 @@ export function adminPageHtml(): string {
 
 <script>
   var SS_KEY = 'parasite_admin_secret';
+  var loggedIn = false;
 
   function el(id) { return document.getElementById(id); }
   function secret() { return el('secret').value; }
@@ -272,11 +282,33 @@ export function adminPageHtml(): string {
   function shortAddr(a) { a = String(a || ''); return a.length > 20 ? a.slice(0, 10) + '…' + a.slice(-6) : a; }
 
   function toast(msg, kind) {
+    var isErr = kind === 'err';
+    // Errors persist until dismissed; de-dupe so a repeating failure (e.g. an
+    // auto-refresh hitting the same network error) can't stack indefinitely.
+    if (isErr) {
+      var open = el('toasts').querySelectorAll('.toast.err');
+      for (var i = 0; i < open.length; i++) if (open[i].dataset.msg === msg) return;
+    }
     var t = document.createElement('div');
-    t.className = 'toast ' + (kind === 'err' ? 'err' : 'ok');
-    t.textContent = msg;
+    t.className = 'toast ' + (isErr ? 'err' : 'ok');
+    if (isErr) t.dataset.msg = msg;
+    var span = document.createElement('span');
+    span.className = 'toast-msg';
+    span.textContent = msg;
+    t.appendChild(span);
+    function dismiss() { t.classList.add('out'); setTimeout(function () { t.remove(); }, 250); }
+    if (isErr) {
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'toast-x';
+      x.setAttribute('aria-label', 'dismiss');
+      x.textContent = '✕';
+      x.onclick = dismiss;
+      t.appendChild(x);
+    } else {
+      setTimeout(dismiss, 3200);
+    }
     el('toasts').appendChild(t);
-    setTimeout(function () { t.classList.add('out'); setTimeout(function () { t.remove(); }, 250); }, 3200);
   }
 
   function copyText(text) {
@@ -316,14 +348,36 @@ export function adminPageHtml(): string {
   function confirmAction(title, message, danger) { return openModal({ title: title, message: message, danger: danger, confirmLabel: danger ? 'confirm' : 'ok' }); }
   function promptAction(title, message, value, maxlength) { return openModal({ title: title, message: message, input: { value: value, maxlength: maxlength }, confirmLabel: 'save' }); }
 
+  // A 401 on any call while logged in means the secret was rotated (or the
+  // worker redeployed) — the LED shouldn't keep claiming "connected". Drop the
+  // session once and prompt to reconnect; guard so concurrent calls don't stack.
+  var sessionExpired = false;
+  function handleUnauthorized() {
+    if (sessionExpired || !loggedIn) return;
+    sessionExpired = true;
+    sessionStorage.removeItem(SS_KEY);
+    stopAutoReports();
+    disconnectLive();
+    setLoggedIn(false);
+    setStatus('session expired');
+    toast('session expired — reconnect', 'err');
+    el('secret').disabled = false;
+    el('secret').focus();
+  }
+
   function api(path, opts) {
     opts = opts || {};
     var headers = Object.assign({ 'X-Admin-Secret': secret(), 'Content-Type': 'application/json' }, opts.headers || {});
-    return fetch(path, Object.assign({}, opts, { headers: headers }));
+    return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
+      if (res.status === 401) handleUnauthorized();
+      return res;
+    });
   }
 
   // ---- Auth -----------------------------------------------------------------
   function setLoggedIn(v) {
+    loggedIn = v;
+    if (v) sessionExpired = false;
     el('console').style.display = v ? 'block' : 'none';
     el('gate').style.display = v ? 'none' : 'block';
     el('logoutBtn').style.display = v ? 'inline-block' : 'none';
@@ -342,6 +396,7 @@ export function adminPageHtml(): string {
     sessionStorage.setItem(SS_KEY, secret());
     setLoggedIn(true);
     setStatus('connected');
+    connectLive();
     var j = await res.json();
     renderReports((j.data && j.data.reports) || []);
     loadAnnouncement(); loadProfiles(); loadMessages(); loadBans();
@@ -350,6 +405,7 @@ export function adminPageHtml(): string {
   function logout() {
     sessionStorage.removeItem(SS_KEY);
     stopAutoReports();
+    disconnectLive();
     el('secret').disabled = false;
     el('secret').value = '';
     setLoggedIn(false);
@@ -358,6 +414,71 @@ export function adminPageHtml(): string {
     setBadge('reportsBadge', 0); setBadge('bansBadge', 0);
     loadedMessages = []; oldestTs = null; oldestId = null;
     el('secret').focus();
+  }
+
+  // ---- Live feed (anonymous read-only WS) -----------------------------------
+  // Opens the same public /chat/ws that viewers use (no token = read-only), so
+  // the messages tab tails the room live and the header shows who's connected.
+  // The admin secret never rides on this socket — it only receives the public
+  // presence / msg / delete / announcement broadcasts the app already sends.
+  var liveWs = null, liveRetry = null, livePing = null, liveWant = false;
+  function liveWsUrl() {
+    return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/chat/ws';
+  }
+  function setOnline(n) {
+    var e = el('online');
+    if (typeof n !== 'number' || n < 0) { e.classList.remove('on'); e.textContent = ''; return; }
+    e.innerHTML = '<span class="dot">&#9679;</span> ' + n + ' online';
+    e.classList.add('on');
+  }
+  function connectLive() {
+    liveWant = true;
+    if (liveWs && (liveWs.readyState === 0 || liveWs.readyState === 1)) return;
+    var ws;
+    try { ws = new WebSocket(liveWsUrl()); }
+    catch (e) { return; }
+    liveWs = ws;
+    ws.onopen = function () {
+      // App-level heartbeat: the runtime auto-answers 'ping'→'pong' without
+      // waking the DO, so an idle admin socket isn't reaped.
+      clearInterval(livePing);
+      livePing = setInterval(function () { try { ws.send('ping'); } catch (e) {} }, 25000);
+    };
+    ws.onmessage = function (ev) {
+      if (ev.data === 'pong') return;
+      var m;
+      try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (!m || typeof m !== 'object') return;
+      if (m.type === 'presence') setOnline(m.online);
+      else if (m.type === 'msg') onLiveMessage(m);
+      else if (m.type === 'delete') onLiveDelete(m.id);
+      else if (m.type === 'announcement') setAnnLive(m.body || '');
+    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    ws.onclose = function () {
+      clearInterval(livePing); livePing = null;
+      if (liveWs === ws) { liveWs = null; setOnline(-1); }
+      if (liveWant) { clearTimeout(liveRetry); liveRetry = setTimeout(connectLive, 3000); }
+    };
+  }
+  function disconnectLive() {
+    liveWant = false;
+    clearTimeout(liveRetry); liveRetry = null;
+    clearInterval(livePing); livePing = null;
+    setOnline(-1);
+    if (liveWs) { try { liveWs.close(); } catch (e) {} liveWs = null; }
+  }
+  function onLiveMessage(m) {
+    if (!m.id) return;
+    for (var i = 0; i < loadedMessages.length; i++) if (loadedMessages[i].id === m.id) return;
+    loadedMessages.unshift(m); // history is newest-first, so live messages go on top
+    if (loadedMessages.length > 500) loadedMessages = loadedMessages.slice(0, 500);
+    renderMessages();
+  }
+  function onLiveDelete(id) {
+    var before = loadedMessages.length;
+    loadedMessages = loadedMessages.filter(function (m) { return m.id !== id; });
+    if (loadedMessages.length !== before) renderMessages();
   }
 
   // ---- Tabs -----------------------------------------------------------------
@@ -384,10 +505,13 @@ export function adminPageHtml(): string {
   async function saveAnn() {
     var body = el('ann').value.trim();
     if (!body) { toast('empty — use clear to remove', 'err'); return; }
+    if (!(await confirmAction('Broadcast announcement', 'Show this banner to everyone in chat right now?', false))) return;
     var res;
     try { res = await api('/chat/admin/announcement', { method: 'POST', body: JSON.stringify({ body: body }) }); }
     catch (e) { toast('network error', 'err'); return; }
-    if (res.ok) { toast('announcement saved'); setAnnLive(body); } else toast('save failed ' + res.status, 'err');
+    // Re-read the stored value so the "live:" readout reflects what actually
+    // persisted (the server trims/normalizes) rather than just the local draft.
+    if (res.ok) { toast('announcement saved'); loadAnnouncement(); } else toast('save failed ' + res.status, 'err');
   }
   async function clearAnn() {
     if (!(await confirmAction('Clear announcement', 'Remove the banner for everyone?', true))) return;
@@ -522,21 +646,40 @@ export function adminPageHtml(): string {
 
   // ---- Reports --------------------------------------------------------------
   function setBadge(id, n) { var b = el(id); if (!b) return; b.textContent = n; b.style.display = n > 0 ? 'inline-block' : 'none'; }
-  function reportRow(r) {
-    return '<div class="card" id="report-' + esc(r.id) + '">' +
-      '<div class="meta"><span class="chip warn">report</span><span class="dim">' + fmtSec(r.created_at) + '</span><span class="dim">reason: ' + (esc(r.reason) || '—') + '</span></div>' +
-      '<div class="body">' + (r.body == null ? '<span class="dim">[message deleted or missing]</span>' : esc(r.body)) + '</div>' +
-      '<div class="addr">sender: ' + (esc(r.message_address) || '—') + '</div>' +
-      '<div class="addr">reporter: ' + esc(r.reporter) + '</div>' +
+  // Collapse multiple reports of the same message into one card, so a pile-on
+  // shows as "report ×N" with every reporter rather than N rows to triage.
+  function groupReports(reports) {
+    var map = {}, order = [];
+    reports.forEach(function (r) {
+      var k = r.message_id, g = map[k];
+      if (!g) { g = map[k] = { message_id: k, body: r.body, message_address: r.message_address, created_at: r.created_at, ids: [], reporters: [], reasons: [] }; order.push(k); }
+      g.ids.push(r.id);
+      g.reporters.push(r.reporter);
+      if (r.reason) g.reasons.push(r.reason);
+      if (r.created_at < g.created_at) g.created_at = r.created_at; // oldest report in the group
+      if (g.body == null && r.body != null) g.body = r.body;
+      if (!g.message_address && r.message_address) g.message_address = r.message_address;
+    });
+    return order.map(function (k) { return map[k]; });
+  }
+  function reportRow(g) {
+    var n = g.ids.length, rids = g.ids.join(',');
+    return '<div class="card" id="report-' + esc(g.message_id) + '">' +
+      '<div class="meta"><span class="chip warn">report' + (n > 1 ? ' &#215;' + n : '') + '</span><span class="dim">' + fmtSec(g.created_at) + '</span>' +
+        (g.reasons.length ? '<span class="dim">reason: ' + esc(g.reasons.join(' · ')) + '</span>' : '') + '</div>' +
+      '<div class="body">' + (g.body == null ? '<span class="dim">[message deleted or missing]</span>' : esc(g.body)) + '</div>' +
+      '<div class="addr">sender: ' + (esc(g.message_address) || '—') + '</div>' +
+      '<div class="addr">' + (n > 1 ? 'reporters (' + n + '): ' : 'reporter: ') + esc(g.reporters.join(', ')) + '</div>' +
       '<div class="acts">' +
-        '<button class="mini danger" data-act="del" data-mid="' + esc(r.message_id) + '" data-rid="' + esc(r.id) + '">delete message</button>' +
-        '<button class="mini danger" data-act="ban" data-addr="' + esc(r.message_address) + '" data-rid="' + esc(r.id) + '" ' + (r.message_address ? '' : 'disabled') + '>ban sender</button>' +
-        '<button class="mini" data-act="resolve" data-rid="' + esc(r.id) + '">dismiss</button>' +
+        '<button class="mini danger" data-act="del" data-mid="' + esc(g.message_id) + '" data-rids="' + esc(rids) + '">delete message</button>' +
+        '<button class="mini danger" data-act="ban" data-addr="' + esc(g.message_address) + '" data-rids="' + esc(rids) + '" ' + (g.message_address ? '' : 'disabled') + '>ban sender</button>' +
+        '<button class="mini" data-act="resolve" data-rids="' + esc(rids) + '">dismiss' + (n > 1 ? ' all' : '') + '</button>' +
       '</div></div>';
   }
   function renderReports(reports) {
     setBadge('reportsBadge', reports.length);
-    el('reports').innerHTML = reports.length ? reports.map(reportRow).join('') : '<div class="empty">// no open reports</div>';
+    var groups = groupReports(reports);
+    el('reports').innerHTML = groups.length ? groups.map(reportRow).join('') : '<div class="empty">// no open reports</div>';
   }
   async function loadReports() {
     var res;
@@ -545,14 +688,11 @@ export function adminPageHtml(): string {
     if (!res.ok) { toast('reports error ' + res.status, 'err'); return; }
     var j = await res.json(); renderReports((j.data && j.data.reports) || []);
   }
-  async function resolveReport(rid, silent) {
-    var res;
-    try { res = await api('/chat/admin/reports/' + encodeURIComponent(rid) + '/resolve', { method: 'POST' }); }
-    catch (e) { toast('network error', 'err'); return; }
-    if (!res.ok) { toast('resolve failed ' + res.status, 'err'); return; }
-    var e = el('report-' + rid); if (e) e.remove();
-    if (!silent) toast('dismissed');
-    var badge = el('reportsBadge'); setBadge('reportsBadge', Math.max(0, (parseInt(badge.textContent || '0', 10) || 0) - 1));
+  // Resolve every report id in a group (best-effort); callers reload the queue.
+  function resolveRids(rids) {
+    return Promise.all(rids.map(function (rid) {
+      return api('/chat/admin/reports/' + encodeURIComponent(rid) + '/resolve', { method: 'POST' }).catch(function () {});
+    }));
   }
   var reportsTimer = null;
   function toggleAutoReports() {
@@ -619,15 +759,16 @@ export function adminPageHtml(): string {
   el('reports').addEventListener('click', async function (ev) {
     var btn = ev.target.closest('button[data-act]'); if (!btn) return;
     var d = btn.dataset;
+    var rids = (d.rids || '').split(',').filter(Boolean);
     if (d.act === 'del') {
       if (!(await confirmAction('Delete message', 'Delete this reported message?', true))) return;
       var res = await api('/chat/admin/message/' + encodeURIComponent(d.mid), { method: 'DELETE' });
-      if (res.ok) { toast('message deleted'); resolveReport(d.rid, true); } else toast('delete failed ' + res.status, 'err');
+      if (res.ok) { toast('message deleted'); await resolveRids(rids); loadReports(); } else toast('delete failed ' + res.status, 'err');
     } else if (d.act === 'ban') {
       if (!(await confirmAction('Ban sender', 'Ban ' + d.addr + '?', true))) return;
       var r2 = await api('/chat/admin/ban', { method: 'POST', body: JSON.stringify({ address: d.addr }) });
-      if (r2.ok) { toast('sender banned'); loadBans(); resolveReport(d.rid, true); } else toast('ban failed ' + r2.status, 'err');
-    } else if (d.act === 'resolve') { resolveReport(d.rid, false); }
+      if (r2.ok) { toast('sender banned'); loadBans(); await resolveRids(rids); loadReports(); } else toast('ban failed ' + r2.status, 'err');
+    } else if (d.act === 'resolve') { await resolveRids(rids); toast(rids.length > 1 ? 'dismissed ' + rids.length : 'dismissed'); loadReports(); }
   });
   el('bans').addEventListener('click', async function (ev) {
     var cp = ev.target.closest('.copy'); if (cp) { copyText(cp.dataset.copy); return; }
