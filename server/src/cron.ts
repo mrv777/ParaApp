@@ -27,7 +27,7 @@ import {
   claimCronTick,
   pruneCronRuns,
 } from './db';
-import { pruneChatMessages } from './chat/db';
+import { pruneChatMessages, pruneExpiredBans, pruneAuditLog } from './chat/db';
 import { getUser, getPoolStats } from './parasite-api';
 import {
   sendPushNotifications,
@@ -53,6 +53,8 @@ const WIDGET_PUSH_INTERVAL_SECONDS = 2 * 60 * 60;
 const WIDGET_EVENT_MIN_INTERVAL_SECONDS = 15 * 60;
 // Community chat: rolling 30-day message retention.
 const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+// Admin audit trail: keep 90 days.
+const CHAT_AUDIT_RETENTION_SEC = 90 * 24 * 60 * 60;
 
 /**
  * Whether a subscription should receive an event-driven silent widget refresh
@@ -154,6 +156,13 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
   try {
     const pruned = await pruneChatMessages(env.DB, Date.now() - CHAT_RETENTION_MS);
     if (pruned > 0) console.log(`Pruned ${pruned} chat messages (30d retention)`);
+    const bans = await pruneExpiredBans(env.DB);
+    if (bans > 0) console.log(`Reaped ${bans} expired chat bans`);
+    const audit = await pruneAuditLog(
+      env.DB,
+      Math.floor(Date.now() / 1000) - CHAT_AUDIT_RETENTION_SEC
+    );
+    if (audit > 0) console.log(`Pruned ${audit} chat audit entries (90d retention)`);
   } catch (error) {
     console.error('Chat retention prune error:', error);
   }

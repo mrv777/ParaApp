@@ -72,9 +72,15 @@ export const chatEulaSchema = z.object({
   version: z.string().min(1).max(20),
 });
 
+// Optional temp-ban duration (seconds); absent = permanent. Capped at 1 year.
+const banDurationSec = z.number().int().positive().max(365 * 24 * 60 * 60);
+
 export const chatAdminBanSchema = z.object({
   address: chatAddressSchema,
   reason: z.string().max(500).optional(),
+  durationSec: banDurationSec.optional(),
+  // Also soft-delete every message from this sender (ban-purge).
+  purge: z.boolean().optional(),
 });
 
 export const chatAdminNicknameSchema = z.object({
@@ -90,6 +96,8 @@ export const chatAdminNicknameSchema = z.object({
 // from the id, so the client never supplies one. Reason is optional.
 export const chatAdminMessageBanSchema = z.object({
   reason: z.string().max(500).optional(),
+  durationSec: banDurationSec.optional(),
+  purge: z.boolean().optional(),
 });
 
 // Assign/clear a nickname for the sender of a specific message. Same shape as

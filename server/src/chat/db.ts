@@ -330,8 +330,12 @@ export async function isBanned(
   db: D1Database,
   address: string
 ): Promise<boolean> {
+  // A temp ban whose expires_at has passed is treated as lifted (the row lingers
+  // until the retention cron reaps it). NULL expires_at = permanent.
   const row = await db
-    .prepare('SELECT 1 FROM chat_bans WHERE address = ?')
+    .prepare(
+      'SELECT 1 FROM chat_bans WHERE address = ? AND (expires_at IS NULL OR expires_at > unixepoch())'
+    )
     .bind(address)
     .first();
   return row !== null;
@@ -632,14 +636,15 @@ export async function softDeleteMessage(
 export async function banAddress(
   db: D1Database,
   address: string,
-  reason: string
+  reason: string,
+  expiresAt: number | null = null
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO chat_bans (address, reason) VALUES (?, ?)
-       ON CONFLICT(address) DO UPDATE SET reason = excluded.reason`
+      `INSERT INTO chat_bans (address, reason, expires_at) VALUES (?, ?, ?)
+       ON CONFLICT(address) DO UPDATE SET reason = excluded.reason, expires_at = excluded.expires_at`
     )
-    .bind(address, reason)
+    .bind(address, reason, expiresAt)
     .run();
 }
 
@@ -647,17 +652,19 @@ export interface ChatBanRow {
   address: string;
   reason: string | null;
   created_at: number;
+  expires_at: number | null; // seconds epoch; null = permanent
 }
 
-/** Current bans, newest first — powers the admin Bans tab. */
+/** Active bans (expired temp bans excluded), newest first — powers the Bans tab. */
 export async function listBans(
   db: D1Database,
   limit = 200
 ): Promise<ChatBanRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT address, reason, created_at
+      `SELECT address, reason, created_at, expires_at
        FROM chat_bans
+       WHERE expires_at IS NULL OR expires_at > unixepoch()
        ORDER BY created_at DESC, address ASC
        LIMIT ?`
     )
@@ -718,4 +725,225 @@ export async function resolveReport(
     .bind(reportId)
     .run();
   return (result.meta?.changes ?? 0) === 1;
+}
+
+// ---- Admin search / moderation (Phase 6) -----------------------------------
+
+/** A message row for the admin console (carries the deleted flag; address is
+ *  truncated for display, same as public payloads). */
+export interface AdminMessage {
+  id: string;
+  ts: number;
+  address: string; // truncated
+  nickname: string | null;
+  official: boolean;
+  body: string;
+  deleted: boolean;
+}
+
+interface AdminMessageRow {
+  id: string;
+  address: string;
+  body: string;
+  created_at: number;
+  deleted: number;
+  nickname: string | null;
+  official: number | null;
+}
+
+function toAdminMessage(r: AdminMessageRow): AdminMessage {
+  return {
+    id: r.id,
+    ts: r.created_at,
+    address: truncateChatAddress(r.address),
+    nickname: r.nickname ?? null,
+    official: r.official === 1,
+    body: r.body,
+    deleted: r.deleted === 1,
+  };
+}
+
+/**
+ * Admin message search: filter by exact sender `address` and/or a `body`
+ * substring, page back with `before`/`beforeId`, and optionally include
+ * soft-deleted rows (for review / undelete). Newest-first, no block filtering
+ * (admins see everything). Deliberately skips reaction/reply hydration.
+ */
+export async function searchMessages(
+  db: D1Database,
+  opts: {
+    address?: string;
+    q?: string;
+    before?: number;
+    beforeId?: string;
+    limit: number;
+    includeDeleted?: boolean;
+  }
+): Promise<AdminMessage[]> {
+  const limit = Math.min(Math.max(Math.floor(opts.limit) || 50, 1), 100);
+  const conditions: string[] = [];
+  const binds: unknown[] = [];
+  if (!opts.includeDeleted) conditions.push('m.deleted = 0');
+  if (opts.address) {
+    conditions.push('m.address = ?');
+    binds.push(opts.address);
+  }
+  if (opts.q) {
+    // Escape LIKE wildcards so a literal % / _ in the query isn't treated as one.
+    const needle = opts.q.replace(/[\\%_]/g, '\\$&');
+    conditions.push("m.body LIKE ? ESCAPE '\\'");
+    binds.push('%' + needle + '%');
+  }
+  if (opts.before) {
+    if (opts.beforeId) {
+      conditions.push('(m.created_at < ? OR (m.created_at = ? AND m.id < ?))');
+      binds.push(opts.before, opts.before, opts.beforeId);
+    } else {
+      conditions.push('m.created_at < ?');
+      binds.push(opts.before);
+    }
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  binds.push(limit);
+  const { results } = await db
+    .prepare(
+      `SELECT m.id, m.address, m.body, m.created_at, m.deleted, p.nickname, p.official
+       FROM chat_messages m
+       LEFT JOIN chat_profiles p ON p.address = m.address
+       ${where}
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT ?`
+    )
+    .bind(...binds)
+    .all<AdminMessageRow>();
+  return results.map(toAdminMessage);
+}
+
+/** Fetch one message (including deleted) for the admin preview/undelete flow. */
+export async function getAdminMessage(
+  db: D1Database,
+  messageId: string
+): Promise<AdminMessage | null> {
+  const r = await db
+    .prepare(
+      `SELECT m.id, m.address, m.body, m.created_at, m.deleted, p.nickname, p.official
+       FROM chat_messages m
+       LEFT JOIN chat_profiles p ON p.address = m.address
+       WHERE m.id = ?`
+    )
+    .bind(messageId)
+    .first<AdminMessageRow>();
+  return r ? toAdminMessage(r) : null;
+}
+
+/**
+ * Soft-delete every live message from an address (admin ban-purge) and reap
+ * their reactions. Returns the ids removed so the caller can broadcast a delete
+ * for each, dropping them from live sockets without a reload.
+ */
+export async function deleteAllFromAddress(
+  db: D1Database,
+  address: string
+): Promise<string[]> {
+  const { results } = await db
+    .prepare('SELECT id FROM chat_messages WHERE address = ? AND deleted = 0')
+    .bind(address)
+    .all<{ id: string }>();
+  const ids = results.map((r) => r.id);
+  if (!ids.length) return [];
+  await db
+    .prepare('UPDATE chat_messages SET deleted = 1 WHERE address = ? AND deleted = 0')
+    .bind(address)
+    .run();
+  await db
+    .prepare(
+      'DELETE FROM chat_reactions WHERE message_id IN (SELECT id FROM chat_messages WHERE address = ?)'
+    )
+    .bind(address)
+    .run();
+  return ids;
+}
+
+/**
+ * Restore a soft-deleted message. Returns true only if a deleted row was
+ * actually flipped back. Reactions are not restored (they were reaped on
+ * delete); live clients reconcile on their next history fetch (no un-delete
+ * broadcast exists).
+ */
+export async function undeleteMessage(
+  db: D1Database,
+  messageId: string
+): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE chat_messages SET deleted = 0 WHERE id = ? AND deleted = 1')
+    .bind(messageId)
+    .run();
+  return (result.meta?.changes ?? 0) === 1;
+}
+
+// ---- Audit trail ------------------------------------------------------------
+
+export interface ChatAuditRow {
+  id: string;
+  action: string;
+  target: string | null;
+  detail: string | null;
+  created_at: number;
+}
+
+/** Record one mutating admin action for the audit trail. */
+export async function addAuditEntry(
+  db: D1Database,
+  entry: { action: string; target?: string | null; detail?: string | null }
+): Promise<void> {
+  await db
+    .prepare(
+      'INSERT INTO chat_admin_audit (id, action, target, detail) VALUES (?, ?, ?, ?)'
+    )
+    .bind(
+      crypto.randomUUID(),
+      entry.action,
+      entry.target ?? null,
+      entry.detail ?? null
+    )
+    .run();
+}
+
+/** Recent admin actions, newest first — powers the Audit tab. */
+export async function listAudit(
+  db: D1Database,
+  limit = 100
+): Promise<ChatAuditRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, action, target, detail, created_at
+       FROM chat_admin_audit
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .bind(Math.min(Math.max(limit, 1), 500))
+    .all<ChatAuditRow>();
+  return results;
+}
+
+/** Reap temp bans whose expiry has passed (isBanned already ignores them). */
+export async function pruneExpiredBans(db: D1Database): Promise<number> {
+  const result = await db
+    .prepare(
+      'DELETE FROM chat_bans WHERE expires_at IS NOT NULL AND expires_at <= unixepoch()'
+    )
+    .run();
+  return result.meta?.changes ?? 0;
+}
+
+/** Bound audit-log growth: drop entries older than the seconds-epoch cutoff. */
+export async function pruneAuditLog(
+  db: D1Database,
+  olderThanSec: number
+): Promise<number> {
+  const result = await db
+    .prepare('DELETE FROM chat_admin_audit WHERE created_at < ?')
+    .bind(olderThanSec)
+    .run();
+  return result.meta?.changes ?? 0;
 }

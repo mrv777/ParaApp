@@ -116,6 +116,12 @@ export function adminPageHtml(): string {
   textarea { width: 100%; resize: vertical; }
   input, button { max-width: 100%; }
 
+  select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: 8px 10px; font: inherit; border-radius: 0; outline: none; cursor: pointer;
+  }
+  select:focus { border-color: rgba(255,255,255,.42); }
+
   button {
     background: var(--panel); color: var(--text); border: 1px solid var(--line);
     padding: 8px 14px; font: inherit; cursor: pointer; border-radius: 0;
@@ -176,7 +182,13 @@ export function adminPageHtml(): string {
   #modalBox h3 { margin: 0 0 9px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
   #modalBox p { margin: 0 0 15px; color: var(--muted); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
   #modalBox input { width: 100%; margin-bottom: 15px; }
+  #modalBox select { width: 100%; margin-bottom: 12px; }
+  .mlabel { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
   .modal-acts { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* Soft-deleted rows in the admin message search (undelete available). */
+  .card.deleted { opacity: .6; }
+  .card.deleted .body { text-decoration: line-through; text-decoration-color: var(--dim); }
 </style>
 </head>
 <body>
@@ -206,6 +218,7 @@ export function adminPageHtml(): string {
     <button class="tab" data-tab="messages" onclick="showTab('messages')">messages</button>
     <button class="tab" data-tab="reports" onclick="showTab('reports')">reports<span id="reportsBadge" class="badge" style="display:none">0</span></button>
     <button class="tab" data-tab="bans" onclick="showTab('bans')">bans<span id="bansBadge" class="badge" style="display:none">0</span></button>
+    <button class="tab" data-tab="audit" onclick="showTab('audit')">audit</button>
   </nav>
 
   <section id="tab-announcement" class="panel active">
@@ -232,14 +245,17 @@ export function adminPageHtml(): string {
 
   <section id="tab-messages" class="panel">
     <div class="row">
-      <input id="msgSearch" type="text" placeholder="filter loaded messages…" style="flex:1 1 240px" oninput="renderMessages()" />
-      <button class="mini" onclick="loadMessages()">refresh</button>
+      <input id="msgQuery" type="text" placeholder="search text across all history…" style="flex:1 1 200px" />
+      <input id="msgAddr" type="text" placeholder="sender address (optional)" style="flex:1 1 200px" />
+      <label class="check"><input id="msgDeleted" type="checkbox" /> incl. deleted</label>
+      <button class="mini primary" onclick="runSearch()">search</button>
+      <button class="mini" onclick="loadMessages()">live</button>
     </div>
     <div class="row" style="margin-top:8px">
       <input id="delId" type="text" placeholder="delete by message id" style="flex:1 1 260px" />
       <button class="mini danger" onclick="delById()">delete by id</button>
     </div>
-    <div class="eyebrow" style="margin-top:9px">// filter matches id · sender · handle · text across the messages loaded below</div>
+    <div id="msgMode" class="eyebrow" style="margin-top:9px">// live — newest messages, updating in real time</div>
     <div id="messages"></div>
     <div class="row" style="justify-content:center;margin-top:4px"><button id="loadOlder" class="mini" style="display:none" onclick="loadOlder()">load older</button></div>
   </section>
@@ -253,14 +269,31 @@ export function adminPageHtml(): string {
   </section>
 
   <section id="tab-bans" class="panel">
-    <div class="eyebrow">// banned addresses are rejected at session + post time. unban to lift.</div>
+    <div class="eyebrow">// banned addresses are rejected at session + post time. unban to lift. temp bans self-expire.</div>
     <div class="row">
-      <input id="banAddr" type="text" placeholder="address" style="flex:1 1 260px" />
-      <input id="banReason" type="text" placeholder="reason (optional)" style="flex:1 1 150px" />
+      <input id="banAddr" type="text" placeholder="address" style="flex:1 1 220px" />
+      <input id="banReason" type="text" placeholder="reason (optional)" style="flex:1 1 130px" />
+      <select id="banDuration">
+        <option value="">permanent</option>
+        <option value="3600">1 hour</option>
+        <option value="21600">6 hours</option>
+        <option value="86400">24 hours</option>
+        <option value="604800">7 days</option>
+        <option value="2592000">30 days</option>
+      </select>
+      <label class="check"><input id="banPurge" type="checkbox" /> purge msgs</label>
       <button class="danger" onclick="banManual()">ban</button>
     </div>
     <div class="subhead"><span>current bans</span><button class="mini" onclick="loadBans()">refresh</button></div>
     <div id="bans"></div>
+  </section>
+
+  <section id="tab-audit" class="panel">
+    <div class="row" style="justify-content:space-between">
+      <div class="eyebrow" style="margin:0">// recent moderation actions (90-day retention)</div>
+      <button class="mini" onclick="loadAudit()">refresh</button>
+    </div>
+    <div id="audit" style="margin-top:12px"></div>
   </section>
 </main>
 
@@ -348,6 +381,36 @@ export function adminPageHtml(): string {
   function confirmAction(title, message, danger) { return openModal({ title: title, message: message, danger: danger, confirmLabel: danger ? 'confirm' : 'ok' }); }
   function promptAction(title, message, value, maxlength) { return openModal({ title: title, message: message, input: { value: value, maxlength: maxlength }, confirmLabel: 'save' }); }
 
+  // Purpose-built ban modal: pick a duration (blank = permanent) and whether to
+  // purge the sender's messages. Resolves { durationSec, purge } on confirm, or a
+  // falsy value on cancel / backdrop / Escape (callers guard with "if (!opts)").
+  function openBanModal(title, message) {
+    return new Promise(function (resolve) {
+      modalResolve = resolve;
+      el('modalBox').innerHTML =
+        '<h3>' + esc(title) + '</h3>' +
+        (message ? '<p>' + esc(message) + '</p>' : '') +
+        '<label class="mlabel">duration</label>' +
+        '<select id="banModalDur">' +
+          '<option value="">permanent</option>' +
+          '<option value="3600">1 hour</option>' +
+          '<option value="21600">6 hours</option>' +
+          '<option value="86400">24 hours</option>' +
+          '<option value="604800">7 days</option>' +
+          '<option value="2592000">30 days</option>' +
+        '</select>' +
+        '<label class="check" style="margin-bottom:14px"><input id="banModalPurge" type="checkbox" /> also delete all their messages</label>' +
+        '<div class="modal-acts"><button id="modalCancel">cancel</button>' +
+        '<button id="modalOk" class="danger">ban</button></div>';
+      el('modal').classList.add('show');
+      el('modalCancel').onclick = function () { closeModal(null); };
+      el('modalOk').onclick = function () {
+        var dur = el('banModalDur').value;
+        closeModal({ durationSec: dur ? parseInt(dur, 10) : null, purge: el('banModalPurge').checked });
+      };
+    });
+  }
+
   // A 401 on any call while logged in means the secret was rotated (or the
   // worker redeployed) — the LED shouldn't keep claiming "connected". Drop the
   // session once and prompt to reconnect; guard so concurrent calls don't stack.
@@ -410,9 +473,9 @@ export function adminPageHtml(): string {
     el('secret').value = '';
     setLoggedIn(false);
     setStatus('disconnected');
-    ['messages', 'reports', 'bans', 'profiles'].forEach(function (id) { if (el(id)) el(id).innerHTML = ''; });
+    ['messages', 'reports', 'bans', 'profiles', 'audit'].forEach(function (id) { if (el(id)) el(id).innerHTML = ''; });
     setBadge('reportsBadge', 0); setBadge('bansBadge', 0);
-    loadedMessages = []; oldestTs = null; oldestId = null;
+    loadedMessages = []; oldestTs = null; oldestId = null; searchMode = false;
     el('secret').focus();
   }
 
@@ -469,13 +532,16 @@ export function adminPageHtml(): string {
     if (liveWs) { try { liveWs.close(); } catch (e) {} liveWs = null; }
   }
   function onLiveMessage(m) {
-    if (!m.id) return;
+    if (!m.id || searchMode) return; // don't pollute a search view with live msgs
     for (var i = 0; i < loadedMessages.length; i++) if (loadedMessages[i].id === m.id) return;
     loadedMessages.unshift(m); // history is newest-first, so live messages go on top
     if (loadedMessages.length > 500) loadedMessages = loadedMessages.slice(0, 500);
     renderMessages();
   }
   function onLiveDelete(id) {
+    // In a search view a deleted row stays visible (flagged); in the live view it
+    // is dropped.
+    if (searchMode) { if (markDeletedLocal(id, true)) renderMessages(); return; }
     var before = loadedMessages.length;
     loadedMessages = loadedMessages.filter(function (m) { return m.id !== id; });
     if (loadedMessages.length !== before) renderMessages();
@@ -487,6 +553,7 @@ export function adminPageHtml(): string {
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('active', tabs[i].dataset.tab === name);
     var panels = document.querySelectorAll('.panel');
     for (var k = 0; k < panels.length; k++) panels[k].classList.toggle('active', panels[k].id === 'tab-' + name);
+    if (name === 'audit') loadAudit(); // lazily loaded on first/each open
   }
 
   // ---- Announcement ---------------------------------------------------------
@@ -561,35 +628,39 @@ export function adminPageHtml(): string {
     if (res.ok) { toast('handle cleared'); loadProfiles(); loadMessages(); } else toast('clear failed ' + res.status, 'err');
   }
 
-  // ---- Messages (open /chat/history read + guarded message-id actions) ------
+  // ---- Messages (live /chat/history + admin search + guarded id actions) ----
   var loadedMessages = [];
   var oldestTs = null, oldestId = null;
+  // Search mode: viewing /chat/admin/messages results (server-side text/address
+  // search, optionally including deleted rows) instead of the live history tail.
+  var searchMode = false;
+  var searchQ = '', searchAddr = '', searchIncl = false;
 
   function msgRow(m) {
     var who = m.nickname ? esc(m.nickname) + (m.official ? ' <span class="ok-mark">✓</span>' : '') : esc(shortAddr(m.address));
-    return '<div class="card" id="msg-' + esc(m.id) + '">' +
-      '<div class="meta"><strong>' + who + '</strong><span class="dim">' + fmtMs(m.ts) + '</span></div>' +
+    var del = !!m.deleted;
+    return '<div class="card' + (del ? ' deleted' : '') + '" id="msg-' + esc(m.id) + '">' +
+      '<div class="meta"><strong>' + who + '</strong>' + (del ? '<span class="chip">deleted</span>' : '') + '<span class="dim">' + fmtMs(m.ts) + '</span></div>' +
       '<div class="body">' + esc(m.body) + '</div>' +
       '<div class="addr">' + esc(m.address) + ' <span class="dim">· ' + esc(m.id) + '</span></div>' +
       '<div class="acts">' +
-        '<button class="mini danger" data-act="del" data-mid="' + esc(m.id) + '">delete</button>' +
+        (del
+          ? '<button class="mini" data-act="undelete" data-mid="' + esc(m.id) + '">undelete</button>'
+          : '<button class="mini danger" data-act="del" data-mid="' + esc(m.id) + '">delete</button>') +
         '<button class="mini danger" data-act="ban" data-mid="' + esc(m.id) + '">ban sender</button>' +
         '<button class="mini" data-act="nick" data-mid="' + esc(m.id) + '" data-name="' + (m.nickname ? esc(m.nickname) : '') + '">set nickname</button>' +
         '<button class="mini" data-act="copyid" data-mid="' + esc(m.id) + '">copy id</button>' +
       '</div></div>';
   }
   function renderMessages() {
-    var q = el('msgSearch').value.trim().toLowerCase();
-    var list = loadedMessages;
-    if (q) list = list.filter(function (m) {
-      return (m.id && m.id.toLowerCase().indexOf(q) >= 0) ||
-        (m.address && m.address.toLowerCase().indexOf(q) >= 0) ||
-        (m.nickname && m.nickname.toLowerCase().indexOf(q) >= 0) ||
-        (m.body && m.body.toLowerCase().indexOf(q) >= 0);
-    });
-    el('messages').innerHTML = list.length ? list.map(msgRow).join('') : '<div class="empty">' + (q ? '// no matches' : '// no messages') + '</div>';
+    el('messages').innerHTML = loadedMessages.length
+      ? loadedMessages.map(msgRow).join('')
+      : '<div class="empty">' + (searchMode ? '// no matches' : '// no messages') + '</div>';
   }
+  function setMsgMode(text) { el('msgMode').textContent = text; }
   function updateOlderBtn(count) { el('loadOlder').style.display = count >= 50 ? 'inline-block' : 'none'; }
+
+  // Live tail: the public history read (non-deleted, newest-first).
   async function fetchHistory(before, beforeId) {
     var url = '/chat/history?limit=50';
     if (before) { url += '&before=' + encodeURIComponent(before); if (beforeId) url += '&beforeId=' + encodeURIComponent(beforeId); }
@@ -601,15 +672,52 @@ export function adminPageHtml(): string {
     if (msgs.length) { oldestTs = msgs[msgs.length - 1].ts; oldestId = msgs[msgs.length - 1].id; }
     return msgs;
   }
+  // Admin search read (secret-guarded): text and/or sender, optionally deleted.
+  async function fetchSearch(before, beforeId) {
+    var url = '/chat/admin/messages?limit=50';
+    if (searchQ) url += '&q=' + encodeURIComponent(searchQ);
+    if (searchAddr) url += '&address=' + encodeURIComponent(searchAddr);
+    if (searchIncl) url += '&includeDeleted=1';
+    if (before) { url += '&before=' + encodeURIComponent(before); if (beforeId) url += '&beforeId=' + encodeURIComponent(beforeId); }
+    var res;
+    try { res = await api(url); }
+    catch (e) { toast('search network error', 'err'); return null; }
+    if (!res.ok) { toast('search error ' + res.status, 'err'); return null; }
+    var j = await res.json(); var msgs = (j.data && j.data.messages) || [];
+    if (msgs.length) { oldestTs = msgs[msgs.length - 1].ts; oldestId = msgs[msgs.length - 1].id; }
+    return msgs;
+  }
   async function loadMessages() {
+    searchMode = false;
+    setMsgMode('// live — newest messages, updating in real time');
     oldestTs = null; oldestId = null;
     var msgs = await fetchHistory(); if (!msgs) return;
     loadedMessages = msgs; updateOlderBtn(msgs.length); renderMessages();
   }
+  async function runSearch() {
+    var q = el('msgQuery').value.trim();
+    var addr = el('msgAddr').value.trim();
+    if (!q && !addr) { toast('enter search text or a sender address', 'err'); return; }
+    searchMode = true; searchQ = q; searchAddr = addr; searchIncl = el('msgDeleted').checked;
+    oldestTs = null; oldestId = null;
+    var msgs = await fetchSearch(); if (msgs == null) return;
+    loadedMessages = msgs; updateOlderBtn(msgs.length);
+    setMsgMode('// search: ' + (msgs.length >= 50 ? '50+' : msgs.length) + ' match' + (msgs.length === 1 ? '' : 'es') + (searchIncl ? ' · incl. deleted' : '') + ' — press “live” to return');
+    renderMessages();
+  }
   async function loadOlder() {
     if (oldestTs == null) return;
-    var msgs = await fetchHistory(oldestTs, oldestId); if (!msgs) return;
+    var msgs = searchMode ? await fetchSearch(oldestTs, oldestId) : await fetchHistory(oldestTs, oldestId);
+    if (!msgs) return;
     loadedMessages = loadedMessages.concat(msgs); updateOlderBtn(msgs.length); renderMessages();
+  }
+  // Reflect a delete/undelete in the loaded list: returns true if a row matched.
+  function markDeletedLocal(id, deleted) {
+    var hit = false;
+    for (var i = 0; i < loadedMessages.length; i++) {
+      if (loadedMessages[i].id === id) { loadedMessages[i].deleted = deleted; hit = true; }
+    }
+    return hit;
   }
   async function delMsg(id) {
     var res;
@@ -617,29 +725,64 @@ export function adminPageHtml(): string {
     catch (e) { toast('network error', 'err'); return; }
     if (!res.ok) { toast('delete failed ' + res.status, 'err'); return; }
     var j = await res.json();
-    loadedMessages = loadedMessages.filter(function (m) { return m.id !== id; });
+    // In search mode keep the row visible (flagged deleted, with undelete); in
+    // the live view drop it.
+    if (searchMode) markDeletedLocal(id, true);
+    else loadedMessages = loadedMessages.filter(function (m) { return m.id !== id; });
     renderMessages();
     toast(j.data && j.data.deleted ? 'message deleted' : 'already deleted');
   }
-  async function banMsg(id) {
+  async function undeleteMsg(id) {
     var res;
-    try { res = await api('/chat/admin/message/' + encodeURIComponent(id) + '/ban', { method: 'POST', body: JSON.stringify({}) }); }
+    try { res = await api('/chat/admin/message/' + encodeURIComponent(id) + '/undelete', { method: 'POST' }); }
+    catch (e) { toast('network error', 'err'); return; }
+    if (!res.ok) { toast('undelete failed ' + res.status, 'err'); return; }
+    var j = await res.json();
+    if (j.data && j.data.undeleted) { markDeletedLocal(id, false); renderMessages(); toast('message restored'); }
+    else toast('not deleted', 'err');
+  }
+  async function banMsg(id, opts) {
+    opts = opts || {};
+    var body = { purge: !!opts.purge };
+    if (opts.durationSec) body.durationSec = opts.durationSec;
+    var res;
+    try { res = await api('/chat/admin/message/' + encodeURIComponent(id) + '/ban', { method: 'POST', body: JSON.stringify(body) }); }
     catch (e) { toast('network error', 'err'); return; }
     if (!res.ok) { toast(res.status === 404 ? 'sender not found' : 'ban failed ' + res.status, 'err'); return; }
-    var j = await res.json(); toast('sender banned (' + ((j.data && j.data.sender) || '') + ')'); loadBans();
+    var j = await res.json(); var d = j.data || {};
+    toast('sender banned' + (d.purged ? ' · purged ' + d.purged : ''));
+    loadBans();
   }
   async function setMsgNick(id, name) {
     name = name.trim();
     var res;
     try { res = await api('/chat/admin/message/' + encodeURIComponent(id) + '/nickname', { method: 'POST', body: JSON.stringify({ nickname: name, official: !!name }) }); }
     catch (e) { toast('network error', 'err'); return; }
-    if (res.ok) { toast(name ? 'nickname assigned' : 'nickname cleared'); loadProfiles(); loadMessages(); }
+    if (res.ok) { toast(name ? 'nickname assigned' : 'nickname cleared'); loadProfiles(); refreshMessageView(); }
     else { var msg = 'assign failed ' + res.status; try { var jj = await res.json(); if (jj && typeof jj.error === 'string') msg = jj.error; } catch (e) { } toast(msg, 'err'); }
+  }
+  // Reload whichever message view is active (so a nickname change re-renders).
+  // In search mode re-run with the stored params (not the input fields, which the
+  // operator may have edited since).
+  async function refreshMessageView() {
+    if (!searchMode) { loadMessages(); return; }
+    oldestTs = null; oldestId = null;
+    var msgs = await fetchSearch(); if (msgs == null) return;
+    loadedMessages = msgs; updateOlderBtn(msgs.length); renderMessages();
   }
   async function delById() {
     var id = el('delId').value.trim();
     if (!id) { toast('enter a message id', 'err'); return; }
-    if (!(await confirmAction('Delete message', 'Delete message ' + id + '?', true))) return;
+    // Preview the message first so a mistyped id can't nuke the wrong one.
+    var res;
+    try { res = await api('/chat/admin/message/' + encodeURIComponent(id)); }
+    catch (e) { toast('network error', 'err'); return; }
+    if (res.status === 404) { toast('no message with that id', 'err'); return; }
+    if (!res.ok) { toast('lookup failed ' + res.status, 'err'); return; }
+    var j = await res.json(); var m = j.data && j.data.message;
+    if (!m) { toast('no message with that id', 'err'); return; }
+    if (m.deleted) { toast('already deleted', 'err'); return; }
+    if (!(await confirmAction('Delete message', 'Delete this message?\\n\\n' + (m.nickname || m.address) + ': ' + m.body, true))) return;
     await delMsg(id);
     el('delId').value = '';
   }
@@ -703,8 +846,11 @@ export function adminPageHtml(): string {
 
   // ---- Bans -----------------------------------------------------------------
   function banRow(b) {
+    var exp = b.expires_at
+      ? '<span class="chip warn">until ' + esc(fmtSec(b.expires_at)) + '</span>'
+      : '<span class="chip">permanent</span>';
     return '<div class="card">' +
-      '<div class="meta"><span class="chip ban">banned</span><span class="dim">' + fmtSec(b.created_at) + '</span></div>' +
+      '<div class="meta"><span class="chip ban">banned</span>' + exp + '<span class="dim">' + fmtSec(b.created_at) + '</span></div>' +
       '<div class="addr"><span class="copy" data-copy="' + esc(b.address) + '" title="copy">' + esc(b.address) + '</span></div>' +
       (b.reason ? '<div class="addr">reason: ' + esc(b.reason) + '</div>' : '') +
       '<div class="acts"><button class="mini" data-act="unban" data-addr="' + esc(b.address) + '">unban</button></div>' +
@@ -730,12 +876,39 @@ export function adminPageHtml(): string {
     var address = el('banAddr').value.trim();
     if (!address) { toast('enter an address', 'err'); return; }
     var reason = el('banReason').value.trim();
-    if (!(await confirmAction('Ban address', 'Ban ' + address + '?', true))) return;
+    var durRaw = el('banDuration').value;
+    var purge = el('banPurge').checked;
+    if (!(await confirmAction('Ban address', 'Ban ' + address + '?' + (purge ? '\\nAll of their messages will be deleted.' : ''), true))) return;
+    var body = { address: address, purge: purge };
+    if (reason) body.reason = reason;
+    if (durRaw) body.durationSec = parseInt(durRaw, 10);
     var res;
-    try { res = await api('/chat/admin/ban', { method: 'POST', body: JSON.stringify({ address: address, reason: reason }) }); }
+    try { res = await api('/chat/admin/ban', { method: 'POST', body: JSON.stringify(body) }); }
     catch (e) { toast('network error', 'err'); return; }
-    if (res.ok) { toast('address banned'); el('banAddr').value = ''; el('banReason').value = ''; loadBans(); }
+    if (res.ok) {
+      var j = await res.json();
+      toast('address banned' + (j.data && j.data.purged ? ' · purged ' + j.data.purged : ''));
+      el('banAddr').value = ''; el('banReason').value = ''; el('banPurge').checked = false; el('banDuration').value = '';
+      loadBans();
+    }
     else { var msg = 'ban failed ' + res.status; try { var jj = await res.json(); if (jj && typeof jj.error === 'string') msg = jj.error; } catch (e) { } toast(msg, 'err'); }
+  }
+
+  // ---- Audit ----------------------------------------------------------------
+  function auditRow(a) {
+    return '<div class="card">' +
+      '<div class="meta"><span class="chip">' + esc(a.action) + '</span><span class="dim">' + fmtSec(a.created_at) + '</span></div>' +
+      (a.target ? '<div class="addr">' + esc(a.target) + '</div>' : '') +
+      (a.detail ? '<div class="addr dim">' + esc(a.detail) + '</div>' : '') +
+    '</div>';
+  }
+  async function loadAudit() {
+    var res;
+    try { res = await api('/chat/admin/audit'); }
+    catch (e) { toast('network error', 'err'); return; }
+    if (!res.ok) { toast('audit error ' + res.status, 'err'); return; }
+    var j = await res.json(); var list = (j.data && j.data.audit) || [];
+    el('audit').innerHTML = list.length ? list.map(auditRow).join('') : '<div class="empty">// no admin actions logged</div>';
   }
 
   // ---- Delegated handlers (no inline JS built from row data) ----------------
@@ -751,10 +924,12 @@ export function adminPageHtml(): string {
   el('messages').addEventListener('click', async function (ev) {
     var btn = ev.target.closest('button[data-act]'); if (!btn) return;
     var id = btn.dataset.mid;
-    if (btn.dataset.act === 'del') { if (await confirmAction('Delete message', 'This hides it for everyone.', true)) delMsg(id); }
-    else if (btn.dataset.act === 'ban') { if (await confirmAction('Ban sender', 'Ban the sender of this message? They can no longer post.', true)) banMsg(id); }
-    else if (btn.dataset.act === 'nick') { var name = await promptAction('Set nickname', 'Handle for this sender (blank clears):', btn.dataset.name || '', 24); if (name !== false) setMsgNick(id, name); }
-    else if (btn.dataset.act === 'copyid') { copyText(id); }
+    var act = btn.dataset.act;
+    if (act === 'del') { if (await confirmAction('Delete message', 'This hides it for everyone.', true)) delMsg(id); }
+    else if (act === 'undelete') { if (await confirmAction('Undelete', 'Restore this message for everyone?', false)) undeleteMsg(id); }
+    else if (act === 'ban') { var opts = await openBanModal('Ban sender', 'They can no longer post or react.'); if (opts) banMsg(id, opts); }
+    else if (act === 'nick') { var name = await promptAction('Set nickname', 'Handle for this sender (blank clears):', btn.dataset.name || '', 24); if (name !== false) setMsgNick(id, name); }
+    else if (act === 'copyid') { copyText(id); }
   });
   el('reports').addEventListener('click', async function (ev) {
     var btn = ev.target.closest('button[data-act]'); if (!btn) return;
@@ -765,9 +940,16 @@ export function adminPageHtml(): string {
       var res = await api('/chat/admin/message/' + encodeURIComponent(d.mid), { method: 'DELETE' });
       if (res.ok) { toast('message deleted'); await resolveRids(rids); loadReports(); } else toast('delete failed ' + res.status, 'err');
     } else if (d.act === 'ban') {
-      if (!(await confirmAction('Ban sender', 'Ban ' + d.addr + '?', true))) return;
-      var r2 = await api('/chat/admin/ban', { method: 'POST', body: JSON.stringify({ address: d.addr }) });
-      if (r2.ok) { toast('sender banned'); loadBans(); await resolveRids(rids); loadReports(); } else toast('ban failed ' + r2.status, 'err');
+      var opts = await openBanModal('Ban sender', 'Ban ' + d.addr + '?');
+      if (!opts) return;
+      var body = { address: d.addr, purge: !!opts.purge };
+      if (opts.durationSec) body.durationSec = opts.durationSec;
+      var r2 = await api('/chat/admin/ban', { method: 'POST', body: JSON.stringify(body) });
+      if (r2.ok) {
+        var jr = await r2.json();
+        toast('sender banned' + (jr.data && jr.data.purged ? ' · purged ' + jr.data.purged : ''));
+        loadBans(); await resolveRids(rids); loadReports();
+      } else toast('ban failed ' + r2.status, 'err');
     } else if (d.act === 'resolve') { await resolveRids(rids); toast(rids.length > 1 ? 'dismissed ' + rids.length : 'dismissed'); loadReports(); }
   });
   el('bans').addEventListener('click', async function (ev) {
@@ -782,6 +964,7 @@ export function adminPageHtml(): string {
     el('ann').addEventListener('input', updateAnnCount);
     bindEnter('secret', login);
     bindEnter('nickAddr', assignNick); bindEnter('nickName', assignNick);
+    bindEnter('msgQuery', runSearch); bindEnter('msgAddr', runSearch);
     bindEnter('delId', delById);
     bindEnter('banAddr', banManual); bindEnter('banReason', banManual);
     el('modal').addEventListener('click', function (ev) { if (ev.target.id === 'modal') closeModal(false); });

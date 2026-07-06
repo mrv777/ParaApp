@@ -122,11 +122,13 @@ export class ChatRoom {
       return new Response(null, { status: 204 });
     }
 
-    // Internal, worker-only hook: a message was deleted (admin moderation) —
-    // tell live sockets to drop it so it disappears without a reload.
+    // Internal, worker-only hook: one or more messages were deleted (admin
+    // moderation / ban-purge) — tell live sockets to drop them without a reload.
+    // Accepts a single `id` or a bulk `ids` array.
     if (url.pathname === '/internal/delete' && request.method === 'POST') {
-      const { id } = (await request.json()) as { id: string };
-      this.broadcast({ type: 'delete', id });
+      const payload = (await request.json()) as { id?: string; ids?: string[] };
+      const ids = payload.ids ?? (payload.id ? [payload.id] : []);
+      for (const id of ids) this.broadcast({ type: 'delete', id });
       return new Response(null, { status: 204 });
     }
 

@@ -45,6 +45,12 @@ import {
   resolveReport,
   getAnnouncement,
   setAnnouncement,
+  searchMessages,
+  getAdminMessage,
+  deleteAllFromAddress,
+  undeleteMessage,
+  addAuditEntry,
+  listAudit,
 } from './chat/db';
 import { isClean } from './chat/moderation';
 import { isReservedNickname, nicknameKey } from './chat/reserved-nicknames';
@@ -691,6 +697,50 @@ async function broadcastDelete(env: Env, id: string): Promise<void> {
   );
 }
 
+// Bulk variant for ban-purge: drop many messages from live sockets in one hop.
+async function broadcastDeletes(env: Env, ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName('global'));
+  await stub.fetch(
+    new Request('https://do/internal/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
+  );
+}
+
+// Shared ban execution for the address- and message-based admin routes: applies
+// an optional temp-ban expiry, optionally purges the sender's messages (and
+// broadcasts the deletes), evicts the DO identity cache, and writes an audit
+// row. Returns the number of messages purged.
+async function applyBan(
+  env: Env,
+  address: string,
+  opts: { reason?: string; durationSec?: number; purge?: boolean }
+): Promise<number> {
+  const expiresAt = opts.durationSec
+    ? Math.floor(Date.now() / 1000) + opts.durationSec
+    : null;
+  await banAddress(env.DB, address, opts.reason ?? '', expiresAt);
+  await invalidateChatIdentity(env, address);
+  let purged = 0;
+  if (opts.purge) {
+    const ids = await deleteAllFromAddress(env.DB, address);
+    purged = ids.length;
+    await broadcastDeletes(env, ids);
+  }
+  const detail = [expiresAt ? `temp ${opts.durationSec}s` : 'permanent'];
+  if (opts.reason) detail.push(opts.reason);
+  if (opts.purge) detail.push(`purged ${purged}`);
+  await addAuditEntry(env.DB, {
+    action: opts.purge ? 'ban+purge' : 'ban',
+    target: address,
+    detail: detail.join(' · '),
+  });
+  return purged;
+}
+
 // Evict the DO's cached identity for an address after its profile or ban status
 // changes, so the next message re-reads it (nickname/ban changes stay instant
 // despite the per-message read cache).
@@ -778,7 +828,10 @@ app.get('/chat/admin/reports', async (c) => {
 app.delete('/chat/admin/message/:id', async (c) => {
   const id = c.req.param('id');
   const deleted = await softDeleteMessage(c.env.DB, id);
-  if (deleted) await broadcastDelete(c.env, id); // drop it from live sockets
+  if (deleted) {
+    await broadcastDelete(c.env, id); // drop it from live sockets
+    await addAuditEntry(c.env.DB, { action: 'delete', target: id });
+  }
   return c.json({ success: true, data: { deleted } });
 });
 
@@ -794,11 +847,10 @@ app.post('/chat/admin/message/:id/ban', async (c) => {
   }
   const sender = await getMessageSender(c.env.DB, c.req.param('id'));
   if (!sender) return c.json({ success: false, error: 'Message not found' }, 404);
-  await banAddress(c.env.DB, sender, result.data.reason ?? '');
-  await invalidateChatIdentity(c.env, sender);
+  const purged = await applyBan(c.env, sender, result.data);
   return c.json({
     success: true,
-    data: { banned: true, sender: truncateChatAddress(sender) },
+    data: { banned: true, sender: truncateChatAddress(sender), purged },
   });
 });
 
@@ -817,6 +869,13 @@ app.post('/chat/admin/message/:id/nickname', async (c) => {
     result.data.nickname,
     result.data.official
   );
+  if (status === 200) {
+    await addAuditEntry(c.env.DB, {
+      action: 'nickname',
+      target: sender,
+      detail: result.data.nickname || '(cleared)',
+    });
+  }
   return c.json(body, status);
 });
 
@@ -825,9 +884,9 @@ app.post('/chat/admin/ban', async (c) => {
   if (!result.success) {
     return c.json({ success: false, error: result.error.flatten() }, 400);
   }
-  await banAddress(c.env.DB, result.data.address, result.data.reason ?? '');
-  await invalidateChatIdentity(c.env, result.data.address);
-  return c.json({ success: true });
+  const { address, ...opts } = result.data;
+  const purged = await applyBan(c.env, address, opts);
+  return c.json({ success: true, data: { purged } });
 });
 
 app.get('/chat/admin/bans', async (c) => {
@@ -843,7 +902,10 @@ app.delete('/chat/admin/ban/:address', async (c) => {
     return c.json({ success: false, error: 'Invalid address' }, 400);
   }
   const unbanned = await removeBan(c.env.DB, parsed.data);
-  if (unbanned) await invalidateChatIdentity(c.env, parsed.data);
+  if (unbanned) {
+    await invalidateChatIdentity(c.env, parsed.data);
+    await addAuditEntry(c.env.DB, { action: 'unban', target: parsed.data });
+  }
   return c.json({ success: true, data: { unbanned } });
 });
 
@@ -862,6 +924,13 @@ app.post('/chat/admin/nickname', async (c) => {
     result.data.nickname,
     result.data.official
   );
+  if (status === 200) {
+    await addAuditEntry(c.env.DB, {
+      action: 'nickname',
+      target: result.data.address,
+      detail: result.data.nickname || '(cleared)',
+    });
+  }
   return c.json(body, status);
 });
 
@@ -882,13 +951,63 @@ app.post('/chat/admin/announcement', async (c) => {
   }
   await setAnnouncement(c.env.DB, result.data.body);
   await broadcastAnnouncement(c.env, result.data.body);
+  await addAuditEntry(c.env.DB, {
+    action: 'announce',
+    detail: result.data.body,
+  });
   return c.json({ success: true });
 });
 
 app.delete('/chat/admin/announcement', async (c) => {
   await setAnnouncement(c.env.DB, null);
   await broadcastAnnouncement(c.env, null);
+  await addAuditEntry(c.env.DB, { action: 'announce-clear' });
   return c.json({ success: true });
+});
+
+// Admin message search: filter by exact sender `address` and/or a body `q`
+// substring, page back with `before`/`beforeId`, optionally include soft-deleted
+// rows (for review / undelete). Newest-first; admins see everything (no blocks).
+app.get('/chat/admin/messages', async (c) => {
+  const address = c.req.query('address');
+  if (address && !chatAddressSchema.safeParse(address).success) {
+    return c.json({ success: false, error: 'Invalid address' }, 400);
+  }
+  const beforeNum = Number(c.req.query('before'));
+  const limitNum = Number(c.req.query('limit'));
+  const messages = await searchMessages(c.env.DB, {
+    address: address || undefined,
+    q: c.req.query('q') || undefined,
+    before: Number.isFinite(beforeNum) ? beforeNum : undefined,
+    beforeId: c.req.query('beforeId') || undefined,
+    limit: Number.isFinite(limitNum) ? limitNum : 50,
+    includeDeleted: c.req.query('includeDeleted') === '1',
+  });
+  return c.json({ success: true, data: { messages } });
+});
+
+// Fetch one message (including deleted) — powers the delete-by-id preview.
+app.get('/chat/admin/message/:id', async (c) => {
+  const message = await getAdminMessage(c.env.DB, c.req.param('id'));
+  if (!message) return c.json({ success: false, error: 'Message not found' }, 404);
+  return c.json({ success: true, data: { message } });
+});
+
+// Restore a soft-deleted message. Live clients reconcile on their next history
+// fetch — there is no un-delete broadcast.
+app.post('/chat/admin/message/:id/undelete', async (c) => {
+  const id = c.req.param('id');
+  const undeleted = await undeleteMessage(c.env.DB, id);
+  if (undeleted) {
+    await addAuditEntry(c.env.DB, { action: 'undelete', target: id });
+  }
+  return c.json({ success: true, data: { undeleted } });
+});
+
+// Recent admin actions for the audit trail.
+app.get('/chat/admin/audit', async (c) => {
+  const audit = await listAudit(c.env.DB);
+  return c.json({ success: true, data: { audit } });
 });
 
 export { ChatRoom } from './chat/room';
