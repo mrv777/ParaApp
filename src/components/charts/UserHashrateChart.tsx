@@ -91,15 +91,17 @@ export function UserHashrateChart({
   // Calculate chart data - simplified for user data (single hashrate field)
   // Note: User timestamps are already in milliseconds (converted from ISO string)
   // Downsample if too many points to prevent performance issues
-  const chartData = useMemo(() => {
+  const sampledData = useMemo(() => {
     if (!data || data.length === 0) return [];
+    return downsampleData(data, MAX_CHART_POINTS);
+  }, [data]);
 
-    const sampled = downsampleData(data, MAX_CHART_POINTS);
-    return sampled.map((point) => [
+  const chartData = useMemo(() => {
+    return sampledData.map((point) => [
       point.timestamp,
       point.hashrate,
     ]);
-  }, [data]);
+  }, [sampledData]);
 
   // Generate chart options
   const option = useMemo(() => {
@@ -255,8 +257,8 @@ export function UserHashrateChart({
     if (!chart || !onDataPointSelect) return;
 
     const handleClick = (params: { dataIndex?: number }) => {
-      if (params.dataIndex !== undefined && data[params.dataIndex]) {
-        onDataPointSelect(data[params.dataIndex]);
+      if (params.dataIndex !== undefined && sampledData[params.dataIndex]) {
+        onDataPointSelect(sampledData[params.dataIndex]);
       }
     };
 
@@ -264,7 +266,7 @@ export function UserHashrateChart({
     return () => {
       chart.off('click', handleClick);
     };
-  }, [onDataPointSelect, data]);
+  }, [onDataPointSelect, sampledData]);
 
   // Update chart on resize
   useEffect(() => {

@@ -16,6 +16,7 @@ import {
   selectNotificationPrefs,
   selectPushToken,
   selectWidgetUpdatesEnabled,
+  type NotificationPrefs,
 } from '@/store/settingsStore';
 import {
   requestPermissions,
@@ -55,61 +56,99 @@ export function useNotifications() {
   const prefsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenRefreshAttempted = useRef(false);
   const justFetchedPrefs = useRef(false);
+  const pendingRegistrationRef = useRef(false);
+  const registerRef = useRef<() => void>(() => {});
+
+  const applyFetchedPrefs = useCallback(
+    (targetAddress: string, prefs: NotificationPrefs) => {
+      const current = useSettingsStore.getState();
+      if (current.bitcoinAddress !== targetAddress) return;
+      setNotificationPrefs(prefs);
+      justFetchedPrefs.current = true;
+    },
+    [setNotificationPrefs]
+  );
 
   /**
-   * Register device with backend
+   * Register the latest desired backend state. This reads from the store at
+   * execution time so a rerun after an in-flight registration uses fresh address
+   * and toggle values rather than the closure that started the old request.
    */
-  const register = useCallback(async () => {
-    if (!bitcoinAddress || isRegistering.current) {
+  const performRegistration = useCallback(async () => {
+    const initial = useSettingsStore.getState();
+    const targetAddress = initial.bitcoinAddress;
+
+    if (
+      !targetAddress ||
+      (!initial.notificationsEnabled && !initial.widgetUpdatesEnabled) ||
+      !canReceivePushNotifications()
+    ) {
       return;
     }
 
     isRegistering.current = true;
+    let attemptedToken: string | null = null;
 
     try {
       // Request permissions if not already granted. Widget updates can still
       // use background refresh if permission is denied, but silent pushes need a token.
       const status = await requestPermissions();
+      const afterPermission = useSettingsStore.getState();
+
+      if (
+        afterPermission.bitcoinAddress !== targetAddress ||
+        (!afterPermission.notificationsEnabled && !afterPermission.widgetUpdatesEnabled)
+      ) {
+        pendingRegistrationRef.current = true;
+        return;
+      }
+
       if (status !== 'granted') {
-        if (notificationsEnabled) {
+        if (afterPermission.notificationsEnabled) {
           setNotificationsEnabled(false);
         }
-        isRegistering.current = false;
         return;
       }
 
       // Get push token
-      let token = pushToken;
+      let token = afterPermission.pushToken;
       if (!token) {
         token = await getExpoPushToken();
         if (!token) {
           console.warn('[Notifications] Failed to get push token');
-          isRegistering.current = false;
           return;
         }
         setPushToken(token);
       }
+      attemptedToken = token;
+
+      const beforeRegister = useSettingsStore.getState();
+      if (
+        beforeRegister.bitcoinAddress !== targetAddress ||
+        (!beforeRegister.notificationsEnabled && !beforeRegister.widgetUpdatesEnabled)
+      ) {
+        pendingRegistrationRef.current = true;
+        return;
+      }
 
       // Register with backend - returns existing preferences for cross-device sync
       // Read prefs from store directly to avoid dependency cycle
-      const currentPrefs = useSettingsStore.getState().notificationPrefs;
+      const currentPrefs = beforeRegister.notificationPrefs;
       const result = await registerDevice(
         token,
-        bitcoinAddress,
+        targetAddress,
         currentPrefs,
-        widgetUpdatesEnabled,
-        notificationsEnabled
+        beforeRegister.widgetUpdatesEnabled,
+        beforeRegister.notificationsEnabled
       );
 
       // Sync preferences from backend if they exist (cross-device sync)
       if (result.success && result.data?.preferences) {
-        const fetchedPrefs = {
+        applyFetchedPrefs(targetAddress, {
           blocks: result.data.preferences.blocks,
           workers: result.data.preferences.workers,
           bestDiff: result.data.preferences.bestDiff,
-        };
-        setNotificationPrefs(fetchedPrefs);
-        justFetchedPrefs.current = true;
+        });
       }
 
       if (!result.success) {
@@ -117,7 +156,10 @@ export function useNotifications() {
 
         // If registration failed and we haven't tried refreshing the token yet,
         // the token might be stale (e.g., after app reinstall)
-        if (!tokenRefreshAttempted.current) {
+        if (
+          useSettingsStore.getState().bitcoinAddress === targetAddress &&
+          !tokenRefreshAttempted.current
+        ) {
           tokenRefreshAttempted.current = true;
           console.log('[Notifications] Attempting token refresh...');
 
@@ -128,27 +170,36 @@ export function useNotifications() {
           if (freshToken && freshToken !== token) {
             console.log('[Notifications] Got fresh token, retrying registration');
             setPushToken(freshToken);
+            attemptedToken = freshToken;
+
+            const beforeRetry = useSettingsStore.getState();
+            if (
+              beforeRetry.bitcoinAddress !== targetAddress ||
+              (!beforeRetry.notificationsEnabled && !beforeRetry.widgetUpdatesEnabled)
+            ) {
+              pendingRegistrationRef.current = true;
+              return;
+            }
 
             // Retry registration with fresh token - use store prefs to avoid stale closure
-            const retryPrefs = useSettingsStore.getState().notificationPrefs;
+            const retryPrefs = beforeRetry.notificationPrefs;
             const retryResult = await registerDevice(
               freshToken,
-              bitcoinAddress,
+              targetAddress,
               retryPrefs,
-              widgetUpdatesEnabled,
-              notificationsEnabled
+              beforeRetry.widgetUpdatesEnabled,
+              beforeRetry.notificationsEnabled
             );
             if (retryResult.success) {
               console.log('[Notifications] Registration succeeded with fresh token');
               tokenRefreshAttempted.current = false; // Reset for next time
               // Sync preferences from backend if they exist
               if (retryResult.data?.preferences) {
-                setNotificationPrefs({
+                applyFetchedPrefs(targetAddress, {
                   blocks: retryResult.data.preferences.blocks,
                   workers: retryResult.data.preferences.workers,
                   bestDiff: retryResult.data.preferences.bestDiff,
                 });
-                justFetchedPrefs.current = true;
               }
             } else {
               console.warn('[Notifications] Registration failed even with fresh token');
@@ -162,30 +213,76 @@ export function useNotifications() {
     } catch (error) {
       console.error('[Notifications] Registration error:', error);
     } finally {
+      const current = useSettingsStore.getState();
+      if (
+        attemptedToken &&
+        (!current.bitcoinAddress || current.bitcoinAddress !== targetAddress)
+      ) {
+        try {
+          await unregisterDevice(attemptedToken);
+        } catch (error) {
+          console.error('Notification unregistration error:', error);
+        }
+      } else if (
+        attemptedToken &&
+        current.bitcoinAddress === targetAddress &&
+        !current.notificationsEnabled &&
+        !current.widgetUpdatesEnabled
+      ) {
+        updatePreferences(
+          attemptedToken,
+          targetAddress,
+          current.notificationPrefs,
+          false,
+          false
+        ).catch((error) => {
+          console.warn('Failed to sync disabled push preferences:', error);
+        });
+      }
+
       isRegistering.current = false;
+
+      if (pendingRegistrationRef.current) {
+        pendingRegistrationRef.current = false;
+        registerRef.current();
+      }
     }
   }, [
-    bitcoinAddress,
-    pushToken,
-    notificationsEnabled,
-    widgetUpdatesEnabled,
-    setPushToken,
+    applyFetchedPrefs,
     setNotificationsEnabled,
-    setNotificationPrefs,
+    setPushToken,
   ]);
+
+  /**
+   * Register device with backend
+   */
+  const register = useCallback(() => {
+    if (isRegistering.current) {
+      pendingRegistrationRef.current = true;
+      return;
+    }
+    void performRegistration();
+  }, [
+    performRegistration,
+  ]);
+
+  useEffect(() => {
+    registerRef.current = register;
+  }, [register]);
 
   /**
    * Unregister device from backend
    */
-  const unregister = useCallback(async () => {
-    if (!pushToken) return;
+  const unregister = useCallback(async (tokenOverride?: string | null) => {
+    const token = tokenOverride ?? useSettingsStore.getState().pushToken;
+    if (!token) return;
 
     try {
-      await unregisterDevice(pushToken);
+      await unregisterDevice(token);
     } catch (error) {
       console.error('Notification unregistration error:', error);
     }
-  }, [pushToken]);
+  }, []);
 
   // Initialize on mount (after hydration + address set)
   useEffect(() => {
@@ -202,7 +299,7 @@ export function useNotifications() {
 
   // Re-register when address changes
   useEffect(() => {
-    if (!isHydrated || (!notificationsEnabled && !widgetUpdatesEnabled)) return;
+    if (!isHydrated) return;
 
     const prevAddress = prevAddressRef.current;
     prevAddressRef.current = bitcoinAddress;
@@ -214,10 +311,17 @@ export function useNotifications() {
     // Address changed
     if (!bitcoinAddress) {
       // Address removed - unregister
+      pendingRegistrationRef.current = true;
       unregister();
-    } else if (prevAddress !== null) {
+    } else if (
+      prevAddress !== null &&
+      (notificationsEnabled || widgetUpdatesEnabled)
+    ) {
       // New address set - re-register
-      register();
+      void (async () => {
+        await unregister();
+        register();
+      })();
     }
   }, [
     isHydrated,
@@ -243,7 +347,10 @@ export function useNotifications() {
     // would clobber account-wide prefs (the same class of bug e0921b2 fixed on
     // /register, re-entering via the /preferences PATCH). Don't consume the
     // flag; registration clears it in its finally block.
-    if (isRegistering.current) return;
+    if (isRegistering.current) {
+      pendingRegistrationRef.current = true;
+      return;
+    }
 
     // Skip sync if preferences were just fetched from backend
     if (justFetchedPrefs.current) {

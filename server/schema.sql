@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   reply_to TEXT              -- parent message id when this is a reply (see 0009)
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
+-- Supports admin sender search and ban-purge (migration 0010).
+CREATE INDEX IF NOT EXISTS idx_chat_messages_address ON chat_messages(address, created_at);
 
 CREATE TABLE IF NOT EXISTS chat_reactions (
   message_id TEXT NOT NULL,
@@ -130,7 +132,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_reports_unique ON chat_reports(messag
 CREATE TABLE IF NOT EXISTS chat_bans (
   address TEXT PRIMARY KEY,
   reason TEXT,
-  created_at INTEGER DEFAULT (unixepoch())
+  created_at INTEGER DEFAULT (unixepoch()),
+  expires_at INTEGER         -- seconds epoch; NULL = permanent (see 0010)
 );
 
 CREATE TABLE IF NOT EXISTS chat_eula_accept (
@@ -145,3 +148,13 @@ CREATE TABLE IF NOT EXISTS chat_announcement (
   updated_at INTEGER DEFAULT (unixepoch())
 );
 INSERT OR IGNORE INTO chat_announcement (id, body) VALUES (1, NULL);
+
+-- Admin moderation audit trail (migration 0010).
+CREATE TABLE IF NOT EXISTS chat_admin_audit (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  target TEXT,
+  detail TEXT,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_chat_admin_audit_created ON chat_admin_audit(created_at);
