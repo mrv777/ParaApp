@@ -2,6 +2,17 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.5.3] - 2026-07-10
+
+### Fixed
+- Prevented repeated Android background wakeups by removing the redundant Expo widget workers; placed Android widgets continue to refresh through their native 30-minute update handler
+- Restricted the background notification task to silent `widget_refresh` payloads so visible block, worker, and best-difficulty notifications never start widget network work
+- Bounded, parallelized, deduplicated, and made widget refresh requests cancellable so headless tasks finish inside Android and iOS execution windows
+- Treated successful background checks with no changed data as successful scheduler runs instead of failures
+
+### Changed
+- Reduced event-driven silent widget pushes to at most two per hour, matching Apple's recommended background-notification budget; visible notification delivery is unchanged
+
 ## [0.5.0] - 2026-07-02
 
 ### Added

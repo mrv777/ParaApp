@@ -48,9 +48,9 @@ const STALE_THRESHOLD_SECONDS = 300;
 // (only a handful/day deliver reliably); real freshness comes from the
 // event-driven refreshes below.
 const WIDGET_PUSH_INTERVAL_SECONDS = 2 * 60 * 60;
-// Per-device floor between event-driven widget refreshes, so frequent events
-// (e.g. blocks on a busy pool) can't blow the silent-push budget.
-const WIDGET_EVENT_MIN_INTERVAL_SECONDS = 15 * 60;
+// Per-device floor between event-driven widget refreshes, capped at two/hour
+// to stay within Apple's recommended background-notification budget.
+const WIDGET_EVENT_MIN_INTERVAL_SECONDS = 30 * 60;
 // Community chat: rolling 30-day message retention.
 const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 // Admin audit trail: keep 90 days.

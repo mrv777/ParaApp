@@ -15,36 +15,40 @@ import {
   setPoolSnapshot,
 } from './storage';
 
-// Hard cap for the WIDGET_UPDATE self-fetch. The two widget endpoints are fetched
-// sequentially and each carries ~10s timeout + 1 retry, so an outer race is needed
-// to guarantee the headless handler always resolves. 8s allows one real round-trip;
-// this runs off the UI thread, so there is no ANR risk. On timeout we fall through
-// to the stored snapshot.
-const SELF_FETCH_TIMEOUT_MS = 8000;
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error('widget self-fetch timeout')), ms)
-    ),
-  ]);
-}
+// The library's native HeadlessJsTaskConfig allows 30s. Abort well before that;
+// fetchServerWidgetSnapshots also limits its parallel requests to 6s each.
+const SELF_FETCH_TIMEOUT_MS = 15000;
+let storedRefreshInFlight: Promise<void> | null = null;
 
 // Best-effort: pull fresh server snapshots and persist them for renderWidgetForInfo
 // to read. Never throws — on network failure / timeout / unsupported headless fetch,
 // the last stored snapshot is left in place and the caller renders that instead.
-async function refreshStoredSnapshots(): Promise<void> {
+async function performStoredSnapshotRefresh(): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SELF_FETCH_TIMEOUT_MS);
   try {
-    const { pool, personal } = await withTimeout(
-      fetchServerWidgetSnapshots(),
-      SELF_FETCH_TIMEOUT_MS
-    );
+    const { pool, personal } = await fetchServerWidgetSnapshots({
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted) return;
     if (pool) await setPoolSnapshot(pool);
     if (personal) await setPersonalSnapshot(personal);
   } catch {
     // Keep the last stored snapshot.
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
+
+function refreshStoredSnapshots(): Promise<void> {
+  if (storedRefreshInFlight) return storedRefreshInFlight;
+
+  const run = performStoredSnapshotRefresh();
+  const wrapped = run.finally(() => {
+    if (storedRefreshInFlight === wrapped) storedRefreshInFlight = null;
+  });
+  storedRefreshInFlight = wrapped;
+  return wrapped;
 }
 
 // Render the current stored snapshot for a given placed widget. Shared by the

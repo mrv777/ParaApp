@@ -62,4 +62,32 @@ describe('fetchWithTimeout retry policy', () => {
     expect(result.success).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('honors an owning task abort and does not retry', async () => {
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const error = new Error('aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    const pending = fetchWithTimeout('http://x/api', {
+      retries: 3,
+      signal: controller.signal,
+    });
+    controller.abort();
+    const result = await pending;
+
+    expect(result).toEqual({
+      success: false,
+      error: { message: 'Request aborted', code: 'ABORTED' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

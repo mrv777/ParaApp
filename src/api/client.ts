@@ -19,8 +19,17 @@ const DEFAULT_RETRY_DELAY = 1000;
 /**
  * Sleep for specified milliseconds
  */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener('abort', finish, { once: true });
+  });
 }
 
 /**
@@ -55,22 +64,37 @@ export async function fetchWithTimeout<T>(
   let lastError: ApiError | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
+    const externalSignal = fetchOptions.signal;
+    if (externalSignal?.aborted) {
+      lastError = createApiError('Request aborted', undefined, 'ABORTED');
+      break;
+    }
+
     // Wait before retry (skip first attempt)
     if (attempt > 0) {
       const delay = retryDelayMs * Math.pow(2, attempt - 1);
-      await sleep(delay);
+      await sleep(delay, externalSignal);
+      if (externalSignal?.aborted) {
+        lastError = createApiError('Request aborted', undefined, 'ABORTED');
+        break;
+      }
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    let didTimeout = false;
+    const handleExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', handleExternalAbort, { once: true });
+    if (externalSignal?.aborted) controller.abort();
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+    }, timeout);
 
     try {
       const response = await fetch(url, {
         ...fetchOptions,
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         lastError = createApiError(
@@ -94,11 +118,11 @@ export async function fetchWithTimeout<T>(
           : ((await response.json()) as T);
       return { success: true, data };
     } catch (error) {
-      clearTimeout(timeoutId);
-
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          lastError = createApiError('Request timeout', undefined, 'TIMEOUT');
+          lastError = didTimeout
+            ? createApiError('Request timeout', undefined, 'TIMEOUT')
+            : createApiError('Request aborted', undefined, 'ABORTED');
         } else {
           lastError = createApiError(
             error.message,
@@ -109,7 +133,14 @@ export async function fetchWithTimeout<T>(
       } else {
         lastError = createApiError('Unknown error', undefined, 'UNKNOWN');
       }
+    } finally {
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', handleExternalAbort);
     }
+
+    // An owning background task cancelled the whole operation. Retrying would
+    // outlive that task's execution window and keep a headless runtime awake.
+    if (externalSignal?.aborted) break;
   }
 
   return {

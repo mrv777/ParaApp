@@ -21,6 +21,16 @@ import {
   type PoolOverviewWidgetSnapshot,
 } from './types';
 
+// Background notifications have a strict execution window (30s on iOS), and
+// the Android widget library gives its headless task 30s as well. Keep network
+// work comfortably inside both limits: hydrate (up to 5s), then perform both
+// requests in parallel with no retries (up to 6s).
+const WIDGET_REQUEST_TIMEOUT_MS = 6000;
+const WIDGET_REFRESH_TIMEOUT_MS = 15000;
+
+let refreshInFlight: Promise<boolean> | null = null;
+let activeRefreshController: AbortController | null = null;
+
 function canUpdateWidgets(): boolean {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
@@ -186,7 +196,9 @@ export interface FetchedWidgetSnapshots {
 // functions) and the Android WIDGET_UPDATE task handler (which persists only).
 // A field is left undefined when its fetch fails, so callers never clobber a good
 // stored snapshot with an error placeholder.
-export async function fetchServerWidgetSnapshots(): Promise<FetchedWidgetSnapshots> {
+export async function fetchServerWidgetSnapshots(
+  options: { signal?: AbortSignal } = {}
+): Promise<FetchedWidgetSnapshots> {
   // Headless/background launches may run before AsyncStorage rehydrates; without
   // this, bitcoinAddress reads as null and we'd overwrite a real user's widget.
   await awaitSettingsHydration();
@@ -202,13 +214,23 @@ export async function fetchServerWidgetSnapshots(): Promise<FetchedWidgetSnapsho
   // Returning empty leaves callers rendering the last stored snapshot.
   if (!settings.widgetUpdatesEnabled) return out;
 
-  const poolResult = await getPoolWidgetSnapshot();
+  const requestOptions = {
+    timeout: WIDGET_REQUEST_TIMEOUT_MS,
+    retries: 0,
+    signal: options.signal,
+  };
+  const [poolResult, userResult] = await Promise.all([
+    getPoolWidgetSnapshot(requestOptions),
+    settings.bitcoinAddress
+      ? getUserWidgetSnapshot(settings.bitcoinAddress, requestOptions)
+      : Promise.resolve(null),
+  ]);
+
   if (isSuccess(poolResult) && poolResult.data.success) {
     out.pool = { ...poolResult.data.data, source: 'server' };
   }
 
-  if (settings.bitcoinAddress) {
-    const userResult = await getUserWidgetSnapshot(settings.bitcoinAddress);
+  if (settings.bitcoinAddress && userResult) {
     if (isSuccess(userResult) && userResult.data.success) {
       out.personal = { ...userResult.data.data, source: 'server' };
     }
@@ -223,18 +245,40 @@ export async function fetchServerWidgetSnapshots(): Promise<FetchedWidgetSnapsho
   return out;
 }
 
-export async function refreshWidgetsFromBackend(): Promise<boolean> {
-  if (!canUpdateWidgets()) return false;
+async function performWidgetRefresh(signal: AbortSignal): Promise<boolean> {
+  const { pool, personal } = await fetchServerWidgetSnapshots({ signal });
+  if (signal.aborted) return false;
 
-  const { pool, personal } = await fetchServerWidgetSnapshots();
   let updated = false;
-
-  if (pool) {
-    updated = (await updatePoolOverviewWidgetAsync(pool)) || updated;
-  }
-  if (personal) {
-    updated = (await updatePersonalMiningWidgetAsync(personal)) || updated;
-  }
-
+  if (pool) updated = (await updatePoolOverviewWidgetAsync(pool)) || updated;
+  if (signal.aborted) return updated;
+  if (personal) updated = (await updatePersonalMiningWidgetAsync(personal)) || updated;
   return updated;
+}
+
+/** Abort active work when the OS expires an iOS background execution window. */
+export function cancelWidgetRefresh(): void {
+  activeRefreshController?.abort();
+}
+
+/**
+ * Refresh widgets at most once at a time across scheduled tasks and silent
+ * pushes. Concurrent callers share the same bounded operation instead of
+ * starting duplicate network requests and native widget writes.
+ */
+export function refreshWidgetsFromBackend(): Promise<boolean> {
+  if (!canUpdateWidgets()) return Promise.resolve(false);
+  if (refreshInFlight) return refreshInFlight;
+
+  const controller = new AbortController();
+  activeRefreshController = controller;
+  const timeoutId = setTimeout(() => controller.abort(), WIDGET_REFRESH_TIMEOUT_MS);
+  const run = performWidgetRefresh(controller.signal);
+  const wrapped = run.finally(() => {
+    clearTimeout(timeoutId);
+    if (activeRefreshController === controller) activeRefreshController = null;
+    if (refreshInFlight === wrapped) refreshInFlight = null;
+  });
+  refreshInFlight = wrapped;
+  return wrapped;
 }

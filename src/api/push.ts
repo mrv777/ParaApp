@@ -4,7 +4,7 @@
 
 import Constants from 'expo-constants';
 import { postJson, fetchWithTimeout } from './client';
-import type { ApiResult } from '@/types';
+import type { ApiResult, FetchOptions } from '@/types';
 import type { NotificationPrefs } from '@/store/settingsStore';
 import type {
   PersonalMiningWidgetSnapshot,
@@ -92,20 +92,21 @@ export async function updatePreferences(
   });
 }
 
-export async function getPoolWidgetSnapshot(): Promise<
-  ApiResult<WidgetSnapshotResponse<PoolOverviewWidgetSnapshot>>
-> {
+export async function getPoolWidgetSnapshot(
+  options: FetchOptions & Pick<RequestInit, 'signal'> = {}
+): Promise<ApiResult<WidgetSnapshotResponse<PoolOverviewWidgetSnapshot>>> {
   return fetchWithTimeout<WidgetSnapshotResponse<PoolOverviewWidgetSnapshot>>(
     `${BASE_URL}/widget/pool`,
-    { retries: 1 }
+    { retries: 1, ...options }
   );
 }
 
 export async function getUserWidgetSnapshot(
-  btcAddress: string
+  btcAddress: string,
+  options: FetchOptions & Pick<RequestInit, 'signal'> = {}
 ): Promise<ApiResult<WidgetSnapshotResponse<PersonalMiningWidgetSnapshot>>> {
   return fetchWithTimeout<WidgetSnapshotResponse<PersonalMiningWidgetSnapshot>>(
     `${BASE_URL}/widget/user/${encodeURIComponent(btcAddress)}`,
-    { retries: 1 }
+    { retries: 1, ...options }
   );
 }
