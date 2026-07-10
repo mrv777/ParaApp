@@ -2,6 +2,14 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.5.4] - 2026-07-10
+
+### Fixed
+- Stopped the app crashing when an Android home-screen widget is removed; the widget-image cleanup no longer throws when its cache folder is missing, so the widget-deleted handler now runs (patches `react-native-android-widget`, upstream sAleksovski/react-native-android-widget#143)
+
+### Changed
+- Updated `expo-widgets` to 56.0.22 and `@expo/ui` to 56.0.21; iOS widget rendering and refresh behavior are unchanged
+
 ## [0.5.3] - 2026-07-10
 
 ### Fixed
