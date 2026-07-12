@@ -41,8 +41,11 @@ import {
 
 // 5 minutes = 5 cron cycles (1 min each)
 const OFFLINE_CHECK_THRESHOLD = 5;
-// Worker considered stale if lastSubmission is older than 5 minutes
-const STALE_THRESHOLD_SECONDS = 300;
+// Worker considered stale if lastSubmission is older than 10 minutes.
+// Kept generous because share arrival is probabilistic: low-hashrate miners
+// can legitimately go several minutes between shares, and a threshold that's
+// too tight produces false offline/online notification pairs.
+const STALE_THRESHOLD_SECONDS = 600;
 // Blanket fallback: how often a quiet device gets a silent widget refresh even
 // when nothing changed. Kept well within Apple's content-available budget
 // (only a handful/day deliver reliably); real freshness comes from the
@@ -415,7 +418,7 @@ async function processUser(
         newOfflineChecks >= OFFLINE_CHECK_THRESHOLD &&
         !stored.notifiedOffline
       ) {
-        // Time to notify - worker has been offline for 5 minutes
+        // Time to notify - worker has been stale for 5 consecutive checks
         offlineWorkers.push(workerName);
         newStatuses[workerName] = {
           offlineChecks: newOfflineChecks,
