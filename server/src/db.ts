@@ -94,46 +94,41 @@ export async function upsertPreferences(
   btcAddress: string,
   prefs: { blocks?: boolean; workers?: boolean; bestDiff?: boolean }
 ): Promise<void> {
-  const existing = await db
-    .prepare('SELECT * FROM notification_preferences WHERE btc_address = ?')
-    .bind(btcAddress)
-    .first<NotificationPreferences>();
+  const blocks = prefs.blocks !== undefined ? (prefs.blocks ? 1 : 0) : null;
+  const workers = prefs.workers !== undefined ? (prefs.workers ? 1 : 0) : null;
+  const bestDiff = prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : null;
 
-  if (existing) {
-    await db
-      .prepare(
-        `
-        UPDATE notification_preferences SET
-          notify_blocks = COALESCE(?, notify_blocks),
-          notify_workers = COALESCE(?, notify_workers),
-          notify_best_diff = COALESCE(?, notify_best_diff),
-          updated_at = unixepoch()
-        WHERE btc_address = ?
+  // One atomic statement covers every state:
+  // - missing row: undefined fields receive the schema's enabled-by-default value
+  // - existing row: undefined fields preserve their current value
+  // - explicit false: 0 is preserved by COALESCE and never mistaken for missing
+  await db
+    .prepare(
       `
+      INSERT INTO notification_preferences (
+        btc_address,
+        notify_blocks,
+        notify_workers,
+        notify_best_diff
       )
-      .bind(
-        prefs.blocks !== undefined ? (prefs.blocks ? 1 : 0) : null,
-        prefs.workers !== undefined ? (prefs.workers ? 1 : 0) : null,
-        prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : null,
-        btcAddress
-      )
-      .run();
-  } else {
-    await db
-      .prepare(
-        `
-        INSERT INTO notification_preferences (btc_address, notify_blocks, notify_workers, notify_best_diff)
-        VALUES (?, ?, ?, ?)
-      `
-      )
-      .bind(
-        btcAddress,
-        prefs.blocks !== undefined ? (prefs.blocks ? 1 : 0) : 1,
-        prefs.workers !== undefined ? (prefs.workers ? 1 : 0) : 1,
-        prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : 1
-      )
-      .run();
-  }
+      VALUES (?, COALESCE(?, 1), COALESCE(?, 1), COALESCE(?, 1))
+      ON CONFLICT(btc_address) DO UPDATE SET
+        notify_blocks = COALESCE(?, notification_preferences.notify_blocks),
+        notify_workers = COALESCE(?, notification_preferences.notify_workers),
+        notify_best_diff = COALESCE(?, notification_preferences.notify_best_diff),
+        updated_at = unixepoch()
+    `
+    )
+    .bind(
+      btcAddress,
+      blocks,
+      workers,
+      bestDiff,
+      blocks,
+      workers,
+      bestDiff
+    )
+    .run();
 }
 
 /**
@@ -208,6 +203,16 @@ export async function getPreferences(
     .first<NotificationPreferences>();
 }
 
+/** Load all account-wide preferences in one query for block fan-out. */
+export async function getAllPreferences(
+  db: D1Database
+): Promise<NotificationPreferences[]> {
+  const result = await db
+    .prepare('SELECT * FROM notification_preferences')
+    .all<NotificationPreferences>();
+  return result.results;
+}
+
 // ============================================
 // Cron Job Support Functions
 // ============================================
@@ -259,14 +264,19 @@ export async function markWidgetPushSent(
 ): Promise<void> {
   if (pushTokens.length === 0) return;
 
-  for (const token of pushTokens) {
+  // D1 accepts at most 100 bound parameters. One UPDATE per chunk reduces
+  // hundreds of sequential round-trips to a handful.
+  const uniqueTokens = [...new Set(pushTokens)];
+  for (let i = 0; i < uniqueTokens.length; i += 100) {
+    const chunk = uniqueTokens.slice(i, i + 100);
+    const placeholders = chunk.map(() => '?').join(', ');
     await db
       .prepare(
         `UPDATE push_subscriptions
          SET last_widget_push_at = unixepoch(), updated_at = unixepoch()
-         WHERE push_token = ?`
+         WHERE push_token IN (${placeholders})`
       )
-      .bind(token)
+      .bind(...chunk)
       .run();
   }
 }

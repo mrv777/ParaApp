@@ -392,47 +392,57 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           return { loadingMiners: next };
         });
 
-        // If we already know this is an Avalon, skip the AxeOS probe
-        // and go straight to cgminer. Saves one HTTP timeout on every
-        // poll cycle.
-        const known = get().miners.find((m) => m.ip === ip);
-        const result =
-          known?.minerType === 'avalon'
-            ? await fetchAvalon(ip)
-            : await fetchMiner(ip);
+        try {
+          // If we already know this is an Avalon, skip the AxeOS probe
+          // and go straight to cgminer. Saves one HTTP timeout on every
+          // poll cycle.
+          const known = get().miners.find((m) => m.ip === ip);
+          const result =
+            known?.minerType === 'avalon'
+              ? await fetchAvalon(ip)
+              : await fetchMiner(ip);
 
-        // Get fresh state after async operation to avoid race conditions
-        const { loadingMiners: currentLoading, miners: currentMiners } = get();
-        const updatedLoading = new Set(currentLoading);
-        updatedLoading.delete(ip);
-
-        if (isSuccess(result)) {
-          const existingMiner = currentMiners.find((m) => m.ip === ip);
-          const updatedMiner = result.data;
-
-          // Preserve alias
-          if (existingMiner?.alias) {
-            updatedMiner.alias = existingMiner.alias;
+          if (isSuccess(result)) {
+            set((state) => {
+              const existingMiner = state.miners.find((m) => m.ip === ip);
+              const updatedMiner = existingMiner?.alias
+                ? { ...result.data, alias: existingMiner.alias }
+                : result.data;
+              return {
+                miners: state.miners.map((m) =>
+                  m.ip === ip ? updatedMiner : m
+                ),
+              };
+            });
+          } else {
+            // Mark as offline but keep in list.
+            set((state) => ({
+              miners: state.miners.map((m) =>
+                m.ip === ip ? { ...m, isOnline: false, lastSeen: Date.now() } : m
+              ),
+            }));
           }
-
-          set({
-            miners: currentMiners.map((m) => (m.ip === ip ? updatedMiner : m)),
-            loadingMiners: updatedLoading,
-          });
-        } else {
-          // Mark as offline but keep in list
-          set({
-            miners: currentMiners.map((m) =>
+        } catch (error) {
+          // Protocol adapters should normally return ApiResult failures, but a
+          // malformed firmware response must not leave a permanent spinner.
+          console.warn(`[Miners] Unexpected refresh failure for ${ip}:`, error);
+          set((state) => ({
+            miners: state.miners.map((m) =>
               m.ip === ip ? { ...m, isOnline: false, lastSeen: Date.now() } : m
             ),
-            loadingMiners: updatedLoading,
+          }));
+        } finally {
+          set((state) => {
+            const loadingMiners = new Set(state.loadingMiners);
+            loadingMiners.delete(ip);
+            return { loadingMiners };
           });
         }
       },
 
       refreshAllMiners: async () => {
         const { miners, refreshMiner } = get();
-        await Promise.all(miners.map((m) => refreshMiner(m.ip)));
+        await Promise.allSettled(miners.map((m) => refreshMiner(m.ip)));
       },
 
       restartMiner: async (ip) => {

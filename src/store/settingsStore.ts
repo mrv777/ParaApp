@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { TemperatureUnit } from '@/utils/formatting';
+import { normalizeBitcoinAddress } from '@/utils/bitcoinAddress';
 import type { MinerSortOption, MinerFilterOption, MinerViewMode } from '@/types';
 
 export type PollingInterval = 5000 | 10000 | 20000 | 30000;
@@ -120,7 +121,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
 
       setMinerViewMode: (mode) => set({ minerViewMode: mode }),
 
-      setBitcoinAddress: (address) => set({ bitcoinAddress: address }),
+      setBitcoinAddress: (address) =>
+        set({ bitcoinAddress: address ? normalizeBitcoinAddress(address) : null }),
 
       setRoundMode: (mode) => set({ roundMode: mode }),
 
@@ -129,9 +131,17 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
 
       setNotificationPrefs: (prefs) =>
-        set((state) => ({
-          notificationPrefs: { ...state.notificationPrefs, ...prefs },
-        })),
+        set((state) => {
+          const next = { ...state.notificationPrefs, ...prefs };
+          if (
+            next.blocks === state.notificationPrefs.blocks &&
+            next.workers === state.notificationPrefs.workers &&
+            next.bestDiff === state.notificationPrefs.bestDiff
+          ) {
+            return state;
+          }
+          return { notificationPrefs: next };
+        }),
 
       setPushToken: (token) => set({ pushToken: token }),
 
@@ -194,13 +204,19 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
       },
-      // v1: widget background refresh became opt-out (default on). Flip existing
-      // installs that persisted the old `false` default so the new default applies.
-      version: 1,
+      // v1: widget background refresh became opt-out (default on).
+      // v2: canonicalize persisted uppercase Bech32/Bech32m addresses.
+      version: 2,
       migrate: (persistedState, version) => {
-        const state = (persistedState ?? {}) as Partial<SettingsState>;
+        let state = (persistedState ?? {}) as Partial<SettingsState>;
         if (version < 1) {
-          return { ...state, widgetUpdatesEnabled: true };
+          state = { ...state, widgetUpdatesEnabled: true };
+        }
+        if (version < 2 && state.bitcoinAddress) {
+          state = {
+            ...state,
+            bitcoinAddress: normalizeBitcoinAddress(state.bitcoinAddress),
+          };
         }
         return state;
       },

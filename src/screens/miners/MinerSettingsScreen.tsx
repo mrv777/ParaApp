@@ -112,13 +112,20 @@ function displayToCelsius(input: string, unit: 'celsius' | 'fahrenheit'): number
   return unit === 'fahrenheit' ? Math.round(((num - 32) * 5) / 9) : num;
 }
 
+/** Parse an uncommitted custom hardware value without mutating form state. */
+function parsePositiveInteger(input: string): number | null {
+  const trimmed = input.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export function MinerSettingsScreen({ route, navigation }: Props) {
   const { t } = useTranslation();
   const { ip } = route.params;
 
   // Store
   const miners = useMinerStore(selectMiners);
-  const refreshMiner = useMinerStore((s) => s.refreshMiner);
   const updateMinerSettings = useMinerStore((s) => s.updateMinerSettings);
   const restartMiner = useMinerStore((s) => s.restartMiner);
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
@@ -330,6 +337,18 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     return displayToCelsius(targetTempInput, temperatureUnit);
   }, [targetTempInput, temperatureUnit]);
 
+  // SwipeToConfirm does not reliably blur a focused TextInput. Derive the same
+  // effective values that handleApply will validate and send so the pending
+  // summary can never confirm one value while applying another.
+  const effectiveFrequency = useMemo(() => {
+    if (!customFrequency) return frequency;
+    return parsePositiveInteger(customFrequencyInput) ?? frequency;
+  }, [customFrequency, customFrequencyInput, frequency]);
+  const effectiveVoltage = useMemo(() => {
+    if (!customVoltage) return voltage;
+    return parsePositiveInteger(customVoltageInput) ?? voltage;
+  }, [customVoltage, customVoltageInput, voltage]);
+
   // Calculate pending changes
   const pendingChanges = useMemo<PendingChange[]>(() => {
     if (!originalValues) return [];
@@ -337,25 +356,26 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
     // Frequency/voltage only when asicConfig is available
     if (asicConfig) {
-      if (frequency !== originalValues.frequency) {
+      if (effectiveFrequency !== originalValues.frequency) {
         changes.push({
           field: 'frequency',
           label: t('miners.frequency'),
           from: `${originalValues.frequency} MHz`,
-          to: `${frequency} MHz`,
+          to: `${effectiveFrequency} MHz`,
         });
       }
-      if (voltage !== originalValues.coreVoltage) {
+      if (effectiveVoltage !== originalValues.coreVoltage) {
         changes.push({
           field: 'voltage',
           label: t('miners.voltage'),
           from: `${originalValues.coreVoltage} mV`,
-          to: `${voltage} mV`,
+          to: `${effectiveVoltage} mV`,
         });
       }
       // Hammer: freq/voltage edits force boot_mode → 2 (customize). Surface that.
       if (miner?.minerType === 'hammer'
-        && (frequency !== originalValues.frequency || voltage !== originalValues.coreVoltage)
+        && (effectiveFrequency !== originalValues.frequency
+          || effectiveVoltage !== originalValues.coreVoltage)
         && (miner.bootMode ?? 0) !== 2
       ) {
         changes.push({
@@ -464,7 +484,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     }
 
     return changes;
-  }, [frequency, voltage, fanSpeed, autoFan, parsedTargetTempC, stratumUrl, stratumPort, stratumUser, passwordTouched, fallbackStratumUrl, fallbackStratumPort, fallbackStratumUser, originalValues, asicConfig, miner, temperatureUnit, t]);
+  }, [effectiveFrequency, effectiveVoltage, fanSpeed, autoFan, parsedTargetTempC, stratumUrl, stratumPort, stratumUser, passwordTouched, fallbackStratumUrl, fallbackStratumPort, fallbackStratumUser, originalValues, asicConfig, miner, temperatureUnit, t]);
 
   const hasChanges = pendingChanges.length > 0;
 
@@ -527,24 +547,24 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   const frequencyWarning = useMemo(() => {
     if (!asicConfig) return null;
     const maxOption = Math.max(...asicConfig.frequencyOptions);
-    if (frequency > maxOption) {
-      return frequency > asicConfig.absMaxFrequency
+    if (effectiveFrequency > maxOption) {
+      return effectiveFrequency > asicConfig.absMaxFrequency
         ? t('miners.exceedsMaximum')
         : t('miners.exceedsRecommended');
     }
     return null;
-  }, [frequency, asicConfig, t]);
+  }, [effectiveFrequency, asicConfig, t]);
 
   const voltageWarning = useMemo(() => {
     if (!asicConfig) return null;
     const maxOption = Math.max(...asicConfig.voltageOptions);
-    if (voltage > maxOption) {
-      return voltage > asicConfig.absMaxVoltage
+    if (effectiveVoltage > maxOption) {
+      return effectiveVoltage > asicConfig.absMaxVoltage
         ? t('miners.exceedsMaximum')
         : t('miners.exceedsRecommended');
     }
     return null;
-  }, [voltage, asicConfig, t]);
+  }, [effectiveVoltage, asicConfig, t]);
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -626,18 +646,18 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     // Commit any custom freq/voltage typed but not yet blurred — the footer
     // swipe gesture doesn't reliably blur the focused input, so the value
     // could otherwise be dropped. Use the returned value (setState is async).
-    let effectiveFrequency = frequency;
-    let effectiveVoltage = voltage;
+    let frequencyToApply = frequency;
+    let voltageToApply = voltage;
     if (customFrequency) {
       const v = validateCustomFrequency();
       if (v === null) return; // invalid — error shown, block apply
-      effectiveFrequency = v;
+      frequencyToApply = v;
       setFrequency(v);
     }
     if (customVoltage) {
       const v = validateCustomVoltage();
       if (v === null) return;
-      effectiveVoltage = v;
+      voltageToApply = v;
       setVoltage(v);
     }
 
@@ -645,11 +665,11 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     setApplyError(null);
 
     const settings: MinerSettings = {};
-    if (effectiveFrequency !== originalValues?.frequency) {
-      settings.frequency = effectiveFrequency;
+    if (frequencyToApply !== originalValues?.frequency) {
+      settings.frequency = frequencyToApply;
     }
-    if (effectiveVoltage !== originalValues?.coreVoltage) {
-      settings.coreVoltage = effectiveVoltage;
+    if (voltageToApply !== originalValues?.coreVoltage) {
+      settings.coreVoltage = voltageToApply;
     }
     const autoFanWas = (originalValues?.autoFanSpeed ?? 0) > 0;
     if (autoFan !== autoFanWas) {
@@ -748,6 +768,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     haptics.selection();
     setHammerPreset(preset);
     if (preset !== 'custom') {
+      setCustomFrequency(false);
+      setCustomVoltage(false);
+      setCustomFrequencyError(null);
+      setCustomVoltageError(null);
       setFrequency(HAMMER_PRESETS[preset].frequency);
       setVoltage(HAMMER_PRESETS[preset].voltage);
     }
@@ -996,7 +1020,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                               </Badge>
                             )}
                             <Text variant="body" className="font-medium">
-                              {frequency} MHz
+                              {effectiveFrequency} MHz
                             </Text>
                           </View>
                         </View>
@@ -1037,7 +1061,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                               </Badge>
                             )}
                             <Text variant="body" className="font-medium">
-                              {voltage} mV
+                              {effectiveVoltage} mV
                             </Text>
                           </View>
                         </View>
@@ -1083,7 +1107,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                           </Badge>
                         )}
                         <Text variant="body" className="font-medium">
-                          {frequency} MHz
+                          {effectiveFrequency} MHz
                         </Text>
                       </View>
                     </View>
@@ -1166,7 +1190,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
                           </Badge>
                         )}
                         <Text variant="body" className="font-medium">
-                          {voltage} mV
+                          {effectiveVoltage} mV
                         </Text>
                       </View>
                     </View>

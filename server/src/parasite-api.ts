@@ -61,10 +61,12 @@ async function fetchWithTimeout<T>(
  */
 export async function getUser(
   baseUrl: string,
-  address: string
+  address: string,
+  timeoutMs: number = DEFAULT_TIMEOUT
 ): Promise<FetchResult<ParasiteUserResponse>> {
   return fetchWithTimeout<ParasiteUserResponse>(
-    `${baseUrl}/api/user/${encodeURIComponent(address)}`
+    `${baseUrl}/api/user/${encodeURIComponent(address)}`,
+    timeoutMs
   );
 }
 

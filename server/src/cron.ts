@@ -10,7 +10,6 @@ import type {
   ExpoPushMessage,
   ParasiteWorker,
   PushSubscription,
-  NotificationPreferences,
 } from './types';
 import {
   getUserState,
@@ -19,6 +18,7 @@ import {
   updatePoolState,
   getAllActiveSubscriptions,
   getPreferences,
+  getAllPreferences,
   markTokenInactive,
   getSubscriptionsDueForWidgetPush,
   markWidgetPushSent,
@@ -58,6 +58,102 @@ const WIDGET_EVENT_MIN_INTERVAL_SECONDS = 30 * 60;
 const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 // Admin audit trail: keep 90 days.
 const CHAT_AUDIT_RETENTION_SEC = 90 * 24 * 60 * 60;
+// Production has 300+ active addresses; sequential processing was observed
+// spanning 61 seconds, long enough to overlap the next one-minute tick.
+const USER_BATCH_SIZE = 6;
+const CRON_USER_TIMEOUT_MS = 5000;
+const CRON_USER_DEADLINE_MS = 45_000;
+const CRON_DURATION_WARNING_MS = 52_000;
+
+interface CronSummaryInput {
+  scheduledTime: number;
+  durationMs: number;
+  totalAddresses: number;
+  attemptedAddresses: number;
+  updatedAddresses: number;
+  userFailures: number;
+  deadlineReached: boolean;
+  notificationsQueued: number;
+  pushFailures: number;
+  invalidTokens: number;
+  claimFailed: boolean;
+  maintenanceFailures: number;
+  duplicateTick?: boolean;
+  topLevelError?: boolean;
+}
+
+export interface CronSummary extends CronSummaryInput {
+  message: 'cron_summary';
+  coverageTicks: number | null;
+  warningReasons: string[];
+}
+
+/** Build the stable, non-sensitive payload emitted once per cron invocation. */
+export function buildCronSummary(input: CronSummaryInput): CronSummary {
+  const coverageTicks =
+    input.totalAddresses === 0
+      ? 0
+      : input.updatedAddresses > 0
+        ? Math.ceil(input.totalAddresses / input.updatedAddresses)
+        : null;
+  const warningReasons: string[] = [];
+
+  if (input.topLevelError) warningReasons.push('top_level_error');
+  if (input.claimFailed) warningReasons.push('tick_claim_failed');
+  if (input.maintenanceFailures > 0) {
+    warningReasons.push('maintenance_failures');
+  }
+  if (input.durationMs > CRON_DURATION_WARNING_MS) {
+    warningReasons.push('duration_over_52s');
+  }
+  if (input.totalAddresses > 0 && input.updatedAddresses === 0) {
+    warningReasons.push('no_user_updates');
+  } else if (coverageTicks !== null && coverageTicks > 2) {
+    warningReasons.push('coverage_over_two_ticks');
+  }
+  if (input.userFailures > 0) warningReasons.push('user_failures');
+  if (input.pushFailures > 0) warningReasons.push('push_failures');
+
+  return {
+    message: 'cron_summary',
+    ...input,
+    coverageTicks,
+    warningReasons,
+  };
+}
+
+function logCronSummary(input: CronSummaryInput): void {
+  const summary = buildCronSummary(input);
+  const serialized = JSON.stringify(summary);
+  if (input.topLevelError) console.error(serialized);
+  else if (summary.warningReasons.length > 0) console.warn(serialized);
+  else console.log(serialized);
+}
+
+function greatestCommonDivisor(a: number, b: number): number {
+  while (b !== 0) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+  return Math.abs(a);
+}
+
+/**
+ * Pick a widely-spaced start position that still visits every possible offset
+ * exactly once per `addressCount` ticks. A dynamically coprime stride avoids
+ * both stable-tail starvation and fixed-stride cycles when the count changes.
+ */
+export function getUserRotationOffset(
+  scheduledTime: number,
+  addressCount: number
+): number {
+  if (addressCount <= 1) return 0;
+  let stride = Math.max(1, Math.floor(addressCount / 2));
+  while (greatestCommonDivisor(stride, addressCount) !== 1) stride++;
+  const tick = Math.floor(scheduledTime / 60_000) % addressCount;
+  return (tick * stride) % addressCount;
+}
 
 /**
  * Whether a subscription should receive an event-driven silent widget refresh
@@ -133,6 +229,18 @@ function isNewerBlock(
  * Main cron job entry point
  */
 export async function runCronJob(env: Env, scheduledTime: number): Promise<void> {
+  const runStartedAt = Date.now();
+  let totalAddresses = 0;
+  let attemptedAddresses = 0;
+  let updatedAddresses = 0;
+  let userFailures = 0;
+  let deadlineReached = false;
+  let notificationsQueued = 0;
+  let pushFailures = 0;
+  let invalidTokens = 0;
+  let claimFailed = false;
+  let maintenanceFailures = 0;
+  let topLevelError = false;
   console.log('Cron job started');
 
   // Single-flight: a duplicate dispatch of this same scheduled tick shares
@@ -145,11 +253,27 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
       console.log(
         `Cron tick ${scheduledTime} already claimed, skipping duplicate dispatch`
       );
+      logCronSummary({
+        scheduledTime,
+        durationMs: Date.now() - runStartedAt,
+        totalAddresses,
+        attemptedAddresses,
+        updatedAddresses,
+        userFailures,
+        deadlineReached,
+        notificationsQueued,
+        pushFailures,
+        invalidTokens,
+        claimFailed,
+        maintenanceFailures,
+        duplicateTick: true,
+      });
       return;
     }
     // Keep the lock table bounded; one row per minute otherwise grows forever.
     await pruneCronRuns(env.DB, scheduledTime - 60 * 60 * 1000);
   } catch (error) {
+    claimFailed = true;
     console.error('Cron tick claim error, proceeding anyway:', error);
   }
 
@@ -167,6 +291,7 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     );
     if (audit > 0) console.log(`Pruned ${audit} chat audit entries (90d retention)`);
   } catch (error) {
+    maintenanceFailures++;
     console.error('Chat retention prune error:', error);
   }
 
@@ -196,14 +321,38 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     }
     console.log(`Processing ${subsByAddress.size} unique addresses`);
 
-    for (const [address, tokens] of subsByAddress) {
-      try {
-        const userResult = await processUser(env, address, tokens);
-        allMessages.push(...userResult.messages);
-        for (const token of userResult.widgetTokens) eventWidgetTokens.add(token);
-      } catch (error) {
-        console.error(`Error processing user ${address}:`, error);
-        // Continue with other users
+    // Rotate the first address every tick so an upstream outage plus deadline
+    // cannot starve the same stable tail forever. Six concurrent users match
+    // Cloudflare's documented simultaneous outgoing-connection cap.
+    const entries = [...subsByAddress.entries()];
+    totalAddresses = entries.length;
+    const offset = getUserRotationOffset(scheduledTime, entries.length);
+    const orderedEntries = entries.slice(offset).concat(entries.slice(0, offset));
+    for (let i = 0; i < orderedEntries.length; i += USER_BATCH_SIZE) {
+      if (Date.now() - runStartedAt >= CRON_USER_DEADLINE_MS) {
+        deadlineReached = true;
+        break;
+      }
+
+      const batch = orderedEntries.slice(i, i + USER_BATCH_SIZE);
+      attemptedAddresses += batch.length;
+      const results = await Promise.allSettled(
+        batch.map(([address, tokens]) => processUser(env, address, tokens))
+      );
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        const address = batch[j][0];
+        if (result.status === 'rejected') {
+          userFailures++;
+          console.error(`Error processing user ${address}:`, result.reason);
+          continue;
+        }
+        if (result.value.stateUpdated) updatedAddresses++;
+        else userFailures++;
+        allMessages.push(...result.value.messages);
+        for (const token of result.value.widgetTokens) {
+          eventWidgetTokens.add(token);
+        }
       }
     }
 
@@ -220,10 +369,13 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
       ...eventOnlyTokens.map((token) => createSilentWidgetRefreshMessage(token)),
     ];
     allMessages.push(...widgetMessages);
+    notificationsQueued = allMessages.length;
 
     if (allMessages.length > 0) {
       console.log(`Sending ${allMessages.length} notifications`);
       const result = await sendPushNotifications(allMessages);
+      pushFailures = result.failedTokens.length;
+      invalidTokens = result.invalidTokens.length;
 
       // Mark invalid tokens as inactive
       if (result.invalidTokens.length > 0) {
@@ -246,9 +398,27 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
       }
     }
 
-    console.log('Cron job completed');
   } catch (error) {
+    topLevelError = true;
     console.error('Cron job error:', error);
+  } finally {
+    const durationMs = Date.now() - runStartedAt;
+    logCronSummary({
+      scheduledTime,
+      durationMs,
+      totalAddresses,
+      attemptedAddresses,
+      updatedAddresses,
+      userFailures,
+      deadlineReached,
+      notificationsQueued,
+      pushFailures,
+      invalidTokens,
+      claimFailed,
+      maintenanceFailures,
+      topLevelError,
+    });
+    console.log(`Cron job completed in ${durationMs}ms`);
   }
 }
 
@@ -312,9 +482,13 @@ async function checkPoolBlock(
       addressSubs.set(sub.btc_address, subs);
     }
 
-    // Check preferences and create messages
+    // Check preferences and create messages. Load the small table once instead
+    // of issuing one D1 query per address on the relatively rare block tick.
+    const prefsByAddress = new Map(
+      (await getAllPreferences(env.DB)).map((prefs) => [prefs.btc_address, prefs])
+    );
     for (const [address, subs] of addressSubs) {
-      const prefs = await getPreferences(env.DB, address);
+      const prefs = prefsByAddress.get(address);
       // Default to enabled if no preferences set
       const blocksEnabled = prefs ? prefs.notify_blocks === 1 : true;
 
@@ -351,22 +525,39 @@ async function processUser(
   env: Env,
   address: string,
   tokens: PushSubscription[]
-): Promise<{ messages: ExpoPushMessage[]; widgetTokens: string[] }> {
+): Promise<{
+  messages: ExpoPushMessage[];
+  widgetTokens: string[];
+  stateUpdated: boolean;
+}> {
   const messages: ExpoPushMessage[] = [];
   const widgetTokens: string[] = [];
 
   if (tokens.length === 0) {
-    return { messages, widgetTokens }; // No active tokens for this user
+    return { messages, widgetTokens, stateUpdated: false }; // Defensive only
   }
 
   // Fetch user data from Parasite Pool
-  const userResult = await getUser(env.PARASITE_API_URL, address);
+  const userResult = await getUser(
+    env.PARASITE_API_URL,
+    address,
+    CRON_USER_TIMEOUT_MS
+  );
   if (!userResult.success || !userResult.data) {
     console.log(`Failed to fetch user ${address}, skipping`);
-    return { messages, widgetTokens };
+    return { messages, widgetTokens, stateUpdated: false };
   }
 
   const userData = userResult.data;
+  if (
+    !Array.isArray(userData.workerData) ||
+    !Number.isFinite(userData.workers) ||
+    typeof userData.bestDifficulty !== 'string' ||
+    (userData.workers > 0 && userData.workerData.length === 0)
+  ) {
+    console.warn(`Partial user payload for ${address}, preserving stored state`);
+    return { messages, widgetTokens, stateUpdated: false };
+  }
   const fetchedAt = Date.now();
   await upsertWidgetUserSnapshot(
     env.DB,
@@ -534,7 +725,7 @@ async function processUser(
     userData.bestDifficulty || ''
   );
 
-  return { messages, widgetTokens };
+  return { messages, widgetTokens, stateUpdated: true };
 }
 
 async function buildWidgetRefreshMessages(env: Env): Promise<ExpoPushMessage[]> {

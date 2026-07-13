@@ -363,6 +363,12 @@ export async function getVersion(
   if (!env.success) return env;
   const list = unwrap<AvalonVersion>(env.data, 'VERSION');
   if (!list.success) return list;
+  if (list.data.length === 0) {
+    return {
+      success: false,
+      error: { message: 'Empty VERSION section', code: 'EMPTY_SECTION' },
+    };
+  }
   return { success: true, data: list.data[0] };
 }
 
@@ -374,6 +380,12 @@ export async function getSummary(
   if (!env.success) return env;
   const list = unwrap<AvalonSummary>(env.data, 'SUMMARY');
   if (!list.success) return list;
+  if (list.data.length === 0) {
+    return {
+      success: false,
+      error: { message: 'Empty SUMMARY section', code: 'EMPTY_SECTION' },
+    };
+  }
   return { success: true, data: list.data[0] };
 }
 

@@ -43,6 +43,7 @@ import {
 } from '@/utils/notifications';
 import { useTranslation } from '@/i18n';
 import { isValidBitcoinAddress, isTaprootAddress } from '@/utils/validation';
+import { normalizeBitcoinAddress } from '@/utils/bitcoinAddress';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import type { SettingsStackScreenProps } from '@/types/navigation';
@@ -169,8 +170,10 @@ export function SettingsMainScreen({ navigation }: Props) {
     }
 
     if (isValidBitcoinAddress(trimmed)) {
+      const normalized = normalizeBitcoinAddress(trimmed);
       haptics.success();
-      setBitcoinAddress(trimmed);
+      setAddressInput(normalized);
+      setBitcoinAddress(normalized);
       setIsAddressValid(true);
       setValidationError(null);
     } else {

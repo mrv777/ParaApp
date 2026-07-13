@@ -160,10 +160,13 @@ export function HomeMainScreen({ navigation }: Props) {
     setRefreshing(true);
     await Promise.all([
       hasAddress ? refreshUser() : Promise.resolve(),
+      hasAddress && historicalPeriod !== '24h'
+        ? fetchHistorical(historicalPeriod)
+        : Promise.resolve(),
       refreshPool(),
     ]);
     setRefreshing(false);
-  }, [hasAddress, refreshUser, refreshPool]);
+  }, [hasAddress, refreshUser, fetchHistorical, historicalPeriod, refreshPool]);
 
   // Navigate to Settings to add address
   const handleAddAddress = useCallback(() => {

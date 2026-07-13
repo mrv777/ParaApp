@@ -11,6 +11,7 @@ import { Text } from '@/components/Text';
 import { Button } from '@/components/Button';
 import { useSettingsStore } from '@/store/settingsStore';
 import { isValidBitcoinAddress } from '@/utils/validation';
+import { normalizeBitcoinAddress } from '@/utils/bitcoinAddress';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
@@ -71,7 +72,7 @@ export function QRScannerScreen({ navigation }: Props) {
       if (address && isValidBitcoinAddress(address)) {
         setScanned(true);
         haptics.success();
-        setBitcoinAddress(address);
+        setBitcoinAddress(normalizeBitcoinAddress(address));
         navigation.goBack();
       } else {
         // Show error but allow retry
@@ -84,7 +85,7 @@ export function QRScannerScreen({ navigation }: Props) {
         }, 2000);
       }
     },
-    [scanned, setBitcoinAddress, navigation]
+    [scanned, setBitcoinAddress, navigation, t]
   );
 
   const handleRequestPermission = useCallback(async () => {

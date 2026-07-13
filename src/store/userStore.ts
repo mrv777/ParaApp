@@ -93,6 +93,18 @@ function calculateAverageHashrate(
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
+function historicalSeriesEqual(
+  a: UserHistoricalPoint[] | undefined,
+  b: UserHistoricalPoint[]
+): boolean {
+  if (!a || a.length !== b.length) return false;
+  return a.every(
+    (point, index) =>
+      point.timestamp === b[index].timestamp &&
+      point.hashrate === b[index].hashrate
+  );
+}
+
 export const useUserStore = create<UserState & UserActions>()((set, get) => ({
   ...initialState,
 
@@ -142,9 +154,30 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
         };
       }
 
+      const fetchedAt = Date.now();
+      const currentState = get();
+      const shouldRefreshChart =
+        isSuccess(historicalResult) &&
+        currentState.historicalPeriod === '24h' &&
+        !historicalSeriesEqual(
+          currentState.historical?.data,
+          historicalResult.data
+        );
+
       set({
-        stats: { data: statsWithAverages, timestamp: Date.now() },
+        stats: { data: statsWithAverages, timestamp: fetchedAt },
         statsAddress: address,
+        // The polling request already downloaded this exact series for the
+        // averages. Reuse it for the default chart instead of leaving the
+        // chart frozen at its mount-time snapshot.
+        ...(shouldRefreshChart && isSuccess(historicalResult)
+          ? {
+              historical: {
+                data: historicalResult.data,
+                timestamp: fetchedAt,
+              },
+            }
+          : {}),
         isLoading: false,
       });
     } else {

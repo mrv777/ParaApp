@@ -2,6 +2,19 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.5.5] - 2026-07-12
+
+### Fixed
+- Stopped returning devices from repeatedly registering for push notifications, preserved notification toggles changed during registration, restored unchanged Expo tokens after failed registration, and serialized address-switch registration
+- Canonicalized uppercase Bech32 and Bech32m addresses, including addresses already saved by previous versions, so pool, chat, widget, and notification identity lookups use the same lowercase key
+- Kept unblurred custom miner frequency and voltage values consistent between the pending-changes confirmation and the settings sent to the device
+- Rejected empty required Avalon responses and guaranteed miner refresh loading state is cleared after malformed firmware data or unexpected errors
+- Refreshed the Home user-hashrate chart from polling data and refreshed non-24-hour chart periods on pull-to-refresh
+
+### Performance
+- Parallelized notification-cron user checks within Cloudflare's connection limit, added fair rotating coverage and a bounded processing window, and reduced D1 round trips for block preferences and widget push timestamps
+- Made notification-preference updates a single atomic upsert and added structured cron capacity summaries with actionable warning thresholds
+
 ## [0.5.4] - 2026-07-10
 
 ### Fixed
