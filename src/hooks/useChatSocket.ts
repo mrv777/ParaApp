@@ -345,6 +345,7 @@ export function useChatSocket(): UseChatSocketReturn {
               address: msg.address,
               nickname: msg.nickname,
               official: msg.official,
+              ...(msg.badges ? { badges: msg.badges } : {}),
               body: msg.body,
               ...(msg.replyToId ? { replyToId: msg.replyToId } : {}),
               ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),

@@ -1,3 +1,5 @@
+import { CHAT_BADGES, CHAT_BADGE_KEYS } from './badges';
+
 /**
  * Self-contained admin console for the chat. Served (unauthenticated) at
  * GET /chat/admin; the secret entered here is sent as X-Admin-Secret on every
@@ -151,6 +153,7 @@ export function adminPageHtml(): string {
   .chip.warn { color: var(--warn); border-color: rgba(250,204,21,.4); }
   .chip.plain { color: var(--dim); }
   .chip.ban { color: var(--danger); border-color: rgba(255,82,71,.4); }
+  .badges { font-size: 14px; line-height: 1; letter-spacing: 1px; }
 
   .live { margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--line); font-size: 12.5px; word-break: break-word; }
   .live.off { color: var(--dim); }
@@ -239,6 +242,11 @@ export function adminPageHtml(): string {
       <label class="check"><input id="nickOfficial" type="checkbox" checked /> official</label>
       <button class="primary" onclick="assignNick()">assign</button>
     </div>
+    <div class="eyebrow" style="margin:14px 0 8px">// badges are cosmetic flair (e.g. bozo 🤡), independent of the nickname — they don't lock or change the name and an address can be badged with no handle at all.</div>
+    <div class="row">
+      <input id="badgeAddr" type="text" placeholder="address to badge" style="flex:1 1 260px" />
+      <button class="mini" onclick="openBadgeForAddr()">set badges…</button>
+    </div>
     <div class="subhead"><span>assigned handles</span><button class="mini" onclick="loadProfiles()">refresh</button></div>
     <div id="profiles"></div>
   </section>
@@ -300,6 +308,14 @@ export function adminPageHtml(): string {
 <script>
   var SS_KEY = 'parasite_admin_secret';
   var loggedIn = false;
+  // Badge catalog, injected from the server's single source of truth (badges.ts).
+  var CHAT_BADGES = ${JSON.stringify(CHAT_BADGES)};
+  var CHAT_BADGE_KEYS = ${JSON.stringify(CHAT_BADGE_KEYS)};
+  function badgeEmojis(keys) {
+    if (!keys || !keys.length) return '';
+    return keys.map(function (k) { var b = CHAT_BADGES[k]; return b ? b.emoji : ''; }).join(' ');
+  }
+  function parseBadgeData(s) { try { return JSON.parse(s || '[]') || []; } catch (e) { return []; } }
 
   function el(id) { return document.getElementById(id); }
   function secret() { return el('secret').value; }
@@ -407,6 +423,37 @@ export function adminPageHtml(): string {
       el('modalOk').onclick = function () {
         var dur = el('banModalDur').value;
         closeModal({ durationSec: dur ? parseInt(dur, 10) : null, purge: el('banModalPurge').checked });
+      };
+    });
+  }
+
+  // Badge picker: a checkbox per catalog badge, pre-checked from currentKeys.
+  // Resolves an array of selected keys on save (an empty array = clear all), or
+  // null on cancel/backdrop/Escape (callers guard with "if (keys === null)").
+  function openBadgeModal(title, message, currentKeys) {
+    return new Promise(function (resolve) {
+      modalResolve = resolve;
+      var cur = currentKeys || [];
+      var rows = CHAT_BADGE_KEYS.map(function (k) {
+        var b = CHAT_BADGES[k];
+        var checked = cur.indexOf(k) !== -1 ? ' checked' : '';
+        return '<label class="check" style="display:flex;gap:8px;margin-bottom:9px">' +
+          '<input type="checkbox" class="badgeChk" value="' + esc(k) + '"' + checked + ' /> ' +
+          '<span style="font-size:15px">' + esc(b.emoji) + '</span> ' + esc(b.label) + '</label>';
+      }).join('');
+      el('modalBox').innerHTML =
+        '<h3>' + esc(title) + '</h3>' +
+        (message ? '<p>' + esc(message) + '</p>' : '') +
+        (rows || '<p class="dim">no badges defined</p>') +
+        '<div class="modal-acts"><button id="modalCancel">cancel</button>' +
+        '<button id="modalOk" class="primary">save</button></div>';
+      el('modal').classList.add('show');
+      el('modalCancel').onclick = function () { closeModal(null); };
+      el('modalOk').onclick = function () {
+        var chks = el('modalBox').querySelectorAll('.badgeChk');
+        var out = [];
+        for (var i = 0; i < chks.length; i++) if (chks[i].checked) out.push(chks[i].value);
+        closeModal(out);
       };
     });
   }
@@ -590,14 +637,23 @@ export function adminPageHtml(): string {
 
   // ---- Nicknames ------------------------------------------------------------
   function profileRow(p) {
+    var badges = p.badges || [];
+    var emojis = badgeEmojis(badges);
+    // A row may be a normal handle, or badges-only (no nickname) when an address
+    // was tagged without ever being given a handle.
+    var name = p.nickname ? esc(p.nickname) : esc(shortAddr(p.address));
+    var tag = p.nickname
+      ? (p.official ? '<span class="chip">official</span>' : '<span class="chip plain">plain</span>')
+      : '<span class="chip plain">no handle</span>';
     return '<div class="card">' +
-      '<div class="meta"><strong>' + esc(p.nickname) + '</strong>' +
-        (p.official ? '<span class="chip">official</span>' : '<span class="chip plain">plain</span>') +
+      '<div class="meta"><strong>' + name + '</strong>' + tag +
+        (emojis ? '<span class="badges">' + esc(emojis) + '</span>' : '') +
         '<span class="dim">' + fmtSec(p.updated_at) + '</span></div>' +
       '<div class="addr"><span class="copy" data-copy="' + esc(p.address) + '" title="copy address">' + esc(shortAddr(p.address)) + '</span></div>' +
       '<div class="acts">' +
-        '<button class="mini" data-act="editnick" data-addr="' + esc(p.address) + '" data-name="' + esc(p.nickname) + '" data-official="' + (p.official ? '1' : '0') + '">edit</button>' +
-        '<button class="mini danger" data-act="clearnick" data-addr="' + esc(p.address) + '" data-name="' + esc(p.nickname) + '">clear</button>' +
+        (p.nickname ? '<button class="mini" data-act="editnick" data-addr="' + esc(p.address) + '" data-name="' + esc(p.nickname) + '" data-official="' + (p.official ? '1' : '0') + '">edit</button>' : '') +
+        '<button class="mini" data-act="editbadges" data-addr="' + esc(p.address) + '" data-badges="' + esc(JSON.stringify(badges)) + '">badges</button>' +
+        (p.nickname ? '<button class="mini danger" data-act="clearnick" data-addr="' + esc(p.address) + '" data-name="' + esc(p.nickname) + '">clear</button>' : '') +
       '</div></div>';
   }
   async function loadProfiles() {
@@ -627,6 +683,23 @@ export function adminPageHtml(): string {
     catch (e) { toast('network error', 'err'); return; }
     if (res.ok) { toast('handle cleared'); loadProfiles(); loadMessages(); } else toast('clear failed ' + res.status, 'err');
   }
+  // Set (absolute replace) the badges on an address. Empty keys clears them.
+  async function setBadgesFor(address, keys) {
+    var res;
+    try { res = await api('/chat/admin/badges', { method: 'POST', body: JSON.stringify({ address: address, badges: keys }) }); }
+    catch (e) { toast('network error', 'err'); return; }
+    if (res.ok) { toast(keys.length ? 'badges set' : 'badges cleared'); loadProfiles(); refreshMessageView(); }
+    else toast('badges failed ' + res.status, 'err');
+  }
+  // Badge an arbitrary address (e.g. one with no handle yet) via the tab form.
+  async function openBadgeForAddr() {
+    var address = el('badgeAddr').value.trim();
+    if (!address) { toast('enter an address', 'err'); return; }
+    var keys = await openBadgeModal('Badges', 'Flair for ' + shortAddr(address) + ':', []);
+    if (keys === null) return;
+    await setBadgesFor(address, keys);
+    el('badgeAddr').value = '';
+  }
 
   // ---- Messages (live /chat/history + admin search + guarded id actions) ----
   var loadedMessages = [];
@@ -638,6 +711,8 @@ export function adminPageHtml(): string {
 
   function msgRow(m) {
     var who = m.nickname ? esc(m.nickname) + (m.official ? ' <span class="ok-mark">✓</span>' : '') : esc(shortAddr(m.address));
+    var emojis = badgeEmojis(m.badges);
+    if (emojis) who += ' <span class="badges">' + esc(emojis) + '</span>';
     var del = !!m.deleted;
     return '<div class="card' + (del ? ' deleted' : '') + '" id="msg-' + esc(m.id) + '">' +
       '<div class="meta"><strong>' + who + '</strong>' + (del ? '<span class="chip">deleted</span>' : '') + '<span class="dim">' + fmtMs(m.ts) + '</span></div>' +
@@ -649,6 +724,7 @@ export function adminPageHtml(): string {
           : '<button class="mini danger" data-act="del" data-mid="' + esc(m.id) + '">delete</button>') +
         '<button class="mini danger" data-act="ban" data-mid="' + esc(m.id) + '">ban sender</button>' +
         '<button class="mini" data-act="nick" data-mid="' + esc(m.id) + '" data-name="' + (m.nickname ? esc(m.nickname) : '') + '">set nickname</button>' +
+        '<button class="mini" data-act="badges" data-mid="' + esc(m.id) + '" data-badges="' + esc(JSON.stringify(m.badges || [])) + '">badges</button>' +
         '<button class="mini" data-act="copyid" data-mid="' + esc(m.id) + '">copy id</button>' +
       '</div></div>';
   }
@@ -760,6 +836,15 @@ export function adminPageHtml(): string {
     catch (e) { toast('network error', 'err'); return; }
     if (res.ok) { toast(name ? 'nickname assigned' : 'nickname cleared'); loadProfiles(); refreshMessageView(); }
     else { var msg = 'assign failed ' + res.status; try { var jj = await res.json(); if (jj && typeof jj.error === 'string') msg = jj.error; } catch (e) { } toast(msg, 'err'); }
+  }
+  // Set (absolute replace) the badges on a message's sender (address resolved
+  // server-side from the id).
+  async function setMsgBadges(id, keys) {
+    var res;
+    try { res = await api('/chat/admin/message/' + encodeURIComponent(id) + '/badges', { method: 'POST', body: JSON.stringify({ badges: keys }) }); }
+    catch (e) { toast('network error', 'err'); return; }
+    if (res.ok) { toast(keys.length ? 'badges set' : 'badges cleared'); loadProfiles(); refreshMessageView(); }
+    else toast('badges failed ' + res.status, 'err');
   }
   // Reload whichever message view is active (so a nickname change re-renders).
   // In search mode re-run with the stored params (not the input fields, which the
@@ -912,7 +997,7 @@ export function adminPageHtml(): string {
   }
 
   // ---- Delegated handlers (no inline JS built from row data) ----------------
-  el('profiles').addEventListener('click', function (ev) {
+  el('profiles').addEventListener('click', async function (ev) {
     var cp = ev.target.closest('.copy'); if (cp) { copyText(cp.dataset.copy); return; }
     var btn = ev.target.closest('button[data-act]'); if (!btn) return;
     var d = btn.dataset;
@@ -920,6 +1005,10 @@ export function adminPageHtml(): string {
       el('nickAddr').value = d.addr; el('nickName').value = d.name; el('nickOfficial').checked = d.official === '1';
       el('nickName').focus(); toast('loaded into form');
     } else if (d.act === 'clearnick') { clearNick(d.addr, d.name); }
+    else if (d.act === 'editbadges') {
+      var keys = await openBadgeModal('Badges', 'Flair for ' + shortAddr(d.addr) + ':', parseBadgeData(d.badges));
+      if (keys !== null) setBadgesFor(d.addr, keys);
+    }
   });
   el('messages').addEventListener('click', async function (ev) {
     var btn = ev.target.closest('button[data-act]'); if (!btn) return;
@@ -929,6 +1018,7 @@ export function adminPageHtml(): string {
     else if (act === 'undelete') { if (await confirmAction('Undelete', 'Restore this message for everyone?', false)) undeleteMsg(id); }
     else if (act === 'ban') { var opts = await openBanModal('Ban sender', 'They can no longer post or react.'); if (opts) banMsg(id, opts); }
     else if (act === 'nick') { var name = await promptAction('Set nickname', 'Handle for this sender (blank clears):', btn.dataset.name || '', 24); if (name !== false) setMsgNick(id, name); }
+    else if (act === 'badges') { var keys = await openBadgeModal('Badges', 'Flair for this sender:', parseBadgeData(btn.dataset.badges)); if (keys !== null) setMsgBadges(id, keys); }
     else if (act === 'copyid') { copyText(id); }
   });
   el('reports').addEventListener('click', async function (ev) {
@@ -964,6 +1054,7 @@ export function adminPageHtml(): string {
     el('ann').addEventListener('input', updateAnnCount);
     bindEnter('secret', login);
     bindEnter('nickAddr', assignNick); bindEnter('nickName', assignNick);
+    bindEnter('badgeAddr', openBadgeForAddr);
     bindEnter('msgQuery', runSearch); bindEnter('msgAddr', runSearch);
     bindEnter('delId', delById);
     bindEnter('banAddr', banManual); bindEnter('banReason', banManual);

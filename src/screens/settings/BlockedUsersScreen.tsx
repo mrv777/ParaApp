@@ -21,6 +21,7 @@ import { isError } from '@/api/client';
 import { Sheet } from '@/components/Sheet';
 import { SkeletonLoader } from '@/components/SkeletonLoader';
 import { Text } from '@/components/Text';
+import { badgeEmoji } from '@/constants/chat';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import { useChatStore } from '@/store/chatStore';
@@ -326,6 +327,14 @@ function BlockedUserRow({
           {user.official ? (
             <Ionicons name="shield-checkmark" size={13} color={colors.textMuted} />
           ) : null}
+          {user.badges?.map((b) => {
+            const emoji = badgeEmoji(b);
+            return emoji ? (
+              <Text key={b} style={{ fontSize: 13 }}>
+                {emoji}
+              </Text>
+            ) : null;
+          })}
         </View>
         <Text
           variant="mono"

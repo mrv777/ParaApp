@@ -23,6 +23,27 @@ export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
 export const MAX_MESSAGE_LENGTH = 500;
 export const MAX_NICKNAME_LENGTH = 24;
 
+/**
+ * Cosmetic address badges — admin-assigned flair (e.g. bozo 🤡) shown next to a
+ * sender's handle/address, independent of the nickname and of `official`. Mirrors
+ * the server catalog in `server/src/chat/badges.ts`; keep the two in sync.
+ */
+export const CHAT_BADGES = {
+  bozo: { emoji: '🤡', label: 'Bozo' },
+} as const;
+
+export type ChatBadge = keyof typeof CHAT_BADGES;
+
+/** Emoji for a badge key, or null for an unknown/legacy key (rendered as nothing). */
+export function badgeEmoji(key: string): string | null {
+  return (CHAT_BADGES as Record<string, { emoji: string }>)[key]?.emoji ?? null;
+}
+
+/** Human label for a badge key, falling back to the key itself if unknown. */
+export function badgeLabel(key: string): string {
+  return (CHAT_BADGES as Record<string, { label: string }>)[key]?.label ?? key;
+}
+
 /** Bump when the community guidelines / EULA change to re-prompt acceptance. */
 export const CHAT_EULA_VERSION = '1';
 
@@ -82,6 +103,8 @@ export interface ChatMessage {
   nickname: string | null;
   /** True when the nickname is an admin-assigned (locked) official handle. */
   official?: boolean;
+  /** Admin-assigned cosmetic badges (e.g. bozo 🤡). Omitted when empty. */
+  badges?: ChatBadge[];
   body: string;
   reactions?: ReactionSummary[];
   /** Parent message id when this is a reply (present even if the quote isn't). */
@@ -107,6 +130,7 @@ export type ServerEvent =
       address: string;
       nickname: string | null;
       official?: boolean;
+      badges?: ChatBadge[];
       body: string;
       replyToId?: string;
       replyTo?: ChatReplyQuote;

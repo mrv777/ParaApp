@@ -6,7 +6,11 @@
 
 import { postJson, fetchWithTimeout, isError } from './client';
 import type { ApiResult } from '@/types';
-import { CHAT_HTTP_BASE, type ChatMessage } from '@/constants/chat';
+import {
+  CHAT_HTTP_BASE,
+  type ChatMessage,
+  type ChatBadge,
+} from '@/constants/chat';
 
 /**
  * Run a token-authed REST action, re-minting the session token and retrying once
@@ -52,6 +56,8 @@ export interface BlockedChatUser {
   address: string;
   nickname: string | null;
   official?: boolean;
+  /** Admin-assigned cosmetic badges (e.g. bozo 🤡). */
+  badges?: ChatBadge[];
   createdAt: number;
 }
 

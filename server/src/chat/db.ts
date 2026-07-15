@@ -13,6 +13,8 @@ import {
   replyPreview,
   truncateChatAddress,
 } from './protocol';
+import type { ChatBadge } from './badges';
+import { parseBadges, serializeBadges } from './badges';
 
 interface HistoryRow {
   id: string;
@@ -21,6 +23,7 @@ interface HistoryRow {
   created_at: number;
   nickname: string | null;
   official: number | null;
+  badges: string | null;
   reply_to: string | null;
 }
 
@@ -83,7 +86,7 @@ export async function getRecentMessages(
 
   const { results } = await db
     .prepare(
-      `SELECT m.id, m.address, m.body, m.created_at, m.reply_to, p.nickname, p.official
+      `SELECT m.id, m.address, m.body, m.created_at, m.reply_to, p.nickname, p.official, p.badges
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
        WHERE ${conditions.join(' AND ')}
@@ -92,17 +95,21 @@ export async function getRecentMessages(
     )
     .bind(...binds)
     .all<HistoryRow>();
-  const messages: ChatMessage[] = results.map((row) => ({
-    id: row.id,
-    ts: row.created_at,
-    // Public payloads carry only the truncated sender key — full addresses
-    // must not leave the server (see truncateChatAddress in protocol.ts).
-    address: truncateChatAddress(row.address),
-    nickname: row.nickname ?? null,
-    official: row.official === 1,
-    body: row.body,
-    ...(row.reply_to ? { replyToId: row.reply_to } : {}),
-  }));
+  const messages: ChatMessage[] = results.map((row) => {
+    const badges = parseBadges(row.badges);
+    return {
+      id: row.id,
+      ts: row.created_at,
+      // Public payloads carry only the truncated sender key — full addresses
+      // must not leave the server (see truncateChatAddress in protocol.ts).
+      address: truncateChatAddress(row.address),
+      nickname: row.nickname ?? null,
+      official: row.official === 1,
+      ...(badges.length ? { badges } : {}),
+      body: row.body,
+      ...(row.reply_to ? { replyToId: row.reply_to } : {}),
+    };
+  });
 
   // Attach reaction summaries (with `mine` when an address is supplied).
   const reactions = await getReactionsForMessages(
@@ -350,6 +357,8 @@ export interface ChatProfile {
   nickname: string | null;
   /** True when the handle was assigned by an admin (locked, rendered with a marker). */
   official: boolean;
+  /** Admin-assigned cosmetic badges, independent of the nickname. */
+  badges: ChatBadge[];
 }
 
 export async function getProfile(
@@ -357,22 +366,35 @@ export async function getProfile(
   address: string
 ): Promise<ChatProfile> {
   const row = await db
-    .prepare('SELECT nickname, official FROM chat_profiles WHERE address = ?')
+    .prepare(
+      'SELECT nickname, official, badges FROM chat_profiles WHERE address = ?'
+    )
     .bind(address)
-    .first<{ nickname: string | null; official: number | null }>();
-  return { nickname: row?.nickname ?? null, official: row?.official === 1 };
+    .first<{
+      nickname: string | null;
+      official: number | null;
+      badges: string | null;
+    }>();
+  return {
+    nickname: row?.nickname ?? null,
+    official: row?.official === 1,
+    badges: parseBadges(row?.badges),
+  };
 }
 
 export interface ChatProfileRow {
   address: string;
-  nickname: string;
+  /** Null for a badges-only row (an address that carries badges but no handle). */
+  nickname: string | null;
   official: boolean;
+  badges: ChatBadge[];
   updated_at: number;
 }
 
 /**
- * Assigned handles (rows with a nickname), newest first — powers the admin
- * Nicknames tab. Rows with a null nickname are cleared handles and excluded.
+ * Admin Nicknames tab feed, newest first: every row that carries a nickname OR
+ * at least one badge. A row with neither is a fully-cleared handle and excluded
+ * (badges-only rows — an address badged with no nickname — are included).
  */
 export async function listProfiles(
   db: D1Database,
@@ -381,23 +403,25 @@ export async function listProfiles(
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
   const { results } = await db
     .prepare(
-      `SELECT address, nickname, official, updated_at
+      `SELECT address, nickname, official, badges, updated_at
        FROM chat_profiles
-       WHERE nickname IS NOT NULL
+       WHERE nickname IS NOT NULL OR (badges IS NOT NULL AND badges != '[]')
        ORDER BY updated_at DESC, address ASC
        LIMIT ?`
     )
     .bind(limit)
     .all<{
       address: string;
-      nickname: string;
+      nickname: string | null;
       official: number | null;
+      badges: string | null;
       updated_at: number;
     }>();
   return results.map((r) => ({
     address: r.address,
-    nickname: r.nickname,
+    nickname: r.nickname ?? null,
     official: r.official === 1,
+    badges: parseBadges(r.badges),
     updated_at: r.updated_at,
   }));
 }
@@ -429,8 +453,22 @@ export async function setNickname(
   opts: { norm?: string; official?: boolean } = {}
 ): Promise<void> {
   if (nickname === null) {
+    // Clear the handle (and its official lock), but keep the row alive if the
+    // address still carries badges — those are independent of the nickname and
+    // are removed separately via setBadges. Only a row with neither nickname nor
+    // badges is fully deleted.
     await db
-      .prepare('DELETE FROM chat_profiles WHERE address = ?')
+      .prepare(
+        `UPDATE chat_profiles
+           SET nickname = NULL, norm = NULL, official = 0, updated_at = unixepoch()
+         WHERE address = ?`
+      )
+      .bind(address)
+      .run();
+    await db
+      .prepare(
+        "DELETE FROM chat_profiles WHERE address = ? AND (badges IS NULL OR badges = '[]')"
+      )
       .bind(address)
       .run();
     return;
@@ -448,6 +486,43 @@ export async function setNickname(
          updated_at = unixepoch()`
     )
     .bind(address, nickname, norm, official)
+    .run();
+}
+
+/**
+ * Set (or clear) an address's cosmetic badges. Absolute replace — the passed
+ * list becomes the full set. Badges are independent of the nickname: setting
+ * them upserts a row even when the address has no handle, and clearing them
+ * (empty list) drops a badges-only row but leaves a nicknamed row intact.
+ */
+export async function setBadges(
+  db: D1Database,
+  address: string,
+  badges: ChatBadge[]
+): Promise<void> {
+  const serialized = serializeBadges(badges);
+  if (serialized === null) {
+    await db
+      .prepare(
+        'UPDATE chat_profiles SET badges = NULL, updated_at = unixepoch() WHERE address = ?'
+      )
+      .bind(address)
+      .run();
+    await db
+      .prepare('DELETE FROM chat_profiles WHERE address = ? AND nickname IS NULL')
+      .bind(address)
+      .run();
+    return;
+  }
+  await db
+    .prepare(
+      `INSERT INTO chat_profiles (address, badges, updated_at)
+       VALUES (?, ?, unixepoch())
+       ON CONFLICT(address) DO UPDATE SET
+         badges = excluded.badges,
+         updated_at = unixepoch()`
+    )
+    .bind(address, serialized)
     .run();
 }
 
@@ -471,6 +546,7 @@ export interface BlockedUserRow {
   address: string;
   nickname: string | null;
   official: boolean;
+  badges: ChatBadge[];
   createdAt: number;
 }
 
@@ -480,7 +556,7 @@ export async function getBlockedUsers(
 ): Promise<BlockedUserRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT b.blocked AS address, b.created_at, p.nickname, p.official
+      `SELECT b.blocked AS address, b.created_at, p.nickname, p.official, p.badges
        FROM chat_blocks b
        LEFT JOIN chat_profiles p ON p.address = b.blocked
        WHERE b.blocker = ?
@@ -492,11 +568,13 @@ export async function getBlockedUsers(
       created_at: number;
       nickname: string | null;
       official: number | null;
+      badges: string | null;
     }>();
   return results.map((row) => ({
     address: row.address,
     nickname: row.nickname ?? null,
     official: row.official === 1,
+    badges: parseBadges(row.badges),
     createdAt: row.created_at,
   }));
 }
@@ -737,6 +815,7 @@ export interface AdminMessage {
   address: string; // truncated
   nickname: string | null;
   official: boolean;
+  badges: ChatBadge[];
   body: string;
   deleted: boolean;
 }
@@ -749,6 +828,7 @@ interface AdminMessageRow {
   deleted: number;
   nickname: string | null;
   official: number | null;
+  badges: string | null;
 }
 
 function toAdminMessage(r: AdminMessageRow): AdminMessage {
@@ -758,6 +838,7 @@ function toAdminMessage(r: AdminMessageRow): AdminMessage {
     address: truncateChatAddress(r.address),
     nickname: r.nickname ?? null,
     official: r.official === 1,
+    badges: parseBadges(r.badges),
     body: r.body,
     deleted: r.deleted === 1,
   };
@@ -807,7 +888,7 @@ export async function searchMessages(
   binds.push(limit);
   const { results } = await db
     .prepare(
-      `SELECT m.id, m.address, m.body, m.created_at, m.deleted, p.nickname, p.official
+      `SELECT m.id, m.address, m.body, m.created_at, m.deleted, p.nickname, p.official, p.badges
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
        ${where}
@@ -826,7 +907,7 @@ export async function getAdminMessage(
 ): Promise<AdminMessage | null> {
   const r = await db
     .prepare(
-      `SELECT m.id, m.address, m.body, m.created_at, m.deleted, p.nickname, p.official
+      `SELECT m.id, m.address, m.body, m.created_at, m.deleted, p.nickname, p.official, p.badges
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
        WHERE m.id = ?`

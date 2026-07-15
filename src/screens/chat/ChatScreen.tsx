@@ -71,6 +71,8 @@ import {
   MAX_MESSAGE_LENGTH,
   CHAT_EULA_VERSION,
   truncateChatAddress,
+  badgeEmoji,
+  badgeLabel,
   type ChatMessage,
   type ReactionEmoji,
 } from '@/constants/chat';
@@ -227,6 +229,29 @@ const MessageRow = memo(function MessageRow({
                 ✓
               </RNText>
             ) : null}
+            {/* Admin-assigned cosmetic badges (independent of the nickname).
+                Tap reveals the badge's label — the glyph is tiny, so hitSlop
+                expands the touch target without enlarging or crowding the row.
+                Tap ≠ the row's long-press / swipe-to-reply, so it won't conflict. */}
+            {message.badges?.map((b) => {
+              const emoji = badgeEmoji(b);
+              if (!emoji) return null;
+              const label = badgeLabel(b);
+              return (
+                <Pressable
+                  key={b}
+                  onPress={() => {
+                    haptics.selection();
+                    Toast.show({ type: 'info', text1: `${emoji} ${label}` });
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 5, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} badge`}
+                >
+                  <RNText style={styles.badge}>{emoji}</RNText>
+                </Pressable>
+              );
+            })}
             <View style={{ flex: 1 }} />
             <RNText style={styles.time}>{formatTime(message.ts, i18n.language)}</RNText>
           </View>
@@ -1030,6 +1055,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.24,
   },
   official: { fontFamily: MONO, fontSize: 11, color: colors.primary, marginLeft: -4 },
+  badge: { fontSize: 12, marginLeft: -4 },
   time: { fontFamily: MONO, fontSize: 11, color: TEXT_TIME },
 
   // Reply quote

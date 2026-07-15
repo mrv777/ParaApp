@@ -92,6 +92,19 @@ export const chatAdminNicknameSchema = z.object({
   official: z.boolean().optional(),
 });
 
+// Set (absolute replace) an address's cosmetic badges. Keys are validated
+// against the catalog server-side (sanitizeBadges) — the array cap here just
+// bounds the payload before that.
+export const chatAdminBadgesSchema = z.object({
+  address: chatAddressSchema,
+  badges: z.array(z.string().max(32)).max(20),
+});
+
+// Same, for the sender of a specific message (address resolved server-side).
+export const chatAdminMessageBadgesSchema = z.object({
+  badges: z.array(z.string().max(32)).max(20),
+});
+
 // Ban the sender of a specific message; the server resolves the (full) address
 // from the id, so the client never supplies one. Reason is optional.
 export const chatAdminMessageBanSchema = z.object({

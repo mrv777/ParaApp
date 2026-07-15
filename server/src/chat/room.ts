@@ -35,6 +35,7 @@ import {
   getMessageSender,
 } from './db';
 import { classifyText, moderateAI } from './moderation';
+import type { ChatBadge } from './badges';
 
 interface SocketAttachment {
   /** Empty string = anonymous read-only viewer (may not post). */
@@ -91,7 +92,13 @@ export class ChatRoom {
   /** Cached identity (profile + ban) per address; TTL IDENTITY_TTL_MS. */
   private readonly identityCache = new Map<
     string,
-    { nickname: string | null; official: boolean; banned: boolean; exp: number }
+    {
+      nickname: string | null;
+      official: boolean;
+      badges: ChatBadge[];
+      banned: boolean;
+      exp: number;
+    }
   >();
   /** Presence debounce: one pending trailing broadcast; last count actually sent. */
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -286,7 +293,7 @@ export class ChatRoom {
       createdAt: ts,
       replyTo: replyParentId,
     });
-    const { nickname, official } = identity;
+    const { nickname, official, badges } = identity;
 
     // Per-connection block filtering: a blocked sender's messages never reach
     // the blocker. Payload carries only the truncated public sender key.
@@ -298,6 +305,7 @@ export class ChatRoom {
         address: truncateChatAddress(address),
         nickname,
         official,
+        ...(badges.length ? { badges } : {}),
         body,
         ...(replyParentId ? { replyToId: replyParentId, replyTo } : {}),
       },
@@ -462,7 +470,12 @@ export class ChatRoom {
    */
   private async getIdentity(
     address: string
-  ): Promise<{ nickname: string | null; official: boolean; banned: boolean }> {
+  ): Promise<{
+    nickname: string | null;
+    official: boolean;
+    badges: ChatBadge[];
+    banned: boolean;
+  }> {
     const cached = this.identityCache.get(address);
     if (cached && cached.exp > Date.now()) return cached;
     const [profile, banned] = await Promise.all([
@@ -472,6 +485,7 @@ export class ChatRoom {
     const entry = {
       nickname: profile.nickname,
       official: profile.official,
+      badges: profile.badges,
       banned,
       exp: Date.now() + IDENTITY_TTL_MS,
     };

@@ -4,6 +4,8 @@
  * these shapes in `src/constants/chat.ts`.
  */
 
+import type { ChatBadge } from './badges';
+
 /** Fixed, locked reaction set. Not arbitrary emoji. */
 export const REACTION_EMOJIS = ['👍', '🔥', '⚡', '🎉'] as const;
 export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
@@ -76,6 +78,11 @@ export interface ChatMessage {
   nickname: string | null;
   /** True when the nickname is an admin-assigned (locked) official handle. */
   official?: boolean;
+  /**
+   * Admin-assigned cosmetic badges (e.g. bozo 🤡), independent of the nickname
+   * and of `official`. Omitted when empty. See `./badges`.
+   */
+  badges?: ChatBadge[];
   body: string;
   reactions?: ReactionSummary[];
   /** Parent message id when this is a reply (present even if the quote isn't). */
@@ -103,6 +110,7 @@ export type ServerEvent =
       address: string;
       nickname: string | null;
       official?: boolean;
+      badges?: ChatBadge[];
       body: string;
       replyToId?: string;
       replyTo?: ChatReplyQuote;

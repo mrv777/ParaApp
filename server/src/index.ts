@@ -15,6 +15,8 @@ import {
   chatAdminNicknameSchema,
   chatAdminMessageBanSchema,
   chatAdminMessageNicknameSchema,
+  chatAdminBadgesSchema,
+  chatAdminMessageBadgesSchema,
   chatAnnouncementSchema,
   chatAddressSchema,
 } from './validation';
@@ -28,6 +30,7 @@ import {
   getRecentMessages,
   isBanned,
   setNickname,
+  setBadges,
   getProfile,
   nicknameOwner,
   addReport,
@@ -57,6 +60,7 @@ import { isReservedNickname, nicknameKey } from './chat/reserved-nicknames';
 import { stripInvisible } from './chat/sanitize';
 import { adminPageHtml } from './chat/admin-page';
 import { truncateChatAddress } from './chat/protocol';
+import { sanitizeBadges } from './chat/badges';
 import {
   upsertSubscription,
   deleteSubscription,
@@ -586,6 +590,7 @@ app.get('/chat/blocks', async (c) => {
         address: truncateChatAddress(row.address),
         nickname: row.nickname,
         official: row.official,
+        badges: row.badges,
         createdAt: row.createdAt,
       }))
     );
@@ -879,6 +884,27 @@ app.post('/chat/admin/message/:id/nickname', async (c) => {
   return c.json(body, status);
 });
 
+// Set (absolute replace) the cosmetic badges on the sender of a specific message
+// — the natural workflow: see a message, tag its author (address resolved
+// server-side from the id, same as ban/nickname-by-message).
+app.post('/chat/admin/message/:id/badges', async (c) => {
+  const result = chatAdminMessageBadgesSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const sender = await getMessageSender(c.env.DB, c.req.param('id'));
+  if (!sender) return c.json({ success: false, error: 'Message not found' }, 404);
+  const badges = sanitizeBadges(result.data.badges);
+  await setBadges(c.env.DB, sender, badges);
+  await invalidateChatIdentity(c.env, sender);
+  await addAuditEntry(c.env.DB, {
+    action: 'badges',
+    target: sender,
+    detail: badges.length ? badges.join(', ') : '(cleared)',
+  });
+  return c.json({ success: true, data: { badges } });
+});
+
 app.post('/chat/admin/ban', async (c) => {
   const result = chatAdminBanSchema.safeParse(await c.req.json());
   if (!result.success) {
@@ -932,6 +958,25 @@ app.post('/chat/admin/nickname', async (c) => {
     });
   }
   return c.json(body, status);
+});
+
+// Set (absolute replace) the cosmetic badges on any address. Independent of the
+// nickname: badging an address neither requires nor changes its handle, and an
+// address may carry badges with no nickname at all. Empty list clears them.
+app.post('/chat/admin/badges', async (c) => {
+  const result = chatAdminBadgesSchema.safeParse(await c.req.json());
+  if (!result.success) {
+    return c.json({ success: false, error: result.error.flatten() }, 400);
+  }
+  const badges = sanitizeBadges(result.data.badges);
+  await setBadges(c.env.DB, result.data.address, badges);
+  await invalidateChatIdentity(c.env, result.data.address);
+  await addAuditEntry(c.env.DB, {
+    action: 'badges',
+    target: result.data.address,
+    detail: badges.length ? badges.join(', ') : '(cleared)',
+  });
+  return c.json({ success: true, data: { badges } });
 });
 
 app.get('/chat/admin/profiles', async (c) => {
