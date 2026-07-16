@@ -46,6 +46,18 @@ export interface LeaderboardEntry {
 }
 
 /**
+ * Round summary from /api/rounds — one entry per solved block.
+ */
+export interface RoundSummary {
+  block_height: number;
+  block_hash: string | null;
+  coinbase_value: number | null;
+  /** Difficulty of the share that solved the block */
+  winner_diff: number | null;
+  winner_username: string | null;
+}
+
+/**
  * Leaderboard type for new API
  */
 export type LeaderboardType = 'difficulty' | 'loyalty';

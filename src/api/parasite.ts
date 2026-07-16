@@ -10,6 +10,7 @@ import type {
   DifficultyLeaderboardEntry,
   LoyaltyLeaderboardEntry,
   LeaderboardEntry,
+  RoundSummary,
   UserStats,
   UserStatsApiResponse,
   UserWorkerApiResponse,
@@ -243,6 +244,26 @@ export async function getHighestDiffBlocks(
   return fetchWithTimeout<LeaderboardEntry[]>(
     `${BASE_URL}/api/highest-diff?${params}`
   );
+}
+
+/**
+ * Get solved-round summaries (one entry per block found by the pool).
+ * Filters out the API's placeholder entry (block_height 0, null fields)
+ * and any round without a winner_diff.
+ */
+export async function getRounds(): Promise<ApiResult<RoundSummary[]>> {
+  const result = await fetchWithTimeout<RoundSummary[]>(
+    `${BASE_URL}/api/rounds`
+  );
+  if (result.success) {
+    return {
+      success: true,
+      data: result.data.filter(
+        (r) => r.block_height > 0 && r.winner_diff != null
+      ),
+    };
+  }
+  return result;
 }
 
 /**

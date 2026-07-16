@@ -11,6 +11,7 @@ import type {
   DifficultyLeaderboardEntry,
   LoyaltyLeaderboardEntry,
   LeaderboardEntry,
+  RoundSummary,
   HistoricalPeriod,
   HistoricalInterval,
 } from '@/types';
@@ -27,6 +28,7 @@ interface PoolState {
   roundDifficultyLeaderboard: CachedData<DifficultyLeaderboardEntry[]> | null;
   roundLoyaltyLeaderboard: CachedData<LoyaltyLeaderboardEntry[]> | null;
   blocks: CachedData<LeaderboardEntry[]> | null;
+  rounds: CachedData<RoundSummary[]> | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -37,6 +39,7 @@ interface PoolState {
   isLoadingLeaderboards: boolean;
   isLoadingRoundLeaderboards: boolean;
   isLoadingBlocks: boolean;
+  isLoadingRounds: boolean;
 
   // Error state
   error: ApiError | null;
@@ -47,6 +50,7 @@ interface PoolActions {
   fetchLeaderboards: (limit?: number) => Promise<void>;
   fetchRoundLeaderboards: (limit?: number) => Promise<void>;
   fetchBlocks: (limit?: number) => Promise<void>;
+  fetchRounds: () => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
     interval?: HistoricalInterval
@@ -66,12 +70,14 @@ const initialState: PoolState = {
   roundDifficultyLeaderboard: null,
   roundLoyaltyLeaderboard: null,
   blocks: null,
+  rounds: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
   isLoadingLeaderboards: false,
   isLoadingRoundLeaderboards: false,
   isLoadingBlocks: false,
+  isLoadingRounds: false,
   error: null,
 };
 
@@ -177,6 +183,22 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
     }
   },
 
+  fetchRounds: async () => {
+    set({ isLoadingRounds: true });
+
+    const result = await parasite.getRounds();
+
+    if (isSuccess(result)) {
+      set({
+        rounds: { data: result.data, timestamp: Date.now() },
+        isLoadingRounds: false,
+      });
+    } else {
+      // Don't set error - the winning-diff stat is a non-critical enhancement
+      set({ isLoadingRounds: false });
+    }
+  },
+
   fetchHistorical: async (period, interval) => {
     set({ isLoadingHistorical: true, historicalPeriod: period });
 
@@ -245,6 +267,7 @@ export const selectRoundDifficultyLeaderboard = (state: PoolState) =>
 export const selectRoundLoyaltyLeaderboard = (state: PoolState) =>
   state.roundLoyaltyLeaderboard?.data;
 export const selectBlocks = (state: PoolState) => state.blocks?.data;
+export const selectRounds = (state: PoolState) => state.rounds?.data;
 export const selectHistorical = (state: PoolState) => state.historical?.data;
 export const selectBitcoinPrice = (state: PoolState) =>
   state.bitcoinPrice?.data;

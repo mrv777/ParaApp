@@ -3,7 +3,7 @@
  * Displays an enlarged medal, contextual info, and action buttons.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { captureRef } from 'react-native-view-shot';
@@ -11,6 +11,7 @@ import * as Sharing from 'expo-sharing';
 import { Sheet } from '../Sheet';
 import { Text } from '../Text';
 import { BlockMedal, RefineryMedal } from './BadgeMedals';
+import { usePoolStore, selectRounds, isCacheStale } from '@/store';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { formatDifficulty } from '@/utils/formatting';
@@ -80,7 +81,7 @@ export function BadgeDetailSheet({
   onClose,
 }: BadgeDetailSheetProps) {
   const { t } = useTranslation();
-  const medalRef = useRef<View>(null);
+  const shareRef = useRef<View>(null);
   const [isSharing, setIsSharing] = useState(false);
   // Retain the last badge so content stays stable during the close animation.
   const [displayBadge, setDisplayBadge] = useState<BadgeDetail | null>(badge);
@@ -88,11 +89,29 @@ export function BadgeDetailSheet({
     if (badge) setDisplayBadge(badge);
   }, [badge]);
 
+  // Lazily fetch round summaries (winning diff per block) when a block badge
+  // is shown; one cached fetch covers every badge.
+  useEffect(() => {
+    if (visible && displayBadge?.type === 'block') {
+      const { rounds, isLoadingRounds, fetchRounds } = usePoolStore.getState();
+      if (!isLoadingRounds && isCacheStale(rounds)) fetchRounds();
+    }
+  }, [visible, displayBadge]);
+
+  const rounds = usePoolStore(selectRounds);
+  const winnerDiff = useMemo(() => {
+    if (displayBadge?.type !== 'block') return null;
+    return (
+      rounds?.find((r) => r.block_height === displayBadge.blockHeight)
+        ?.winner_diff ?? null
+    );
+  }, [rounds, displayBadge]);
+
   const handleShare = useCallback(async () => {
-    if (!medalRef.current) return;
+    if (!shareRef.current) return;
     setIsSharing(true);
     try {
-      const uri = await captureRef(medalRef, {
+      const uri = await captureRef(shareRef, {
         format: 'png',
         quality: 1,
         result: 'tmpfile',
@@ -143,61 +162,78 @@ export function BadgeDetailSheet({
         </Pressable>
       </View>
 
-      {/* Enlarged medal (capture target for sharing) */}
+      {/* Medal + stats (capture target for sharing; needs an opaque
+          background so the shared PNG has no transparent regions) */}
       <View
-        ref={medalRef}
+        ref={shareRef}
         collapsable={false}
         style={{
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.background,
-          paddingVertical: 20,
-          borderRadius: 16,
+          backgroundColor: colors.surface,
+          paddingBottom: 12,
         }}
       >
-        {displayBadge?.type === 'refinery' ? (
-          <RefineryMedal size={140} />
-        ) : (
-          <BlockMedal size={140} blockHeight={displayBadge?.blockHeight ?? 0} />
+        <View
+          style={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.background,
+            paddingVertical: 20,
+          }}
+        >
+          {displayBadge?.type === 'refinery' ? (
+            <RefineryMedal size={140} />
+          ) : (
+            <BlockMedal
+              size={140}
+              blockHeight={displayBadge?.blockHeight ?? 0}
+            />
+          )}
+        </View>
+
+        {/* Block round stats */}
+        {displayBadge?.type === 'block' && (
+          <>
+            <View className="flex-row mt-4">
+              <Stat
+                label={t('home.badgeRank')}
+                value={`#${displayBadge.rank}`}
+              />
+              <Stat
+                label={t('home.workRank')}
+                value={`#${displayBadge.workRank}`}
+              />
+              <Stat
+                label={t('home.badgeParticipants')}
+                value={`${displayBadge.totalParticipants}`}
+              />
+            </View>
+            <View className="flex-row mt-3">
+              <Stat
+                label={t('home.badgeTopDiff')}
+                value={formatDifficulty(displayBadge.topDiff)}
+              />
+              <Stat
+                label={t('home.colWork')}
+                value={formatDifficulty(displayBadge.totalWork)}
+              />
+              <Stat
+                label={t('home.badgeWinnerDiff')}
+                value={winnerDiff != null ? formatDifficulty(winnerDiff) : '--'}
+              />
+            </View>
+            <Text
+              variant="caption"
+              align="center"
+              color={displayBadge.isWinner ? 'success' : 'muted'}
+              className="mt-3"
+            >
+              {displayBadge.isWinner
+                ? t('home.badgeWon')
+                : t('home.badgeParticipated')}
+            </Text>
+          </>
         )}
       </View>
-
-      {/* Block round stats */}
-      {displayBadge?.type === 'block' && (
-        <>
-          <View className="flex-row mt-4">
-            <Stat label={t('home.badgeRank')} value={`#${displayBadge.rank}`} />
-            <Stat
-              label={t('home.workRank')}
-              value={`#${displayBadge.workRank}`}
-            />
-            <Stat
-              label={t('home.badgeParticipants')}
-              value={`${displayBadge.totalParticipants}`}
-            />
-          </View>
-          <View className="flex-row mt-3">
-            <Stat
-              label={t('home.badgeTopDiff')}
-              value={formatDifficulty(displayBadge.topDiff)}
-            />
-            <Stat
-              label={t('home.colWork')}
-              value={formatDifficulty(displayBadge.totalWork)}
-            />
-          </View>
-          <Text
-            variant="caption"
-            align="center"
-            color={displayBadge.isWinner ? 'success' : 'muted'}
-            className="mt-3"
-          >
-            {displayBadge.isWinner
-              ? t('home.badgeWon')
-              : t('home.badgeParticipated')}
-          </Text>
-        </>
-      )}
 
       {/* Refinery description */}
       {displayBadge?.type === 'refinery' && (

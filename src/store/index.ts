@@ -13,6 +13,7 @@ export {
   selectPoolStats,
   selectHistorical,
   selectBitcoinPrice,
+  selectRounds,
   selectIsPoolLoading,
   selectPoolError,
   isCacheStale,
