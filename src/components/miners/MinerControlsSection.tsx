@@ -33,6 +33,11 @@ export interface MinerControlsSectionProps {
 const IDENTIFY_DURATION_MS = 15000; // 15 seconds
 const RECONNECT_TIMEOUT_MS = 60000; // 60 seconds (AxeOS/Bitaxe reboot fast)
 const RECONNECT_TIMEOUT_AVALON_MS = 240000; // 4 min — Avalon reboots are slow
+// KBox: covers the firmware's 90s restart debounce + ~60s hash ramp. The
+// NanoPi's HTTP server stays up while cgminer restarts, so the KBox may
+// never be observed offline — reconnect completion is detected by an
+// uptime reset instead (see the kbox effect below).
+const RECONNECT_TIMEOUT_KBOX_MS = 120000;
 
 export function MinerControlsSection({
   miner,
@@ -64,6 +69,9 @@ export function MinerControlsSection({
   const reconnectingRef = useRef(false);
   // Prevents a setState after unmount from the timeout probe's async tail.
   const mountedRef = useRef(true);
+  // KBox only: uptime at the moment restart was accepted. The restart is
+  // confirmed done when uptime_s drops below this AND hashing resumed.
+  const preRestartUptimeRef = useRef<number | null>(null);
 
   // Pulsing animation for identify
   const pulseOpacity = useSharedValue(1);
@@ -136,6 +144,41 @@ export function MinerControlsSection({
       haptics.success();
     }
   }, [miner.isOnline, isReconnecting, onReconnecting]);
+
+  // KBox reconnect completion: the status endpoint keeps answering during
+  // the miner-process restart (only stats go null/zero), so the
+  // offline→online round trip above may never trigger. Instead, clear
+  // once we observe the uptime counter reset below its pre-restart value
+  // AND hashrate above zero (docs: hashing resumes in ~1 min). If the
+  // firmware's uptime_s turns out to measure the Pi rather than the miner
+  // process, this never fires and the fixed timeout window handles it.
+  useEffect(() => {
+    if (
+      miner.minerType === 'kbox' &&
+      isReconnecting &&
+      reconnectingRef.current &&
+      preRestartUptimeRef.current !== null &&
+      miner.uptimeSeconds > 0 &&
+      miner.uptimeSeconds < preRestartUptimeRef.current &&
+      miner.hashRate > 0
+    ) {
+      reconnectingRef.current = false;
+      preRestartUptimeRef.current = null;
+      setIsReconnecting(false);
+      onReconnecting?.(false);
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      haptics.success();
+    }
+  }, [
+    miner.uptimeSeconds,
+    miner.hashRate,
+    miner.minerType,
+    isReconnecting,
+    onReconnecting,
+  ]);
 
   // Show error with auto-dismiss
   const showError = useCallback((message: string) => {
@@ -215,6 +258,10 @@ export function MinerControlsSection({
       // Note: haptics.success() already called by SwipeToConfirm
       setIsRestarting(false);
       sawOfflineRef.current = false; // arm: wait for offline→online round trip
+      // KBox: arm the uptime-reset detector instead — its HTTP server
+      // stays up through the restart, so offline may never be observed.
+      preRestartUptimeRef.current =
+        miner.minerType === 'kbox' ? miner.uptimeSeconds : null;
       reconnectingRef.current = true;
       setIsReconnecting(true);
       onReconnecting?.(true);
@@ -224,7 +271,9 @@ export function MinerControlsSection({
       const reconnectTimeout =
         miner.minerType === 'avalon'
           ? RECONNECT_TIMEOUT_AVALON_MS
-          : RECONNECT_TIMEOUT_MS;
+          : miner.minerType === 'kbox'
+            ? RECONNECT_TIMEOUT_KBOX_MS
+            : RECONNECT_TIMEOUT_MS;
       reconnectTimeoutRef.current = setTimeout(async () => {
         // A reboot faster than the poll cycle can return before the miner is
         // ever observed offline, leaving sawOfflineRef false so the clear-effect
@@ -246,9 +295,21 @@ export function MinerControlsSection({
     } else {
       haptics.error();
       setIsRestarting(false);
-      showError(t('errors.failedToRestart'));
+      // KBox rejects restarts more often than it fails them: the
+      // firmware debounces to once per 90s (a 400/429 rejection).
+      const storeError = useMinerStore.getState().error;
+      const kboxDebounced =
+        miner.minerType === 'kbox' &&
+        (storeError?.code === 'debounced' ||
+          storeError?.status === 400 ||
+          storeError?.status === 429);
+      showError(
+        kboxDebounced
+          ? t('errors.kboxRestartDebounced')
+          : t('errors.failedToRestart')
+      );
     }
-  }, [miner.ip, miner.minerType, restartMiner, dismissError, showError, onReconnecting, t]);
+  }, [miner.ip, miner.minerType, miner.uptimeSeconds, restartMiner, dismissError, showError, onReconnecting, t]);
 
   // Don't show controls if miner is offline (unless reconnecting)
   if (!miner.isOnline && !isReconnecting) {

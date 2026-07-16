@@ -38,6 +38,12 @@ export interface FetchOptions {
   retryDelayMs?: number;
   /** Response type: 'json' (default) or 'text' */
   responseType?: 'json' | 'text';
+  /**
+   * On non-2xx, try to parse a JSON error body of the form
+   * {"ok":false,"error":"code","message":"text"} into ApiError.code/message
+   * (KBox-style envelopes). Falls back to the generic HTTP error.
+   */
+  parseErrorBody?: boolean;
 }
 
 /**

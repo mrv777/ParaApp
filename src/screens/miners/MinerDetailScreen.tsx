@@ -11,6 +11,7 @@ import { Card } from '@/components/Card';
 import {
   AliasEditSheet,
   AsicHeatmap,
+  KBoxAuthSheet,
   MinerStatsSection,
   DeviceInfoSection,
   LinkedWorkerSection,
@@ -36,6 +37,7 @@ export function MinerDetailScreen({ route, navigation }: Props) {
 
   // State
   const [aliasSheetVisible, setAliasSheetVisible] = useState(false);
+  const [keySheetVisible, setKeySheetVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Store
@@ -107,6 +109,10 @@ export function MinerDetailScreen({ route, navigation }: Props) {
   }
 
   const displayName = miner.alias || miner.hostname || miner.ip;
+  // KBox reachable but API key missing/rejected/disabled — the sheet is
+  // only ever opened by a user tap, so polling flipping this flag can
+  // never spam sheets.
+  const kboxLocked = miner.isOnline && !!miner.kboxAuthError;
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
@@ -149,7 +155,7 @@ export function MinerDetailScreen({ route, navigation }: Props) {
             </Text>
           )}
         </View>
-        {miner.isOnline && (
+        {miner.isOnline && !kboxLocked && (
           <Pressable
             onPress={handleOpenSettings}
             className="p-2 mr-1"
@@ -202,8 +208,50 @@ export function MinerDetailScreen({ route, navigation }: Props) {
           </View>
         )}
 
+        {/* KBox locked state: reachable, but no working API key */}
+        {kboxLocked && (
+          <Card padding="none">
+            <View
+              className="items-center"
+              style={{ paddingHorizontal: 20, paddingVertical: 24, gap: 10 }}
+            >
+              <Ionicons name="lock-closed" size={28} color={colors.warning} />
+              <Text
+                variant="mono"
+                className="font-bold"
+                style={{ fontSize: 14, color: colors.textHigh }}
+              >
+                {miner.kboxAuthError === 'api_disabled'
+                  ? t('miners.kboxApiDisabledTitle')
+                  : t('miners.kboxKeyRequired')}
+              </Text>
+              <Text
+                variant="caption"
+                color="muted"
+                style={{ textAlign: 'center' }}
+              >
+                {miner.kboxAuthError === 'api_disabled'
+                  ? t('miners.kboxApiDisabled')
+                  : t('miners.kboxApiKeyHint')}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  haptics.light();
+                  setKeySheetVisible(true);
+                }}
+                className="mt-2 px-5 py-3 bg-foreground items-center"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <Text variant="body" className="font-medium text-gray-950">
+                  {t('miners.kboxEnterKey')}
+                </Text>
+              </Pressable>
+            </View>
+          </Card>
+        )}
+
         {/* Online state: show stats */}
-        {miner.isOnline ? (
+        {kboxLocked ? null : miner.isOnline ? (
           <MinerStatsSection miner={miner} temperatureUnit={temperatureUnit} />
         ) : (
           /* Offline state */
@@ -252,8 +300,9 @@ export function MinerDetailScreen({ route, navigation }: Props) {
         {/* Device info */}
         <DeviceInfoSection miner={miner} />
 
-        {/* Controls (only when online) */}
-        <MinerControlsSection miner={miner} />
+        {/* Controls (only when online; hidden while a KBox is locked —
+            every control needs the API key) */}
+        {!kboxLocked && <MinerControlsSection miner={miner} />}
 
         {/* Linked worker (conditional) */}
         <LinkedWorkerSection
@@ -261,6 +310,16 @@ export function MinerDetailScreen({ route, navigation }: Props) {
           currentMinerIp={miner.ip}
         />
       </ScrollView>
+
+      {/* KBox API key entry (verifies + persists, then refetches stats) */}
+      {miner.minerType === 'kbox' && (
+        <KBoxAuthSheet
+          visible={keySheetVisible}
+          ip={miner.ip}
+          onSuccess={() => void refreshMiner(ip)}
+          onClose={() => setKeySheetVisible(false)}
+        />
+      )}
 
       {/* Alias edit sheet */}
       <AliasEditSheet

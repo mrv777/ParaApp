@@ -1,23 +1,26 @@
 /**
  * Network discovery utilities for local miners.
  *
- * Probes both port 80 (AxeOS / Hammer HTTP) and port 4028 (Canaan
- * Avalon CGMiner JSON RPC) per IP, in parallel, returning as soon as
- * either probe succeeds.
+ * Probes port 80 twice (AxeOS/Hammer at /api/system/info, KBox at
+ * /api/v1/status) and port 4028 (Canaan Avalon CGMiner JSON RPC) per
+ * IP, in parallel, returning as soon as any probe succeeds.
  */
 
 import NetInfo from '@react-native-community/netinfo';
 import type { DiscoveryProgress, DiscoveryOptions, MinerType } from '@/types';
 import { isAvalon } from '@/api/avalon';
+import { isKBox } from '@/api/kbox';
 import { extractSubnet } from './validation';
 
 /** Timeout for discovery probes (ms) - no retries, fast fail */
 const DISCOVERY_TIMEOUT = 5000;
 
 /**
- * Default concurrent connections. We probe two ports per IP, so the
- * effective socket count is ~2× this. Halved from the original 50 to
- * keep total in-flight connections sensible.
+ * Default concurrent connections. We probe three endpoints per IP (two
+ * lightweight HTTP requests on port 80 + one TCP socket on 4028), so
+ * the effective socket count is ~3× this. Halved from the original 50
+ * to keep total in-flight connections sensible; drop further if scans
+ * ever feel heavy on weak APs.
  */
 const DEFAULT_CONCURRENCY = 30;
 
@@ -112,6 +115,11 @@ async function probeMiner(
   const probes = [
     probeAxeOS(ip, signal).then((ok) =>
       ok ? ('unknown' as MinerType) : Promise.reject()
+    ),
+    // KBox is identifiable without its API key: an unauthenticated
+    // GET /api/v1/status returns a distinctive 401/403 JSON envelope.
+    isKBox(ip, signal).then((ok) =>
+      ok ? ('kbox' as MinerType) : Promise.reject()
     ),
     isAvalon(ip, signal).then((ok) =>
       ok ? ('avalon' as MinerType) : Promise.reject()

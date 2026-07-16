@@ -113,6 +113,7 @@ const en = {
     badgeRank: 'Rank',
     badgeParticipants: 'Participants',
     badgeTopDiff: 'Top Difficulty',
+    badgeWinnerDiff: 'Winning Diff',
     badgeWon: 'Block won',
     badgeParticipated: 'Participated',
     viewOnMempool: 'View on mempool.space',
@@ -326,6 +327,36 @@ const en = {
     avalonPoolConfigHint: 'Up to 3 pool slots. The miner will reboot to apply changes.',
     avalonPoolSlot: 'Pool {{n}}',
     swipeToSavePools: 'Swipe to save & reboot',
+    // KBox-specific
+    kboxApiKeyTitle: 'KBox API Key',
+    kboxApiKeyHint:
+      'The API is enabled in the KBox web UI (Settings → System → API Access), which generates a key. Stored securely on this device only. Tip: give the KBox a static DHCP lease — the key is tied to its IP address.',
+    kboxApiKeyPlaceholder: '32-character API key',
+    kboxKeyRequired: 'API key required',
+    kboxApiDisabledTitle: 'API disabled',
+    kboxApiDisabled:
+      'The local API is turned off on this KBox. Enable it in the KBox web UI under Settings → System → API Access, then try again.',
+    kboxEnterKey: 'Enter API Key',
+    kboxPowerMode: 'Power Mode',
+    kboxPowerCustom: 'Custom',
+    kboxCustomFreq: 'Frequency (MHz)',
+    kboxCustomCorev: 'Core Voltage (mV)',
+    kboxPowerRevertHint:
+      'Custom overclock reverts to Medium on reboot. The 70°C watchdog always governs.',
+    kboxFanFloorHint:
+      'A manual value sets a minimum fan speed — the firmware only raises it from there, and the 110°C safety cutoff always overrides.',
+    kboxLed: 'Ambient LEDs',
+    kboxLedEffect: 'Effect',
+    kboxLedColor: 'Color',
+    kboxLedSpeed: 'Speed',
+    kboxLedSpeedFast: 'Fast',
+    kboxLedSpeedNormal: 'Normal',
+    kboxLedSpeedSlow: 'Slow',
+    kboxLedBrightness: 'Brightness',
+    kboxLedOn: 'On',
+    kboxLedOff: 'Off',
+    kboxDualMining: 'Dual Mining',
+    kboxRestartHint: 'Hashrate returns in about a minute',
   },
 
   settings: {
@@ -504,6 +535,12 @@ const en = {
     failedToSetWorkMode: 'Failed to change work mode',
     failedToSavePools: 'Failed to save pool config',
     avalonAuthFailed: 'Wrong admin password',
+    kboxUnauthorized: 'API key rejected — check it in the KBox web UI',
+    kboxApiDisabled: 'API access is disabled on this KBox',
+    kboxVerifyFailed: 'Could not reach the KBox to verify the key',
+    kboxRestartDebounced: 'Restart rejected — the KBox allows one restart per 90 seconds',
+    kboxInvalidEffect: 'Unknown LED effect — effect list refreshed',
+    kboxEffectsLoadFailed: 'Failed to load LED effects — tap to retry',
   },
 
   discovery: {

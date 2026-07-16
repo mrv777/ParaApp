@@ -110,6 +110,7 @@ const de = {
     badgeRank: 'Rang',
     badgeParticipants: 'Teilnehmer',
     badgeTopDiff: 'Höchste Schwierigkeit',
+    badgeWinnerDiff: 'Gewinner-Diff',
     badgeWon: 'Block gefunden',
     badgeParticipated: 'Teilgenommen',
     viewOnMempool: 'Auf mempool.space ansehen',
@@ -285,6 +286,36 @@ const de = {
     hwErrorRate: '{{rate}}% Fehlerrate',
     active: 'Aktiv',
     fallbackActive: 'Fallback-Pool wird verwendet',
+    // KBox-specific
+    kboxApiKeyTitle: 'KBox API-Schlüssel',
+    kboxApiKeyHint:
+      'Die API wird in der KBox-Weboberfläche aktiviert (Settings → System → API Access), wodurch ein Schlüssel erzeugt wird. Wird nur sicher auf diesem Gerät gespeichert. Tipp: der KBox eine feste DHCP-Adresse geben — der Schlüssel ist an ihre IP-Adresse gebunden.',
+    kboxApiKeyPlaceholder: '32-stelliger API-Schlüssel',
+    kboxKeyRequired: 'API-Schlüssel erforderlich',
+    kboxApiDisabledTitle: 'API deaktiviert',
+    kboxApiDisabled:
+      'Die lokale API ist auf dieser KBox deaktiviert. In der KBox-Weboberfläche unter Settings → System → API Access aktivieren und erneut versuchen.',
+    kboxEnterKey: 'API-Schlüssel eingeben',
+    kboxPowerMode: 'Leistungsmodus',
+    kboxPowerCustom: 'Benutzerdefiniert',
+    kboxCustomFreq: 'Frequenz (MHz)',
+    kboxCustomCorev: 'Kernspannung (mV)',
+    kboxPowerRevertHint:
+      'Benutzerdefiniertes Overclocking wird beim Neustart auf Medium zurückgesetzt. Der 70°C-Watchdog hat immer Vorrang.',
+    kboxFanFloorHint:
+      'Ein manueller Wert setzt eine Mindestdrehzahl — die Firmware erhöht sie nur bei Bedarf, und die 110°C-Sicherheitsabschaltung hat immer Vorrang.',
+    kboxLed: 'Ambiente-LEDs',
+    kboxLedEffect: 'Effekt',
+    kboxLedColor: 'Farbe',
+    kboxLedSpeed: 'Geschwindigkeit',
+    kboxLedSpeedFast: 'Schnell',
+    kboxLedSpeedNormal: 'Normal',
+    kboxLedSpeedSlow: 'Langsam',
+    kboxLedBrightness: 'Helligkeit',
+    kboxLedOn: 'An',
+    kboxLedOff: 'Aus',
+    kboxDualMining: 'Dual-Mining',
+    kboxRestartHint: 'Hashrate kehrt in etwa einer Minute zurück',
   },
 
   settings: {
@@ -459,6 +490,12 @@ const de = {
     failedToShare: 'Teilen fehlgeschlagen',
     failedToLoadConfig: 'ASIC-Konfiguration konnte nicht geladen werden',
     failedToApply: 'Einstellungen konnten nicht angewendet werden',
+    kboxUnauthorized: 'API-Schlüssel abgelehnt — in der KBox-Weboberfläche prüfen',
+    kboxApiDisabled: 'API-Zugriff ist auf dieser KBox deaktiviert',
+    kboxVerifyFailed: 'KBox zur Überprüfung des Schlüssels nicht erreichbar',
+    kboxRestartDebounced: 'Neustart abgelehnt — die KBox erlaubt einen Neustart pro 90 Sekunden',
+    kboxInvalidEffect: 'Unbekannter LED-Effekt — Effektliste aktualisiert',
+    kboxEffectsLoadFailed: 'LED-Effekte konnten nicht geladen werden — zum Wiederholen tippen',
   },
 
   discovery: {

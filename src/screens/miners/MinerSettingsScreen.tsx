@@ -19,7 +19,7 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { AvalonSettingsView } from '@/components/miners';
+import { AvalonSettingsView, KBoxSettingsView } from '@/components/miners';
 import { useMinerStore, selectMiners } from '@/store/minerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { axeOS } from '@/api';
@@ -141,6 +141,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   // navigation chrome for visual consistency.
   const isAvalon = miner?.minerType === 'avalon';
 
+  // KBox: same handoff pattern as Avalon — its own /api/v1/ control
+  // surface (power mode, fan, LEDs) replaces the AxeOS form entirely.
+  const isKBox = miner?.minerType === 'kbox';
+
   // ASIC config from API
   const [asicConfig, setAsicConfig] = useState<AsicConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
@@ -193,10 +197,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   useEffect(() => {
     // Skip if already loaded
     if (asicConfig) return;
-    // Avalon miners render a separate view that doesn't use AsicConfig.
-    // Skip the AxeOS HTTP call entirely — port 80 of an Avalon doesn't
-    // serve /api/system/asic and we'd just burn a timeout.
-    if (isAvalon) return;
+    // Avalon and KBox miners render separate views that don't use
+    // AsicConfig. Skip the AxeOS HTTP call entirely — neither serves
+    // /api/system/asic and we'd just burn a timeout (or a KBox 404).
+    if (isAvalon || isKBox) return;
 
     async function fetchAsicConfig() {
       setConfigLoading(true);
@@ -897,6 +901,33 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
           miner={miner}
           onSaved={() => navigation.goBack()}
         />
+      </SafeAreaView>
+    );
+  }
+
+  // KBox: dedicated power/fan/LED control view (its API exposes no
+  // pool writes and none of the AxeOS-style settings).
+  if (isKBox) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <View className="flex-row items-center px-4 py-3 border-b border-border">
+          <Pressable
+            onPress={handleBack}
+            className="p-2 -ml-2 mr-2"
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+          <View className="flex-1">
+            <Text variant="subtitle" className="font-semibold">
+              {t('miners.minerSettings')}
+            </Text>
+            <Text variant="caption" color="muted" numberOfLines={1}>
+              {displayName}
+            </Text>
+          </View>
+        </View>
+        <KBoxSettingsView miner={miner} />
       </SafeAreaView>
     );
   }

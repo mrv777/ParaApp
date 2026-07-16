@@ -20,5 +20,8 @@ export * as avalon from './avalon';
 // Canaan Avalon web CGI fallback (port 80, admin password)
 export * as avalonWeb from './avalonWeb';
 
+// GekkoScience KBox API (HTTP /api/v1/ on port 80, X-API-Key auth)
+export * as kbox from './kbox';
+
 // Mempool.space API
 export * as mempool from './mempool';

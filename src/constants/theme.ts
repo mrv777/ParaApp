@@ -76,6 +76,8 @@ export const tempThresholdsAvalon = {
 } as const;
 
 export function getTempThresholdsFor(minerType?: string) {
+  // KBox deliberately uses the default BM1370 thresholds: its firmware
+  // has a 70°C overclock watchdog, so 68/70 matches its own limits.
   return minerType === 'avalon' ? tempThresholdsAvalon : tempThresholds;
 }
 

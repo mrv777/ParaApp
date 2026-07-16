@@ -5,7 +5,7 @@
 /**
  * Miner firmware type
  */
-export type MinerType = 'axeos' | 'hammer' | 'avalon' | 'unknown';
+export type MinerType = 'axeos' | 'hammer' | 'avalon' | 'kbox' | 'unknown';
 
 /**
  * Avalon working mode — exposed as preset performance profiles instead of
@@ -172,7 +172,37 @@ export interface LocalMiner {
   poolPing?: number;
   /** Best share difficulty across all time (Avalon Best Share) */
   bestShareDifficulty?: number;
+  // KBox-specific fields
+  /** Power mode ("Low"/"Medium"/"High"; other values mean a custom freq/corev override is active) */
+  kboxPowerMode?: string;
+  /** Dual-mining (pool split) active */
+  kboxDualMining?: boolean;
+  /** Ambient LED state as last reported by the device */
+  kboxLed?: KBoxLedState;
+  /**
+   * Device is reachable over HTTP but the API rejected or blocked the request.
+   * 'unauthorized' also covers "no API key stored yet". Locked ≠ offline.
+   */
+  kboxAuthError?: KBoxAuthError;
 }
+
+/**
+ * KBox ambient LED state (mirrors the `led` object in /api/v1/status)
+ */
+export interface KBoxLedState {
+  on: boolean;
+  effect?: string;
+  color?: { r: number; g: number; b: number };
+  /** 10 (fast) – 1000 (slow) */
+  speed?: number;
+  /** 0–255 */
+  brightness?: number;
+}
+
+/**
+ * KBox API auth failure modes (from the response `error` code)
+ */
+export type KBoxAuthError = 'unauthorized' | 'api_disabled';
 
 /**
  * Miner settings that can be modified
@@ -339,6 +369,12 @@ export interface SavedMiner {
   alias?: string;
   /** Last known best diff (shown when offline) */
   lastBestDiff?: number;
+  /**
+   * Last resolved miner type. Lets rehydrated miners skip the protocol
+   * fallback re-probe (critical for KBox, whose authed fetch needs the
+   * stored API key). Absent on entries persisted before this field existed.
+   */
+  minerType?: MinerType;
 }
 
 /**

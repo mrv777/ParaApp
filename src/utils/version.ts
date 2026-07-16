@@ -52,6 +52,13 @@ export function supportsIdentify(miner: LocalMiner): boolean {
     return false;
   }
 
+  // KBox API v1 has no identify endpoint (and we don't emulate one
+  // with the ambient LEDs). Also gated by its empty version string,
+  // but keep this explicit.
+  if (miner.minerType === 'kbox') {
+    return false;
+  }
+
   // NerdQAxe++ and other forks don't support identify
   if (miner.deviceModel.toLowerCase().includes('nerd')) {
     return false;

@@ -110,6 +110,7 @@ const es = {
     badgeRank: 'Rango',
     badgeParticipants: 'Participantes',
     badgeTopDiff: 'Dificultad máxima',
+    badgeWinnerDiff: 'Dif. ganadora',
     badgeWon: 'Bloque ganado',
     badgeParticipated: 'Participó',
     viewOnMempool: 'Ver en mempool.space',
@@ -283,6 +284,36 @@ const es = {
     hwErrorRate: '{{rate}}% tasa de error',
     active: 'Activo',
     fallbackActive: 'Usando pool de respaldo',
+    // KBox-specific
+    kboxApiKeyTitle: 'Clave API de KBox',
+    kboxApiKeyHint:
+      'La API se activa en la interfaz web de la KBox (Settings → System → API Access), que genera una clave. Se guarda de forma segura solo en este dispositivo. Consejo: asigna una IP fija a la KBox — la clave está vinculada a su dirección IP.',
+    kboxApiKeyPlaceholder: 'Clave API de 32 caracteres',
+    kboxKeyRequired: 'Se requiere clave API',
+    kboxApiDisabledTitle: 'API desactivada',
+    kboxApiDisabled:
+      'La API local está desactivada en esta KBox. Actívala en la interfaz web en Settings → System → API Access e inténtalo de nuevo.',
+    kboxEnterKey: 'Introducir clave API',
+    kboxPowerMode: 'Modo de potencia',
+    kboxPowerCustom: 'Personalizado',
+    kboxCustomFreq: 'Frecuencia (MHz)',
+    kboxCustomCorev: 'Voltaje del núcleo (mV)',
+    kboxPowerRevertHint:
+      'El overclock personalizado vuelve a Medium al reiniciar. El watchdog de 70°C siempre manda.',
+    kboxFanFloorHint:
+      'Un valor manual fija una velocidad mínima del ventilador — el firmware solo la aumenta desde ahí, y el corte de seguridad de 110°C siempre prevalece.',
+    kboxLed: 'LEDs ambientales',
+    kboxLedEffect: 'Efecto',
+    kboxLedColor: 'Color',
+    kboxLedSpeed: 'Velocidad',
+    kboxLedSpeedFast: 'Rápido',
+    kboxLedSpeedNormal: 'Normal',
+    kboxLedSpeedSlow: 'Lento',
+    kboxLedBrightness: 'Brillo',
+    kboxLedOn: 'Encendido',
+    kboxLedOff: 'Apagado',
+    kboxDualMining: 'Minería dual',
+    kboxRestartHint: 'El hashrate vuelve en aproximadamente un minuto',
   },
 
   settings: {
@@ -458,6 +489,12 @@ const es = {
     failedToShare: 'Error al compartir',
     failedToLoadConfig: 'Error al cargar configuración ASIC',
     failedToApply: 'Error al aplicar ajustes',
+    kboxUnauthorized: 'Clave API rechazada — compruébala en la interfaz web de la KBox',
+    kboxApiDisabled: 'El acceso a la API está desactivado en esta KBox',
+    kboxVerifyFailed: 'No se pudo contactar con la KBox para verificar la clave',
+    kboxRestartDebounced: 'Reinicio rechazado — la KBox permite un reinicio cada 90 segundos',
+    kboxInvalidEffect: 'Efecto LED desconocido — lista de efectos actualizada',
+    kboxEffectsLoadFailed: 'Error al cargar los efectos LED — toca para reintentar',
   },
 
   discovery: {

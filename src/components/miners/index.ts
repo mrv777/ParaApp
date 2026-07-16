@@ -7,6 +7,11 @@ export { HeaderButtons, type HeaderButtonsProps } from './HeaderButtons';
 export { SortFilterModal, type SortFilterModalProps } from './SortFilterModal';
 export { AliasEditSheet, type AliasEditSheetProps } from './AliasEditSheet';
 export { AvalonAuthSheet, type AvalonAuthSheetProps } from './AvalonAuthSheet';
+export { KBoxAuthSheet, type KBoxAuthSheetProps } from './KBoxAuthSheet';
+export {
+  KBoxSettingsView,
+  type KBoxSettingsViewProps,
+} from './KBoxSettingsView';
 export {
   AvalonSettingsView,
   type AvalonSettingsViewProps,

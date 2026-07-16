@@ -61,6 +61,11 @@ export function MinerCard({
 
   const online = miner.isOnline;
   const standby = miner.isStandby === true;
+  // KBox reachable but API key missing/rejected — stats are all zeros,
+  // so show dashes and a lock hero instead of misleading readings
+  const locked = online && !!miner.kboxAuthError;
+  // KBox API doesn't expose power draw; "0.0 W" would be wrong
+  const hasPower = miner.minerType !== 'kbox';
   const displayName = miner.alias || miner.hostname || miner.ip;
   const nameColor = online ? colors.textHigh : colors.dangerTint;
   const hasModel = miner.deviceModel && miner.deviceModel !== 'Unknown';
@@ -83,22 +88,24 @@ export function MinerCard({
   const cells: { label: string; value: string; color: string }[] = [
     {
       label: t('miners.temp'),
-      value: online ? formatTemperature(miner.temp, temperatureUnit) : DASH,
-      color: tempColor,
+      value:
+        online && !locked ? formatTemperature(miner.temp, temperatureUnit) : DASH,
+      color: locked ? colors.textValue : tempColor,
     },
     {
       label: t('miners.power'),
-      value: online ? noBreak(formatPower(miner.power)) : DASH,
+      value:
+        online && !locked && hasPower ? noBreak(formatPower(miner.power)) : DASH,
       color: colors.textValue,
     },
     {
       label: t('miners.bestDiff'),
-      value: online ? formatDifficulty(miner.bestDiff) : DASH,
+      value: online && !locked ? formatDifficulty(miner.bestDiff) : DASH,
       color: colors.textValue,
     },
     {
       label: t('miners.fan'),
-      value: online ? formatPercent(miner.fanSpeed) : DASH,
+      value: online && !locked ? formatPercent(miner.fanSpeed) : DASH,
       color: colors.textValue,
     },
   ];
@@ -174,15 +181,25 @@ export function MinerCard({
           variant="mono"
           className="font-bold"
           style={{
-            fontSize: standby ? 15 : 24,
+            fontSize: standby || locked ? 15 : 24,
             lineHeight: 28,
-            color: online && !standby ? colors.text : colors.textMuted,
+            color: locked
+              ? colors.warning
+              : online && !standby
+                ? colors.text
+                : colors.textMuted,
           }}
           numberOfLines={1}
         >
-          {!online ? DASH : standby ? t('miners.standby') : hrValue}
+          {!online
+            ? DASH
+            : locked
+              ? t('miners.kboxKeyRequired')
+              : standby
+                ? t('miners.standby')
+                : hrValue}
         </Text>
-        {online && !standby && (
+        {online && !standby && !locked && (
           <Text
             variant="mono"
             style={{ fontSize: 11, color: colors.textMuted }}

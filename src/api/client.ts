@@ -58,6 +58,7 @@ export async function fetchWithTimeout<T>(
     retries = DEFAULT_RETRIES,
     retryDelayMs = DEFAULT_RETRY_DELAY,
     responseType = 'json',
+    parseErrorBody = false,
     ...fetchOptions
   } = options;
 
@@ -101,6 +102,23 @@ export async function fetchWithTimeout<T>(
           `HTTP ${response.status}: ${response.statusText}`,
           response.status
         );
+        if (parseErrorBody) {
+          try {
+            const body = (await response.json()) as {
+              error?: unknown;
+              message?: unknown;
+            };
+            if (typeof body?.error === 'string') {
+              lastError = createApiError(
+                typeof body.message === 'string' ? body.message : body.error,
+                response.status,
+                body.error
+              );
+            }
+          } catch {
+            // Non-JSON error body — keep the generic HTTP error
+          }
+        }
         // Only retry transient failures: server errors (5xx) and rate limits
         // (429). Other 4xx are deterministic — retrying just wastes attempts
         // and backoff (e.g. a 404 for an unknown address).

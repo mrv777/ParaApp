@@ -18,8 +18,9 @@ import type {
   DiscoveryProgress,
   DiscoveryOptions,
 } from '@/types';
-import { axeOS, avalon, avalonWeb, isSuccess } from '@/api';
+import { axeOS, avalon, avalonWeb, kbox, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
+import { getKBoxApiKey, clearKBoxApiKey } from '@/utils/kboxAuth';
 import { formatTemperature, parseDifficulty } from '@/utils/formatting';
 import type { TemperatureUnit } from '@/utils/formatting';
 import { getTempThresholdsFor } from '@/constants/theme';
@@ -33,10 +34,21 @@ export const hasMinerWarnings = (miner: LocalMiner): boolean => {
   if (miner.overheatMode || miner.powerFault) return true;
   // Skip the low-hashrate check in standby: the miner is intentionally
   // paused and `hashRate` is a decaying lifetime average, not a fault.
+  // Also skipped during the KBox startup ramp (~30-60s after power-on
+  // or restart, per its API docs) where hashrate legitimately reads
+  // low/null while the ASIC spins up.
+  if (isInKBoxStartupRamp(miner)) return false;
   if (!miner.isStandby && miner.hashRate < miner.expectedHashrate * 0.8)
     return true;
   return false;
 };
+
+/**
+ * KBox reports low/null hashrate for ~30-60s after boot or restart.
+ * Suppress the low-hashrate warning during that window.
+ */
+const isInKBoxStartupRamp = (miner: LocalMiner): boolean =>
+  miner.minerType === 'kbox' && miner.uptimeSeconds < 120;
 
 interface MinerState {
   // Runtime miner data
@@ -91,6 +103,16 @@ interface MinerActions {
       avalonWeb.PoolSlot?,
       avalonWeb.PoolSlot?,
     ]
+  ) => Promise<ApiResult<void>>;
+
+  // KBox-specific controls (no-op failure for non-KBox miners). All
+  // return ApiResult so callers can branch on auth codes
+  // ('unauthorized' / 'api_disabled') and open the key sheet.
+  setKBoxLed: (ip: string, update: kbox.KBoxLedUpdate) => Promise<ApiResult<void>>;
+  setKBoxFan: (ip: string, update: kbox.KBoxFanUpdate) => Promise<ApiResult<void>>;
+  setKBoxPower: (
+    ip: string,
+    update: kbox.KBoxPowerUpdate
   ) => Promise<ApiResult<void>>;
 
   // Warning helpers
@@ -246,13 +268,23 @@ async function fetchMiner(
   if (preferredType === 'avalon') {
     return fetchAvalon(ip);
   }
+  if (preferredType === 'kbox') {
+    return fetchKBox(ip);
+  }
 
   const axeOsResult = await axeOS.getSystemInfo(ip);
   if (isSuccess(axeOsResult)) {
     return { success: true, data: parseSystemInfo(ip, axeOsResult.data) };
   }
 
-  // AxeOS failed — try Avalon. Cgminer is single-threaded; serialize.
+  // AxeOS failed — try KBox: also HTTP on port 80, but under /api/v1/,
+  // and identifiable without an API key via its distinctive 401/403
+  // JSON envelope. One cheap request; a real AxeOS never reaches here.
+  if (await kbox.isKBox(ip)) {
+    return fetchKBox(ip);
+  }
+
+  // Not KBox either — try Avalon. Cgminer is single-threaded; serialize.
   const version = await avalon.getVersion(ip);
   if (!isSuccess(version)) {
     // Surface the original AxeOS error since that was the primary
@@ -325,6 +357,152 @@ async function fetchAvalonStats(ip: string) {
   return stats;
 }
 
+/**
+ * Fetch a KBox. Three outcomes:
+ *  - key stored + accepted → full stats LocalMiner
+ *  - device reachable but key missing/rejected or API disabled → a
+ *    "locked" stub (isOnline: true, kboxAuthError set, zeroed stats).
+ *    Locked ≠ offline — the existing offline machinery is untouched.
+ *  - device unreachable → failure (caller marks it offline)
+ *
+ * A stored key is never auto-cleared on 401 — a transient firmware
+ * state shouldn't nuke a good key. The user overwrites it via the
+ * auth sheet (which verifies before persisting).
+ */
+async function fetchKBox(ip: string): Promise<ApiResult<LocalMiner>> {
+  const key = await getKBoxApiKey(ip);
+
+  if (!key) {
+    // No key yet — confirm the device is actually there before showing
+    // the locked state, so a powered-off KBox still reads as offline.
+    const reachable = await kbox.isKBox(ip);
+    if (!reachable) {
+      return {
+        success: false,
+        error: { message: 'KBox unreachable', code: 'NETWORK_ERROR' },
+      };
+    }
+    return {
+      success: true,
+      data: kbox.adaptToLocalMiner({ ip, authError: 'unauthorized' }),
+    };
+  }
+
+  const status = await kbox.getStatus(ip, key);
+  if (!isSuccess(status)) {
+    const authError = kbox.authErrorFromCode(status.error.code);
+    if (authError) {
+      return {
+        success: true,
+        data: kbox.adaptToLocalMiner({ ip, authError }),
+      };
+    }
+    return status;
+  }
+
+  // Defensive: HTTP status should mirror `ok`, but treat a 200 body
+  // that still says ok:false + auth code as locked rather than crash
+  // on missing fields.
+  if (status.data.ok === false) {
+    const authError = kbox.authErrorFromCode(status.data.error);
+    return {
+      success: true,
+      data: kbox.adaptToLocalMiner({
+        ip,
+        authError: authError ?? 'unauthorized',
+      }),
+    };
+  }
+
+  // Best-effort per-board detail (frequency). A devices failure must
+  // not fail the whole fetch — frequency just stays 0.
+  const devices = await kbox.getDevices(ip, key);
+  return {
+    success: true,
+    data: kbox.adaptToLocalMiner({
+      ip,
+      status: status.data,
+      devices: isSuccess(devices) ? devices.data.devices : undefined,
+    }),
+  };
+}
+
+/** Narrow zustand set() shape the KBox write helpers need */
+type KBoxStoreSet = (
+  partial:
+    | Partial<MinerState>
+    | ((state: MinerState & MinerActions) => Partial<MinerState>)
+) => void;
+
+/** Flag a miner as auth-locked so the list/detail UI shows the key prompt */
+function markKBoxAuthError(
+  ip: string,
+  authError: 'unauthorized' | 'api_disabled',
+  set: KBoxStoreSet
+): void {
+  set((state) => ({
+    miners: state.miners.map((m) =>
+      m.ip === ip ? { ...m, kboxAuthError: authError } : m
+    ),
+  }));
+}
+
+/**
+ * Common preamble for KBox writes: confirm the miner is a KBox and load
+ * its API key from secure storage. Returns the key on success.
+ */
+async function getKBoxWriteContext(
+  ip: string,
+  get: () => MinerState & MinerActions,
+  set: KBoxStoreSet
+): Promise<ApiResult<string>> {
+  const miner = get().miners.find((m) => m.ip === ip);
+  if (miner?.minerType !== 'kbox') {
+    return {
+      success: false,
+      error: { message: 'Not a KBox miner', code: 'NOT_KBOX' },
+    };
+  }
+  const key = await getKBoxApiKey(ip);
+  if (!key) {
+    markKBoxAuthError(ip, 'unauthorized', set);
+    return {
+      success: false,
+      error: { message: 'KBox API key required', code: 'unauthorized' },
+    };
+  }
+  return { success: true, data: key };
+}
+
+/**
+ * Common postamble for KBox writes: convert transport failures and
+ * ok:false envelopes into a failure ApiResult (flagging auth errors on
+ * the miner), or return null when the write succeeded.
+ */
+function toKBoxWriteResult(
+  ip: string,
+  result: ApiResult<{ ok?: boolean; error?: string; message?: string }>,
+  set: KBoxStoreSet
+): ApiResult<void> | null {
+  if (!isSuccess(result)) {
+    const authError = kbox.authErrorFromCode(result.error.code);
+    if (authError) markKBoxAuthError(ip, authError, set);
+    set({ error: result.error });
+    return { success: false, error: result.error };
+  }
+  if (result.data.ok === false) {
+    const error: ApiError = {
+      message: result.data.message ?? 'Request rejected',
+      code: result.data.error,
+    };
+    const authError = kbox.authErrorFromCode(result.data.error);
+    if (authError) markKBoxAuthError(ip, authError, set);
+    set({ error });
+    return { success: false, error };
+  }
+  return null;
+}
+
 export const useMinerStore = create<MinerState & MinerActions>()(
   persist(
     (set, get) => ({
@@ -352,7 +530,10 @@ export const useMinerStore = create<MinerState & MinerActions>()(
             }
             return {
               miners: [...state.miners, miner],
-              savedMiners: [...state.savedMiners, { ip }],
+              savedMiners: [
+                ...state.savedMiners,
+                { ip, minerType: miner.minerType },
+              ],
               isLoading: false,
             };
           });
@@ -365,10 +546,15 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       },
 
       removeMiner: (ip) => {
+        const removed = get().miners.find((m) => m.ip === ip);
         set((state) => ({
           miners: state.miners.filter((m) => m.ip !== ip),
           savedMiners: state.savedMiners.filter((m) => m.ip !== ip),
         }));
+        // Don't leave orphaned secrets behind (fire-and-forget)
+        if (removed?.minerType === 'kbox') {
+          void clearKBoxApiKey(ip);
+        }
       },
 
       updateMinerAlias: (ip, alias) => {
@@ -393,14 +579,17 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         });
 
         try {
-          // If we already know this is an Avalon, skip the AxeOS probe
-          // and go straight to cgminer. Saves one HTTP timeout on every
-          // poll cycle.
+          // If we already know the miner's type, skip the protocol
+          // fallback and go straight to its client. Saves an HTTP
+          // timeout per poll cycle — and for KBox it's what routes the
+          // fetch through the stored API key.
           const known = get().miners.find((m) => m.ip === ip);
           const result =
             known?.minerType === 'avalon'
               ? await fetchAvalon(ip)
-              : await fetchMiner(ip);
+              : known?.minerType === 'kbox'
+                ? await fetchKBox(ip)
+                : await fetchMiner(ip);
 
           if (isSuccess(result)) {
             set((state) => {
@@ -408,10 +597,26 @@ export const useMinerStore = create<MinerState & MinerActions>()(
               const updatedMiner = existingMiner?.alias
                 ? { ...result.data, alias: existingMiner.alias }
                 : result.data;
+              // Keep the persisted type in sync so rehydrated miners
+              // take the right fast path next launch. Only touch
+              // savedMiners when the type actually changed — mapping
+              // unconditionally would trigger a persist write per poll.
+              const savedEntry = state.savedMiners.find((m) => m.ip === ip);
+              const typeChanged =
+                savedEntry && savedEntry.minerType !== updatedMiner.minerType;
               return {
                 miners: state.miners.map((m) =>
                   m.ip === ip ? updatedMiner : m
                 ),
+                ...(typeChanged
+                  ? {
+                      savedMiners: state.savedMiners.map((m) =>
+                        m.ip === ip
+                          ? { ...m, minerType: updatedMiner.minerType }
+                          : m
+                      ),
+                    }
+                  : {}),
               };
             });
           } else {
@@ -447,6 +652,35 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
       restartMiner: async (ip) => {
         const miner = get().miners.find((m) => m.ip === ip);
+
+        if (miner?.minerType === 'kbox') {
+          const key = await getKBoxApiKey(ip);
+          if (!key) {
+            set({
+              error: { message: 'KBox API key required', code: 'unauthorized' },
+            });
+            return false;
+          }
+          const result = await kbox.restart(ip, key);
+          if (!isSuccess(result)) {
+            // Surfaces the firmware's error code verbatim — notably
+            // the once-per-90s restart debounce rejection.
+            set({ error: result.error });
+            return false;
+          }
+          // Defensive: 200 body that still says ok:false
+          if (result.data.ok === false) {
+            set({
+              error: {
+                message: result.data.message ?? 'Restart rejected',
+                code: result.data.error,
+              },
+            });
+            return false;
+          }
+          return true;
+        }
+
         const result =
           miner?.minerType === 'avalon'
             ? await avalon.reboot(ip)
@@ -459,10 +693,13 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
       identifyMiner: async (ip) => {
         const miner = get().miners.find((m) => m.ip === ip);
-        // Avalon Q firmware doesn't expose an LED-identify equivalent.
-        // The MinerControlsSection hides the button for Avalon, so this
-        // path is defensive — return false without setting an error.
-        if (miner?.minerType === 'avalon') {
+        // Avalon Q firmware doesn't expose an LED-identify equivalent,
+        // and the KBox API has no identify endpoint (we deliberately
+        // don't emulate one with the ambient LEDs — save/restore of the
+        // user's LED state is untestable without hardware). The
+        // MinerControlsSection hides the button for both, so this path
+        // is defensive — return false without setting an error.
+        if (miner?.minerType === 'avalon' || miner?.minerType === 'kbox') {
           return false;
         }
         const result = await axeOS.identify(ip);
@@ -525,6 +762,101 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           set({ error: result.error });
         }
         return result;
+      },
+
+      setKBoxLed: async (ip, update) => {
+        const guard = await getKBoxWriteContext(ip, get, set);
+        if (!guard.success) return guard;
+        const result = await kbox.setLed(ip, guard.data, update);
+        const failure = toKBoxWriteResult(ip, result, set);
+        if (failure) return failure;
+        if (isSuccess(result)) {
+          // Response echoes the resulting LED state (nested or flat)
+          const echoed = result.data.led ?? result.data;
+          set((state) => ({
+            miners: state.miners.map((m) =>
+              m.ip === ip
+                ? {
+                    ...m,
+                    kboxLed: {
+                      on: echoed.on ?? update.on ?? true,
+                      effect:
+                        typeof echoed.effect === 'string'
+                          ? echoed.effect
+                          : (update.effect ?? m.kboxLed?.effect),
+                      color:
+                        echoed.color &&
+                        typeof echoed.color.r === 'number' &&
+                        typeof echoed.color.g === 'number' &&
+                        typeof echoed.color.b === 'number'
+                          ? {
+                              r: echoed.color.r,
+                              g: echoed.color.g,
+                              b: echoed.color.b,
+                            }
+                          : (update.color ?? m.kboxLed?.color),
+                      speed:
+                        typeof echoed.speed === 'number'
+                          ? echoed.speed
+                          : (update.speed ?? m.kboxLed?.speed),
+                      brightness:
+                        typeof echoed.brightness === 'number'
+                          ? echoed.brightness
+                          : (update.brightness ?? m.kboxLed?.brightness),
+                    },
+                  }
+                : m
+            ),
+          }));
+        }
+        return { success: true, data: undefined };
+      },
+
+      setKBoxFan: async (ip, update) => {
+        const guard = await getKBoxWriteContext(ip, get, set);
+        if (!guard.success) return guard;
+        const result = await kbox.setFan(ip, guard.data, update);
+        const failure = toKBoxWriteResult(ip, result, set);
+        if (failure) return failure;
+        if (isSuccess(result) && typeof result.data.fan_percent === 'number') {
+          const fanPercent = result.data.fan_percent;
+          set((state) => ({
+            miners: state.miners.map((m) =>
+              m.ip === ip ? { ...m, fanSpeed: fanPercent } : m
+            ),
+          }));
+        }
+        return { success: true, data: undefined };
+      },
+
+      setKBoxPower: async (ip, update) => {
+        const guard = await getKBoxWriteContext(ip, get, set);
+        if (!guard.success) return guard;
+        const result = await kbox.setPower(ip, guard.data, update);
+        const failure = toKBoxWriteResult(ip, result, set);
+        if (failure) return failure;
+        if (isSuccess(result)) {
+          // Prefer the mode the firmware says it applied; a custom
+          // freq/corev write may not report a named mode.
+          const applied =
+            result.data.mode ?? ('mode' in update ? update.mode : 'Custom');
+          set((state) => ({
+            miners: state.miners.map((m) =>
+              m.ip === ip
+                ? {
+                    ...m,
+                    kboxPowerMode: applied,
+                    ...(typeof result.data.freq === 'number'
+                      ? { frequency: result.data.freq }
+                      : 'freq' in update
+                        ? { frequency: update.freq }
+                        : {}),
+                  }
+                : m
+            ),
+          }));
+        }
+        return { success: true, data: undefined };
       },
 
       updateMinerSettings: async (ip, settings) => {
@@ -593,8 +925,13 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         }
 
         // Low hashrate (below 80% of expected) — not a fault in standby,
-        // where hashRate is a decaying lifetime average of a paused miner.
-        if (!miner.isStandby && miner.hashRate < miner.expectedHashrate * 0.8) {
+        // where hashRate is a decaying lifetime average of a paused
+        // miner, nor during the KBox startup ramp.
+        if (
+          !miner.isStandby &&
+          !isInKBoxStartupRamp(miner) &&
+          miner.hashRate < miner.expectedHashrate * 0.8
+        ) {
           warnings.push({
             type: 'low_hashrate',
             severity: 'caution',
@@ -689,7 +1026,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
             hostname: '',
             ASICModel: '',
             deviceModel: 'Unknown',
-            minerType: 'unknown' as MinerType,
+            // Known type routes the first refresh down the right fast
+            // path (critical for KBox, whose fetch needs the stored key)
+            minerType: sm.minerType ?? ('unknown' as MinerType),
             expectedHashrate: 0,
             hashRate: 0,
             power: 0,

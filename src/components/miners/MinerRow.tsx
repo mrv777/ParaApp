@@ -175,9 +175,20 @@ export function MinerRow({
         )}
       </View>
 
-      {/* Hashrate + chevron */}
+      {/* Hashrate + chevron (lock badge when the KBox API key is missing/rejected) */}
       <View className="flex-row items-center" style={{ gap: 6 }}>
-        {miner.isOnline && (
+        {miner.isOnline && miner.kboxAuthError ? (
+          <>
+            <Ionicons name="lock-closed" size={12} color={colors.warning} />
+            <Text
+              variant="mono"
+              className="uppercase"
+              style={{ fontSize: 10, letterSpacing: 0.5, color: colors.warning }}
+            >
+              {t('miners.kboxKeyRequired')}
+            </Text>
+          </>
+        ) : miner.isOnline ? (
           <Text
             variant="mono"
             style={{
@@ -187,7 +198,7 @@ export function MinerRow({
           >
             {standby ? t('miners.standby') : formatHashrate(miner.hashRate * 1e9)}
           </Text>
-        )}
+        ) : null}
         {onPress && (
           <Ionicons name="chevron-forward" size={16} color={colors.textDim} />
         )}

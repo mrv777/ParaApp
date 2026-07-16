@@ -112,6 +112,7 @@ const fr = {
     badgeRank: 'Rang',
     badgeParticipants: 'Participants',
     badgeTopDiff: 'Difficulté max',
+    badgeWinnerDiff: 'Diff gagnante',
     badgeWon: 'Bloc gagné',
     badgeParticipated: 'Participé',
     viewOnMempool: 'Voir sur mempool.space',
@@ -287,6 +288,36 @@ const fr = {
     hwErrorRate: "{{rate}}% taux d'erreur",
     active: 'Actif',
     fallbackActive: 'Utilisation du pool de secours',
+    // KBox-specific
+    kboxApiKeyTitle: 'Clé API KBox',
+    kboxApiKeyHint:
+      "L'API s'active dans l'interface web de la KBox (Settings → System → API Access), ce qui génère une clé. Stockée en sécurité sur cet appareil uniquement. Astuce : attribuez une IP fixe à la KBox — la clé est liée à son adresse IP.",
+    kboxApiKeyPlaceholder: 'Clé API de 32 caractères',
+    kboxKeyRequired: 'Clé API requise',
+    kboxApiDisabledTitle: 'API désactivée',
+    kboxApiDisabled:
+      "L'API locale est désactivée sur cette KBox. Activez-la dans l'interface web sous Settings → System → API Access, puis réessayez.",
+    kboxEnterKey: 'Saisir la clé API',
+    kboxPowerMode: 'Mode de puissance',
+    kboxPowerCustom: 'Personnalisé',
+    kboxCustomFreq: 'Fréquence (MHz)',
+    kboxCustomCorev: 'Tension du cœur (mV)',
+    kboxPowerRevertHint:
+      "L'overclock personnalisé revient sur Medium au redémarrage. Le watchdog à 70°C garde toujours la main.",
+    kboxFanFloorHint:
+      'Une valeur manuelle fixe une vitesse minimale du ventilateur — le firmware ne fait que l’augmenter au besoin, et la coupure de sécurité à 110°C prévaut toujours.',
+    kboxLed: "LEDs d'ambiance",
+    kboxLedEffect: 'Effet',
+    kboxLedColor: 'Couleur',
+    kboxLedSpeed: 'Vitesse',
+    kboxLedSpeedFast: 'Rapide',
+    kboxLedSpeedNormal: 'Normal',
+    kboxLedSpeedSlow: 'Lent',
+    kboxLedBrightness: 'Luminosité',
+    kboxLedOn: 'Allumé',
+    kboxLedOff: 'Éteint',
+    kboxDualMining: 'Minage double',
+    kboxRestartHint: 'Le hashrate revient en une minute environ',
   },
 
   settings: {
@@ -463,6 +494,12 @@ const fr = {
     failedToShare: 'Échec du partage',
     failedToLoadConfig: 'Échec du chargement de la configuration ASIC',
     failedToApply: "Échec de l'application des paramètres",
+    kboxUnauthorized: "Clé API refusée — vérifiez-la dans l'interface web de la KBox",
+    kboxApiDisabled: "L'accès à l'API est désactivé sur cette KBox",
+    kboxVerifyFailed: 'Impossible de joindre la KBox pour vérifier la clé',
+    kboxRestartDebounced: 'Redémarrage refusé — la KBox autorise un redémarrage toutes les 90 secondes',
+    kboxInvalidEffect: 'Effet LED inconnu — liste des effets actualisée',
+    kboxEffectsLoadFailed: 'Échec du chargement des effets LED — touchez pour réessayer',
   },
 
   discovery: {

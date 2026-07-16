@@ -67,9 +67,10 @@ export function MinerStatsSection({
       : '0';
 
   const isAvalon = miner.minerType === 'avalon';
+  const isKBox = miner.minerType === 'kbox';
   const standby = miner.isStandby === true;
 
-  const entries: StatEntry[] = [
+  const entries: (StatEntry | null)[] = [
     {
       label: t('miners.hashrate'),
       // In standby the miner isn't hashing; `hashrateHs` is a decaying
@@ -96,8 +97,10 @@ export function MinerStatsSection({
             })
           : undefined,
     },
-    { label: t('miners.power'), value: formatPower(miner.power) },
-    // Avalon: show work mode instead of voltage
+    // KBox doesn't report power draw — "0.0 W" would be wrong
+    isKBox ? null : { label: t('miners.power'), value: formatPower(miner.power) },
+    // Avalon: show work mode instead of voltage. KBox: its power mode
+    // (Low/Medium/High or a custom overclock) — voltage isn't reported.
     isAvalon && miner.workMode !== undefined
       ? {
           label: t('miners.workMode'),
@@ -109,7 +112,13 @@ export function MinerStatsSection({
                 : t('miners.workModeSuper'),
           subValue: miner.frequency > 0 ? `${miner.frequency} MHz` : undefined,
         }
-      : { label: t('miners.voltage'), value: formatVoltage(miner.voltage) },
+      : isKBox
+        ? {
+            label: t('miners.kboxPowerMode'),
+            value: miner.kboxPowerMode || '--',
+            subValue: miner.frequency > 0 ? `${miner.frequency} MHz` : undefined,
+          }
+        : { label: t('miners.voltage'), value: formatVoltage(miner.voltage) },
     {
       label: t('miners.shares'),
       value: formatNumber(miner.sharesAccepted),
@@ -135,7 +144,11 @@ export function MinerStatsSection({
     entries.push({
       label: t('miners.hwErrors'),
       value: formatNumber(miner.hwErrors),
-      subValue: t('miners.hwErrorRate', { rate: (miner.hwErrorRate ?? 0).toFixed(1) }),
+      // KBox reports a count but no rate — skip the rate sub-line there
+      subValue:
+        miner.hwErrorRate !== undefined
+          ? t('miners.hwErrorRate', { rate: miner.hwErrorRate.toFixed(1) })
+          : undefined,
       color: getHwErrorColor(miner.hwErrorRate ?? 0),
     });
   }
@@ -152,7 +165,7 @@ export function MinerStatsSection({
         {t('miners.performance')}
       </Text>
       <View className="flex-row flex-wrap" style={{ gap: 8, justifyContent: 'space-between' }}>
-        {entries.map((entry, i) => (
+        {entries.filter((e): e is StatEntry => e !== null).map((entry, i) => (
           <StatBox
             key={i}
             label={entry.label}

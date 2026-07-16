@@ -146,6 +146,7 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
     ? `${miner.stratumUrl}:${miner.stratumPort}`
     : '--';
   const isAvalon = miner.minerType === 'avalon';
+  const isKBox = miner.minerType === 'kbox';
   const hasMac = isAvalon && !!miner.macAddress;
   const hasAsicCount = isAvalon && !!miner.asicCount;
   const hasFallback = miner.fallbackStratumUrl !== undefined;
@@ -165,7 +166,8 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
       {hasAsicCount && (
         <InfoRow label={t('miners.asicCount')} value={String(miner.asicCount)} />
       )}
-      <InfoRow label={t('miners.firmware')} value={miner.version} />
+      {/* KBox API doesn't expose its firmware version */}
+      {!isKBox && <InfoRow label={t('miners.firmware')} value={miner.version} />}
       <IpAddressRow ip={miner.ip} />
       {hasMac && (
         <InfoRow label={t('miners.macAddress')} value={miner.macAddress as string} />
@@ -173,8 +175,14 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
       <InfoRow label={t('miners.hostname')} value={miner.hostname} />
       <InfoRow label={t('miners.pool')} value={poolUrl} />
       <InfoRow label={t('miners.worker')} value={truncateWorker(miner.stratumUser)} />
-      {/* Avalons report no WiFi info — skip the row entirely */}
-      {!isAvalon && (
+      {isKBox && miner.kboxPowerMode && (
+        <InfoRow label={t('miners.kboxPowerMode')} value={miner.kboxPowerMode} />
+      )}
+      {isKBox && miner.kboxDualMining && (
+        <InfoRow label={t('miners.kboxDualMining')} value={t('miners.active')} />
+      )}
+      {/* Avalons and the KBox (wired NanoPi) report no WiFi info */}
+      {!isAvalon && !isKBox && (
         <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} />
       )}
       {hasRssi && (
