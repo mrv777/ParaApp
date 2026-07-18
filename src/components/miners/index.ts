@@ -13,6 +13,10 @@ export {
   type KBoxSettingsViewProps,
 } from './KBoxSettingsView';
 export {
+  LuxOSSettingsView,
+  type LuxOSSettingsViewProps,
+} from './LuxOSSettingsView';
+export {
   AvalonSettingsView,
   type AvalonSettingsViewProps,
 } from './AvalonSettingsView';

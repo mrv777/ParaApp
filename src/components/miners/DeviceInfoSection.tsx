@@ -147,8 +147,11 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
     : '--';
   const isAvalon = miner.minerType === 'avalon';
   const isKBox = miner.minerType === 'kbox';
-  const hasMac = isAvalon && !!miner.macAddress;
+  const isLuxOS = miner.minerType === 'luxos';
+  const hasMac = (isAvalon || isLuxOS) && !!miner.macAddress;
   const hasAsicCount = isAvalon && !!miner.asicCount;
+  // LuxOS 'ASC Count' is the hashboard count, not a chip count
+  const hasBoardCount = isLuxOS && !!miner.asicCount;
   const hasFallback = miner.fallbackStratumUrl !== undefined;
   const hasSerial = !!miner.serialNumber;
   const hasRssi = miner.rssi !== undefined;
@@ -162,9 +165,13 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
         {t('miners.deviceInfo')}
       </Text>
       <InfoRow label={t('miners.model')} value={miner.deviceModel} />
-      <InfoRow label={t('miners.asic')} value={miner.ASICModel} />
+      {/* LuxOS doesn't expose the ASIC chip model */}
+      {!isLuxOS && <InfoRow label={t('miners.asic')} value={miner.ASICModel} />}
       {hasAsicCount && (
         <InfoRow label={t('miners.asicCount')} value={String(miner.asicCount)} />
+      )}
+      {hasBoardCount && (
+        <InfoRow label={t('miners.luxosBoards')} value={String(miner.asicCount)} />
       )}
       {/* KBox API doesn't expose its firmware version */}
       {!isKBox && <InfoRow label={t('miners.firmware')} value={miner.version} />}
@@ -181,8 +188,11 @@ export function DeviceInfoSection({ miner }: DeviceInfoSectionProps) {
       {isKBox && miner.kboxDualMining && (
         <InfoRow label={t('miners.kboxDualMining')} value={t('miners.active')} />
       )}
-      {/* Avalons and the KBox (wired NanoPi) report no WiFi info */}
-      {!isAvalon && !isKBox && (
+      {isLuxOS && miner.luxosProfile && (
+        <InfoRow label={t('miners.luxosProfile')} value={miner.luxosProfile} />
+      )}
+      {/* Avalons, LuxOS Antminers and the KBox (wired) report no WiFi info */}
+      {!isAvalon && !isKBox && !isLuxOS && (
         <InfoRow label={t('miners.wifi')} value={miner.wifiSSID || ''} />
       )}
       {hasRssi && (

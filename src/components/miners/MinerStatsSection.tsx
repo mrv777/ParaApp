@@ -68,7 +68,15 @@ export function MinerStatsSection({
 
   const isAvalon = miner.minerType === 'avalon';
   const isKBox = miner.minerType === 'kbox';
+  const isLuxOS = miner.minerType === 'luxos';
   const standby = miner.isStandby === true;
+
+  // LuxOS per-board temps: chip-die values when the model has die
+  // sensors, board sensors otherwise (matches how `temp` was derived)
+  const luxosBoardRange =
+    isLuxOS && (miner.luxosChipTemps ?? miner.luxosBoardTemps)?.length
+      ? (miner.luxosChipTemps ?? miner.luxosBoardTemps)!
+      : null;
 
   const entries: (StatEntry | null)[] = [
     {
@@ -95,7 +103,9 @@ export function MinerStatsSection({
               in: formatTemperature(miner.hashboardInletTemp, temperatureUnit),
               out: formatTemperature(miner.hashboardOutletTemp, temperatureUnit),
             })
-          : undefined,
+          : luxosBoardRange && luxosBoardRange.length > 1
+            ? `${luxosBoardRange.length} × ${formatTemperature(Math.min(...luxosBoardRange), temperatureUnit)}–${formatTemperature(Math.max(...luxosBoardRange), temperatureUnit)}`
+            : undefined,
     },
     // KBox doesn't report power draw — "0.0 W" would be wrong
     isKBox ? null : { label: t('miners.power'), value: formatPower(miner.power) },
@@ -118,7 +128,15 @@ export function MinerStatsSection({
             value: miner.kboxPowerMode || '--',
             subValue: miner.frequency > 0 ? `${miner.frequency} MHz` : undefined,
           }
-        : { label: t('miners.voltage'), value: formatVoltage(miner.voltage) },
+        : isLuxOS
+          ? {
+              // LuxOS: active power profile instead of voltage (core mV
+              // isn't reported)
+              label: t('miners.luxosProfile'),
+              value: miner.luxosProfile || '--',
+              subValue: miner.frequency > 0 ? `${miner.frequency} MHz` : undefined,
+            }
+          : { label: t('miners.voltage'), value: formatVoltage(miner.voltage) },
     {
       label: t('miners.shares'),
       value: formatNumber(miner.sharesAccepted),
@@ -130,8 +148,9 @@ export function MinerStatsSection({
       value: formatDifficulty(miner.bestDiff),
       subValue: t('miners.session', { value: formatDifficulty(miner.bestSessionDiff) }),
     },
-    // Avalon has 4 individual fans — show duty + per-fan range. AxeOS shows the single fan duty.
-    isAvalon && miner.fanRpms && miner.fanRpms.length > 1
+    // Avalon/LuxOS Antminers have 4 individual fans — show duty +
+    // per-fan range. AxeOS shows the single fan duty.
+    miner.fanRpms && miner.fanRpms.length > 1
       ? {
           label: t('miners.fanSpeed'),
           value: formatPercent(miner.fanSpeed),

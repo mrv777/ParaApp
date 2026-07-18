@@ -38,6 +38,8 @@ const en = {
     applied: 'Applied!',
     status: 'Status',
     name: 'Name',
+    on: 'On',
+    off: 'Off',
   },
 
   home: {
@@ -357,6 +359,23 @@ const en = {
     kboxLedOff: 'Off',
     kboxDualMining: 'Dual Mining',
     kboxRestartHint: 'Hashrate returns in about a minute',
+    // LuxOS-specific (Antminers on Luxor firmware)
+    luxosProfile: 'Power Profile',
+    luxosNoProfiles: 'No profiles reported by the miner',
+    luxosProfileHint:
+      'Switching profiles makes the miner re-tune — expect the hashrate to dip for several minutes.',
+    luxosProfileAtmNote:
+      'Advanced Thermal Management is enabled and follows the selected profile.',
+    luxosLocate: 'Locate Miner',
+    luxosLocateHint: 'Blinks the red front-panel LED until turned off.',
+    luxosPools: 'Pools',
+    luxosPoolsLoadFailed: 'Failed to load pools — tap to retry',
+    luxosPoolsHint:
+      'Changes apply immediately. Making a pool primary triggers a reconnect.',
+    luxosAddPool: 'Add Pool',
+    luxosRemovePool: 'Remove Pool',
+    luxosRemovePoolConfirm: 'Remove {{pool}} from this miner?',
+    luxosBoards: 'Hashboards',
   },
 
   settings: {
@@ -539,6 +558,8 @@ const en = {
     kboxApiDisabled: 'API access is disabled on this KBox',
     kboxVerifyFailed: 'Could not reach the KBox to verify the key',
     kboxRestartDebounced: 'Restart rejected — the KBox allows one restart per 90 seconds',
+    luxosSessionBusy:
+      'Another tool is configuring this miner — try again shortly',
     kboxInvalidEffect: 'Unknown LED effect — effect list refreshed',
     kboxEffectsLoadFailed: 'Failed to load LED effects — tap to retry',
   },

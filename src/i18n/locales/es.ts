@@ -39,6 +39,8 @@ const es = {
     applied: '¡Aplicado!',
     status: 'Estado',
     name: 'Nombre',
+    on: 'Encendido',
+    off: 'Apagado',
   },
 
   home: {
@@ -314,6 +316,24 @@ const es = {
     kboxLedOff: 'Apagado',
     kboxDualMining: 'Minería dual',
     kboxRestartHint: 'El hashrate vuelve en aproximadamente un minuto',
+    // LuxOS-specific (Antminers on Luxor firmware)
+    luxosProfile: 'Perfil de Potencia',
+    luxosNoProfiles: 'El minero no reporta perfiles',
+    luxosProfileHint:
+      'Al cambiar de perfil el minero se reajusta — el hashrate bajará durante varios minutos.',
+    luxosProfileAtmNote:
+      'Advanced Thermal Management está activado y sigue el perfil seleccionado.',
+    luxosLocate: 'Localizar Minero',
+    luxosLocateHint:
+      'Hace parpadear el LED rojo frontal hasta que se apague.',
+    luxosPools: 'Pools',
+    luxosPoolsLoadFailed: 'Error al cargar los pools — toca para reintentar',
+    luxosPoolsHint:
+      'Los cambios se aplican de inmediato. Hacer primario un pool provoca una reconexión.',
+    luxosAddPool: 'Añadir Pool',
+    luxosRemovePool: 'Eliminar Pool',
+    luxosRemovePoolConfirm: '¿Eliminar {{pool}} de este minero?',
+    luxosBoards: 'Placas de hash',
   },
 
   settings: {
@@ -493,6 +513,8 @@ const es = {
     kboxApiDisabled: 'El acceso a la API está desactivado en esta KBox',
     kboxVerifyFailed: 'No se pudo contactar con la KBox para verificar la clave',
     kboxRestartDebounced: 'Reinicio rechazado — la KBox permite un reinicio cada 90 segundos',
+    luxosSessionBusy:
+      'Otra herramienta está configurando este minero — inténtalo de nuevo en breve',
     kboxInvalidEffect: 'Efecto LED desconocido — lista de efectos actualizada',
     kboxEffectsLoadFailed: 'Error al cargar los efectos LED — toca para reintentar',
   },

@@ -23,5 +23,8 @@ export * as avalonWeb from './avalonWeb';
 // GekkoScience KBox API (HTTP /api/v1/ on port 80, X-API-Key auth)
 export * as kbox from './kbox';
 
+// LuxOS / LUXminer API (Antminers on Luxor firmware; HTTP RPC on port 8080)
+export * as luxos from './luxos';
+
 // Mempool.space API
 export * as mempool from './mempool';

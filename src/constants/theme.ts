@@ -75,10 +75,22 @@ export const tempThresholdsAvalon = {
   danger: 102,
 } as const;
 
+// LuxOS Antminers: `temp` is chip-die based when the model has die
+// sensors (tempctrl defaults ChipHot 93 / ChipDangerous 100). These
+// constants are only the fallback — warnings prefer the device's own
+// tempctrl limits (LocalMiner.luxosTempLimits) when reported, which
+// also covers board-sensor-only models whose limits are far lower.
+export const tempThresholdsLuxOS = {
+  caution: 93,
+  danger: 100,
+} as const;
+
 export function getTempThresholdsFor(minerType?: string) {
   // KBox deliberately uses the default BM1370 thresholds: its firmware
   // has a 70°C overclock watchdog, so 68/70 matches its own limits.
-  return minerType === 'avalon' ? tempThresholdsAvalon : tempThresholds;
+  if (minerType === 'avalon') return tempThresholdsAvalon;
+  if (minerType === 'luxos') return tempThresholdsLuxOS;
+  return tempThresholds;
 }
 
 // Polling intervals (in milliseconds)

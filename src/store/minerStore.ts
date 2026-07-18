@@ -18,7 +18,7 @@ import type {
   DiscoveryProgress,
   DiscoveryOptions,
 } from '@/types';
-import { axeOS, avalon, avalonWeb, kbox, isSuccess } from '@/api';
+import { axeOS, avalon, avalonWeb, kbox, luxos, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
 import { getKBoxApiKey, clearKBoxApiKey } from '@/utils/kboxAuth';
 import { formatTemperature, parseDifficulty } from '@/utils/formatting';
@@ -30,25 +30,50 @@ import { getTempThresholdsFor } from '@/constants/theme';
  */
 export const hasMinerWarnings = (miner: LocalMiner): boolean => {
   if (!miner.isOnline) return true;
-  if (miner.temp >= getTempThresholdsFor(miner.minerType).caution) return true;
+  if (miner.temp >= getEffectiveTempThresholds(miner).caution) return true;
   if (miner.overheatMode || miner.powerFault) return true;
   // Skip the low-hashrate check in standby: the miner is intentionally
   // paused and `hashRate` is a decaying lifetime average, not a fault.
-  // Also skipped during the KBox startup ramp (~30-60s after power-on
-  // or restart, per its API docs) where hashrate legitimately reads
-  // low/null while the ASIC spins up.
-  if (isInKBoxStartupRamp(miner)) return false;
+  // Also skipped during the startup ramp where hashrate legitimately
+  // reads low/null while the ASICs spin up.
+  if (isInStartupRamp(miner)) return false;
   if (!miner.isStandby && miner.hashRate < miner.expectedHashrate * 0.8)
     return true;
   return false;
 };
 
 /**
- * KBox reports low/null hashrate for ~30-60s after boot or restart.
- * Suppress the low-hashrate warning during that window.
+ * Suppress the low-hashrate warning while the miner ramps after boot:
+ * KBox for ~30-60s per its API docs; LuxOS Antminers ramp for several
+ * minutes (PowerTarget/Bist ramp modes) — 10 min is a doc-driven
+ * window, refine when hardware feedback exists.
  */
-const isInKBoxStartupRamp = (miner: LocalMiner): boolean =>
-  miner.minerType === 'kbox' && miner.uptimeSeconds < 120;
+const isInStartupRamp = (miner: LocalMiner): boolean =>
+  (miner.minerType === 'kbox' && miner.uptimeSeconds < 120) ||
+  (miner.minerType === 'luxos' && miner.uptimeSeconds < 600);
+
+/**
+ * Temperature thresholds for warnings. LuxOS miners report their own
+ * tempctrl limits — prefer those (chip-die family when the model has
+ * die sensors, board family otherwise) over the app constants, since
+ * board thresholds (~65/70°C) and chip thresholds (~93/100°C) differ
+ * wildly per model.
+ */
+function getEffectiveTempThresholds(miner: LocalMiner): {
+  caution: number;
+  danger: number;
+} {
+  if (miner.minerType === 'luxos') {
+    const limits = miner.luxosTempLimits;
+    const usingChipTemp = (miner.luxosChipTemps?.length ?? 0) > 0;
+    const caution = usingChipTemp ? limits?.chipHot : limits?.hot;
+    const danger = usingChipTemp ? limits?.chipDangerous : limits?.dangerous;
+    if (typeof caution === 'number' && typeof danger === 'number') {
+      return { caution, danger };
+    }
+  }
+  return getTempThresholdsFor(miner.minerType);
+}
 
 interface MinerState {
   // Runtime miner data
@@ -114,6 +139,20 @@ interface MinerActions {
     ip: string,
     update: kbox.KBoxPowerUpdate
   ) => Promise<ApiResult<void>>;
+
+  // LuxOS-specific controls (no-op failure for non-LuxOS miners). All
+  // return ApiResult so callers can surface 'session_busy' distinctly.
+  setLuxOSProfile: (ip: string, profileName: string) => Promise<ApiResult<void>>;
+  /** Persistent locate toggle: red LED blink on / auto off */
+  setLuxOSLocate: (ip: string, on: boolean) => Promise<ApiResult<void>>;
+  addLuxOSPool: (
+    ip: string,
+    url: string,
+    user: string,
+    password?: string
+  ) => Promise<ApiResult<void>>;
+  removeLuxOSPool: (ip: string, poolId: number) => Promise<ApiResult<void>>;
+  switchLuxOSPool: (ip: string, poolId: number) => Promise<ApiResult<void>>;
 
   // Warning helpers
   getWarnings: (miner: LocalMiner, temperatureUnit?: TemperatureUnit) => MinerWarning[];
@@ -271,6 +310,9 @@ async function fetchMiner(
   if (preferredType === 'kbox') {
     return fetchKBox(ip);
   }
+  if (preferredType === 'luxos') {
+    return fetchLuxOS(ip);
+  }
 
   const axeOsResult = await axeOS.getSystemInfo(ip);
   if (isSuccess(axeOsResult)) {
@@ -284,7 +326,15 @@ async function fetchMiner(
     return fetchKBox(ip);
   }
 
-  // Not KBox either — try Avalon. Cgminer is single-threaded; serialize.
+  // LuxOS must be probed BEFORE the Avalon path: LuxOS also answers
+  // cgminer-style TCP on 4028 (with no PROD field), so the Avalon
+  // sequence below would half-parse a LuxOS miner into garbage. The
+  // HTTP-8080 probe is unambiguous.
+  if (await luxos.isLuxOS(ip)) {
+    return fetchLuxOS(ip);
+  }
+
+  // Not KBox/LuxOS either — try Avalon. Cgminer is single-threaded; serialize.
   const version = await avalon.getVersion(ip);
   if (!isSuccess(version)) {
     // Surface the original AxeOS error since that was the primary
@@ -425,6 +475,34 @@ async function fetchKBox(ip: string): Promise<ApiResult<LocalMiner>> {
       devices: isSuccess(devices) ? devices.data.devices : undefined,
     }),
   };
+}
+
+/**
+ * Fetch a LuxOS miner: one multi-command HTTP round-trip for the whole
+ * monitoring snapshot, normalized by the adapter.
+ */
+async function fetchLuxOS(ip: string): Promise<ApiResult<LocalMiner>> {
+  const snapshot = await luxos.getSnapshot(ip);
+  if (!isSuccess(snapshot)) return snapshot;
+  return {
+    success: true,
+    data: luxos.adaptToLocalMiner({ ip, snapshot: snapshot.data }),
+  };
+}
+
+/** Guard for LuxOS writes: fail fast when the miner isn't a LuxOS */
+function getLuxOSGuard(
+  ip: string,
+  get: () => MinerState & MinerActions
+): ApiResult<void> | null {
+  const miner = get().miners.find((m) => m.ip === ip);
+  if (miner?.minerType !== 'luxos') {
+    return {
+      success: false,
+      error: { message: 'Not a LuxOS miner', code: 'NOT_LUXOS' },
+    };
+  }
+  return null;
 }
 
 /** Narrow zustand set() shape the KBox write helpers need */
@@ -589,7 +667,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
               ? await fetchAvalon(ip)
               : known?.minerType === 'kbox'
                 ? await fetchKBox(ip)
-                : await fetchMiner(ip);
+                : known?.minerType === 'luxos'
+                  ? await fetchLuxOS(ip)
+                  : await fetchMiner(ip);
 
           if (isSuccess(result)) {
             set((state) => {
@@ -681,6 +761,20 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           return true;
         }
 
+        if (miner?.minerType === 'luxos') {
+          // rebootdevice responds STATUS S *before* rebooting, so a
+          // real response is expected here (no treat-timeout-as-
+          // success). The device then drops off HTTP for minutes; the
+          // offline/recovery machinery covers the gap. A failure may
+          // carry code 'session_busy' — another tool holds the miner's
+          // single config session.
+          const result = await luxos.rebootDevice(ip);
+          if (!isSuccess(result)) {
+            set({ error: result.error });
+          }
+          return isSuccess(result);
+        }
+
         const result =
           miner?.minerType === 'avalon'
             ? await avalon.reboot(ip)
@@ -701,6 +795,35 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         // is defensive — return false without setting an error.
         if (miner?.minerType === 'avalon' || miner?.minerType === 'kbox') {
           return false;
+        }
+        if (miner?.minerType === 'luxos') {
+          // LuxOS ledset has no auto-revert: blink persists until
+          // changed. Blink the red LED and restore 'auto' after 15s
+          // fire-and-forget. Known limitation: killing the app inside
+          // the window leaves the LED blinking (harmless; the settings
+          // view exposes a persistent locate toggle to clear it).
+          const result = await luxos.setLed(ip, 'red', 'blink');
+          if (!isSuccess(result)) {
+            set({ error: result.error });
+            return false;
+          }
+          set((state) => ({
+            miners: state.miners.map((m) =>
+              m.ip === ip ? { ...m, luxosRedLed: 'blink' } : m
+            ),
+          }));
+          setTimeout(() => {
+            void luxos.setLed(ip, 'red', 'auto').then((revert) => {
+              if (isSuccess(revert)) {
+                set((state) => ({
+                  miners: state.miners.map((m) =>
+                    m.ip === ip ? { ...m, luxosRedLed: 'auto' } : m
+                  ),
+                }));
+              }
+            });
+          }, 15000);
+          return true;
         }
         const result = await axeOS.identify(ip);
         if (!isSuccess(result)) {
@@ -859,6 +982,81 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         return { success: true, data: undefined };
       },
 
+      /**
+       * Switch the active LuxOS power profile. Optimistic profile-name
+       * update, then a refresh — expect the hashrate to dip while the
+       * miner re-ramps onto the new profile.
+       */
+      setLuxOSProfile: async (ip, profileName) => {
+        const guard = getLuxOSGuard(ip, get);
+        if (guard) return guard;
+        const result = await luxos.setProfile(ip, profileName);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return result;
+        }
+        set((state) => ({
+          miners: state.miners.map((m) =>
+            m.ip === ip ? { ...m, luxosProfile: profileName } : m
+          ),
+        }));
+        void get().refreshMiner(ip);
+        return { success: true, data: undefined };
+      },
+
+      setLuxOSLocate: async (ip, on) => {
+        const guard = getLuxOSGuard(ip, get);
+        if (guard) return guard;
+        const mode = on ? 'blink' : 'auto';
+        const result = await luxos.setLed(ip, 'red', mode);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return result;
+        }
+        set((state) => ({
+          miners: state.miners.map((m) =>
+            m.ip === ip ? { ...m, luxosRedLed: mode } : m
+          ),
+        }));
+        return { success: true, data: undefined };
+      },
+
+      addLuxOSPool: async (ip, url, user, password) => {
+        const guard = getLuxOSGuard(ip, get);
+        if (guard) return guard;
+        const result = await luxos.addPool(ip, url, user, password);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return result;
+        }
+        void get().refreshMiner(ip);
+        return { success: true, data: undefined };
+      },
+
+      removeLuxOSPool: async (ip, poolId) => {
+        const guard = getLuxOSGuard(ip, get);
+        if (guard) return guard;
+        const result = await luxos.removePool(ip, poolId);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return result;
+        }
+        void get().refreshMiner(ip);
+        return { success: true, data: undefined };
+      },
+
+      switchLuxOSPool: async (ip, poolId) => {
+        const guard = getLuxOSGuard(ip, get);
+        if (guard) return guard;
+        const result = await luxos.switchPool(ip, poolId);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return result;
+        }
+        void get().refreshMiner(ip);
+        return { success: true, data: undefined };
+      },
+
       updateMinerSettings: async (ip, settings) => {
         const miner = get().miners.find((m) => m.ip === ip);
 
@@ -891,7 +1089,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         }
 
         // Temperature checks — thresholds are stored in °C but messages use display unit
-        const thresholds = getTempThresholdsFor(miner.minerType);
+        const thresholds = getEffectiveTempThresholds(miner);
         if (miner.temp >= thresholds.danger) {
           warnings.push({
             type: 'temp_danger',
@@ -926,10 +1124,10 @@ export const useMinerStore = create<MinerState & MinerActions>()(
 
         // Low hashrate (below 80% of expected) — not a fault in standby,
         // where hashRate is a decaying lifetime average of a paused
-        // miner, nor during the KBox startup ramp.
+        // miner, nor during the startup ramp.
         if (
           !miner.isStandby &&
-          !isInKBoxStartupRamp(miner) &&
+          !isInStartupRamp(miner) &&
           miner.hashRate < miner.expectedHashrate * 0.8
         ) {
           warnings.push({

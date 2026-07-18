@@ -266,10 +266,11 @@ export function MinerControlsSection({
       setIsReconnecting(true);
       onReconnecting?.(true);
 
-      // Set a timeout for reconnection failure. Avalon reboots take much longer
-      // than AxeOS, so give them a wider window before declaring failure.
+      // Set a timeout for reconnection failure. Avalon and LuxOS
+      // (Antminer) reboots take much longer than AxeOS, so give them a
+      // wider window before declaring failure.
       const reconnectTimeout =
-        miner.minerType === 'avalon'
+        miner.minerType === 'avalon' || miner.minerType === 'luxos'
           ? RECONNECT_TIMEOUT_AVALON_MS
           : miner.minerType === 'kbox'
             ? RECONNECT_TIMEOUT_KBOX_MS
@@ -303,10 +304,15 @@ export function MinerControlsSection({
         (storeError?.code === 'debounced' ||
           storeError?.status === 400 ||
           storeError?.status === 429);
+      // LuxOS: another tool may hold the miner's single config session
+      const luxosSessionBusy =
+        miner.minerType === 'luxos' && storeError?.code === 'session_busy';
       showError(
         kboxDebounced
           ? t('errors.kboxRestartDebounced')
-          : t('errors.failedToRestart')
+          : luxosSessionBusy
+            ? t('errors.luxosSessionBusy')
+            : t('errors.failedToRestart')
       );
     }
   }, [miner.ip, miner.minerType, miner.uptimeSeconds, restartMiner, dismissError, showError, onReconnecting, t]);

@@ -35,6 +35,13 @@ const IDENTIFY_MIN_VERSION = 'v2.12.0';
  * Requires ESP-Miner v2.12.0+ and not a fork (NerdQAxe++, etc.)
  */
 export function supportsIdentify(miner: LocalMiner): boolean {
+  // LuxOS supports identify via `ledset` (red LED blink). Must be
+  // decided before the ESP-Miner semver parsing below — LuxOS version
+  // strings (e.g. "2024.2.19.131822-ef17c0c4") aren't semver.
+  if (miner.minerType === 'luxos') {
+    return true;
+  }
+
   // Guard against missing data
   if (!miner.version || !miner.deviceModel) {
     return false;

@@ -2,25 +2,26 @@
  * Network discovery utilities for local miners.
  *
  * Probes port 80 twice (AxeOS/Hammer at /api/system/info, KBox at
- * /api/v1/status) and port 4028 (Canaan Avalon CGMiner JSON RPC) per
- * IP, in parallel, returning as soon as any probe succeeds.
+ * /api/v1/status), port 8080 (LuxOS HTTP RPC) and port 4028 (Canaan
+ * Avalon CGMiner JSON RPC) per IP, in parallel, returning as soon as
+ * any probe succeeds.
  */
 
 import NetInfo from '@react-native-community/netinfo';
 import type { DiscoveryProgress, DiscoveryOptions, MinerType } from '@/types';
 import { isAvalon } from '@/api/avalon';
 import { isKBox } from '@/api/kbox';
+import { isLuxOS } from '@/api/luxos';
 import { extractSubnet } from './validation';
 
 /** Timeout for discovery probes (ms) - no retries, fast fail */
 const DISCOVERY_TIMEOUT = 5000;
 
 /**
- * Default concurrent connections. We probe three endpoints per IP (two
- * lightweight HTTP requests on port 80 + one TCP socket on 4028), so
- * the effective socket count is ~3× this. Halved from the original 50
- * to keep total in-flight connections sensible; drop further if scans
- * ever feel heavy on weak APs.
+ * Default concurrent connections. We probe four endpoints per IP
+ * (three lightweight HTTP requests on ports 80/8080 + one TCP socket
+ * on 4028), so the effective socket count is ~4× this. Kept at 30;
+ * drop further if scans ever feel heavy on weak APs.
  */
 const DEFAULT_CONCURRENCY = 30;
 
@@ -120,6 +121,12 @@ async function probeMiner(
     // GET /api/v1/status returns a distinctive 401/403 JSON envelope.
     isKBox(ip, signal).then((ok) =>
       ok ? ('kbox' as MinerType) : Promise.reject()
+    ),
+    // LuxOS answers HTTP RPC on 8080 with a LUXminer signature. It
+    // also speaks TCP 4028, but isAvalon requires a PROD field LuxOS
+    // never sends, so the two probes can't misclaim each other.
+    isLuxOS(ip, signal).then((ok) =>
+      ok ? ('luxos' as MinerType) : Promise.reject()
     ),
     isAvalon(ip, signal).then((ok) =>
       ok ? ('avalon' as MinerType) : Promise.reject()

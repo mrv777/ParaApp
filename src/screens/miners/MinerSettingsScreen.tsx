@@ -19,7 +19,11 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { SwipeToConfirm } from '@/components/SwipeToConfirm';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { AvalonSettingsView, KBoxSettingsView } from '@/components/miners';
+import {
+  AvalonSettingsView,
+  KBoxSettingsView,
+  LuxOSSettingsView,
+} from '@/components/miners';
 import { useMinerStore, selectMiners } from '@/store/minerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { axeOS } from '@/api';
@@ -145,6 +149,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   // surface (power mode, fan, LEDs) replaces the AxeOS form entirely.
   const isKBox = miner?.minerType === 'kbox';
 
+  // LuxOS: same handoff pattern — profile/locate/pool controls via the
+  // LuxOS RPC API replace the AxeOS form entirely.
+  const isLuxOS = miner?.minerType === 'luxos';
+
   // ASIC config from API
   const [asicConfig, setAsicConfig] = useState<AsicConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
@@ -197,10 +205,10 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   useEffect(() => {
     // Skip if already loaded
     if (asicConfig) return;
-    // Avalon and KBox miners render separate views that don't use
-    // AsicConfig. Skip the AxeOS HTTP call entirely — neither serves
+    // Avalon, KBox and LuxOS miners render separate views that don't
+    // use AsicConfig. Skip the AxeOS HTTP call entirely — none serves
     // /api/system/asic and we'd just burn a timeout (or a KBox 404).
-    if (isAvalon || isKBox) return;
+    if (isAvalon || isKBox || isLuxOS) return;
 
     async function fetchAsicConfig() {
       setConfigLoading(true);
@@ -928,6 +936,33 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
           </View>
         </View>
         <KBoxSettingsView miner={miner} />
+      </SafeAreaView>
+    );
+  }
+
+  // LuxOS: dedicated profile/locate/pool control view (no AxeOS-style
+  // frequency/voltage/fan settings — profiles are the tuning surface).
+  if (isLuxOS) {
+    return (
+      <SafeAreaView className="flex-1 bg-background" edges={['top']}>
+        <View className="flex-row items-center px-4 py-3 border-b border-border">
+          <Pressable
+            onPress={handleBack}
+            className="p-2 -ml-2 mr-2"
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+          <View className="flex-1">
+            <Text variant="subtitle" className="font-semibold">
+              {t('miners.minerSettings')}
+            </Text>
+            <Text variant="caption" color="muted" numberOfLines={1}>
+              {displayName}
+            </Text>
+          </View>
+        </View>
+        <LuxOSSettingsView miner={miner} />
       </SafeAreaView>
     );
   }

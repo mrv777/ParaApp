@@ -5,7 +5,7 @@
 /**
  * Miner firmware type
  */
-export type MinerType = 'axeos' | 'hammer' | 'avalon' | 'kbox' | 'unknown';
+export type MinerType = 'axeos' | 'hammer' | 'avalon' | 'kbox' | 'luxos' | 'unknown';
 
 /**
  * Avalon working mode — exposed as preset performance profiles instead of
@@ -184,6 +184,61 @@ export interface LocalMiner {
    * 'unauthorized' also covers "no API key stored yet". Locked ≠ offline.
    */
   kboxAuthError?: KBoxAuthError;
+  // LuxOS-specific fields (Antminers running Luxor firmware)
+  /** Name of the active power profile (config.Profile) */
+  luxosProfile?: string;
+  /** Available preset profiles for the settings picker */
+  luxosProfiles?: LuxOSProfile[];
+  /** Advanced Thermal Management enabled — profile changes update ATM bounds */
+  luxosAtmEnabled?: boolean;
+  /** Front-panel red LED mode: 'on' | 'off' | 'blink' | 'auto' */
+  luxosRedLed?: string;
+  /** Front-panel green LED mode: 'on' | 'off' | 'blink' | 'auto' */
+  luxosGreenLed?: string;
+  /** Device-reported temperature thresholds (tempctrl) — preferred over app constants */
+  luxosTempLimits?: LuxOSTempLimits;
+  /** Max board-sensor temperature per hashboard, ordered by board ID */
+  luxosBoardTemps?: number[];
+  /** Max chip-die temperature per hashboard (only on models with die sensors) */
+  luxosChipTemps?: number[];
+  /** Curtail state: 'None' | 'Sleep' | 'WakeUp' */
+  luxosCurtailMode?: string;
+  /** True when watts are PSU-measured rather than estimated */
+  luxosPowerMeasured?: boolean;
+}
+
+/**
+ * A LuxOS preset power profile (from the `profiles` command)
+ */
+export interface LuxOSProfile {
+  name: string;
+  /** Profile default frequency (MHz) */
+  frequency?: number;
+  /** Estimated hashrate (TH/s) */
+  hashrateThs?: number;
+  /** Estimated power usage (W) */
+  watts?: number;
+  /** Relative position vs 'default' (e.g. "-1", "0", "1"); "" for user-created */
+  step?: string;
+  isDynamic?: boolean;
+}
+
+/**
+ * LuxOS temperature-control thresholds (from the `tempctrl` command).
+ * Board thresholds (hot/dangerous) are far lower than chip-die ones —
+ * warnings should use whichever family matches the reported `temp`.
+ */
+export interface LuxOSTempLimits {
+  /** Board temp where the miner is considered hot */
+  hot?: number;
+  /** Board temp where luxminer shuts down */
+  dangerous?: number;
+  /** Chip-die temp where the miner is considered hot */
+  chipHot?: number;
+  /** Chip-die temp where luxminer shuts down */
+  chipDangerous?: number;
+  /** 'Automatic' or 'Manual' fan control */
+  mode?: string;
 }
 
 /**

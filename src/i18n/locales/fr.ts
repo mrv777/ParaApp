@@ -39,6 +39,8 @@ const fr = {
     applied: 'Appliqué !',
     status: 'Statut',
     name: 'Nom',
+    on: 'Activé',
+    off: 'Désactivé',
   },
 
   home: {
@@ -318,6 +320,25 @@ const fr = {
     kboxLedOff: 'Éteint',
     kboxDualMining: 'Minage double',
     kboxRestartHint: 'Le hashrate revient en une minute environ',
+    // LuxOS-specific (Antminers on Luxor firmware)
+    luxosProfile: 'Profil de puissance',
+    luxosNoProfiles: 'Le mineur ne signale aucun profil',
+    luxosProfileHint:
+      'Changer de profil relance le réglage du mineur — le hashrate baissera pendant quelques minutes.',
+    luxosProfileAtmNote:
+      "L'Advanced Thermal Management est activé et suit le profil sélectionné.",
+    luxosLocate: 'Localiser le mineur',
+    luxosLocateHint:
+      "Fait clignoter la LED rouge en façade jusqu'à désactivation.",
+    luxosPools: 'Pools',
+    luxosPoolsLoadFailed:
+      'Échec du chargement des pools — touchez pour réessayer',
+    luxosPoolsHint:
+      "Les changements s'appliquent immédiatement. Rendre un pool prioritaire déclenche une reconnexion.",
+    luxosAddPool: 'Ajouter un pool',
+    luxosRemovePool: 'Supprimer le pool',
+    luxosRemovePoolConfirm: 'Supprimer {{pool}} de ce mineur ?',
+    luxosBoards: 'Cartes de hachage',
   },
 
   settings: {
@@ -498,6 +519,8 @@ const fr = {
     kboxApiDisabled: "L'accès à l'API est désactivé sur cette KBox",
     kboxVerifyFailed: 'Impossible de joindre la KBox pour vérifier la clé',
     kboxRestartDebounced: 'Redémarrage refusé — la KBox autorise un redémarrage toutes les 90 secondes',
+    luxosSessionBusy:
+      'Un autre outil configure ce mineur — réessayez dans un instant',
     kboxInvalidEffect: 'Effet LED inconnu — liste des effets actualisée',
     kboxEffectsLoadFailed: 'Échec du chargement des effets LED — touchez pour réessayer',
   },
