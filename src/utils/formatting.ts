@@ -224,6 +224,28 @@ export function formatDifficulty(diff: number): string {
 }
 
 /**
+ * Format hash-days with auto-scaling (Refinery order sizes).
+ * The router API reports raw hash-days; 1 PHd = 1e15.
+ * @param hashDays - Raw hash-days value
+ * @returns Formatted string like "1.50PHd" or "420THd"
+ */
+export function formatHashDays(hashDays: number): string {
+  if (hashDays === 0) return '0Hd';
+  if (!Number.isFinite(hashDays)) return '--';
+
+  const units = ['Hd', 'KHd', 'MHd', 'GHd', 'THd', 'PHd', 'EHd'];
+  let unitIndex = 0;
+  let value = hashDays;
+
+  while (value >= 1000 && unitIndex < units.length - 1) {
+    value /= 1000;
+    unitIndex++;
+  }
+
+  return `${formatSignificantDigits(value)}${units[unitIndex]}`;
+}
+
+/**
  * Truncate Bitcoin address for display
  * @param address - Full Bitcoin address
  * @param chars - Characters to show on each end (default: 6)

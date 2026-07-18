@@ -25,10 +25,17 @@ import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { useSettingsStore, selectRoundMode } from '@/store/settingsStore';
 import type { RoundMode } from '@/store/settingsStore';
-import type { DifficultyLeaderboardEntry, LoyaltyLeaderboardEntry } from '@/types';
+import type {
+  DifficultyLeaderboardEntry,
+  LoyaltyLeaderboardEntry,
+  RoundWorkLeaderboardEntry,
+} from '@/types';
 
-type LeaderboardMetric = 'difficulty' | 'loyalty';
-type Entry = DifficultyLeaderboardEntry | LoyaltyLeaderboardEntry;
+type LeaderboardMetric = 'difficulty' | 'loyalty' | 'work';
+type Entry =
+  | DifficultyLeaderboardEntry
+  | LoyaltyLeaderboardEntry
+  | RoundWorkLeaderboardEntry;
 
 const ROW_HEIGHT = 42;
 // Bounded viewport (~7 rows) so the list scrolls internally and the "You" footer
@@ -40,6 +47,7 @@ export interface LeaderboardCardProps {
   loyaltyEntries: LoyaltyLeaderboardEntry[];
   roundDifficultyEntries?: DifficultyLeaderboardEntry[];
   roundLoyaltyEntries?: LoyaltyLeaderboardEntry[];
+  roundWorkEntries?: RoundWorkLeaderboardEntry[];
   userAddress?: string;
   /** Approximate total member count for the informational "· N members" hint. */
   totalMembers?: number;
@@ -50,6 +58,9 @@ export interface LeaderboardCardProps {
 function formatValue(metric: LeaderboardMetric, entry: Entry): string {
   if (metric === 'difficulty') {
     return formatDifficulty((entry as DifficultyLeaderboardEntry).diff);
+  }
+  if (metric === 'work') {
+    return formatDifficulty((entry as RoundWorkLeaderboardEntry).total_work);
   }
   return formatNumber((entry as LoyaltyLeaderboardEntry).total_blocks);
 }
@@ -157,6 +168,7 @@ export function LeaderboardCard({
   loyaltyEntries,
   roundDifficultyEntries,
   roundLoyaltyEntries,
+  roundWorkEntries,
   userAddress,
   totalMembers,
   isLoading = false,
@@ -177,6 +189,10 @@ export function LeaderboardCard({
     (mode: RoundMode) => {
       haptics.selection();
       setRoundModeStore(mode);
+      // Work is a round-only metric — fall back when leaving round mode.
+      if (mode === 'alltime') {
+        setMetric((m) => (m === 'work' ? 'difficulty' : m));
+      }
     },
     [setRoundModeStore]
   );
@@ -184,12 +200,13 @@ export function LeaderboardCard({
   // Resolve the active entry set from timeframe × metric.
   const entries: Entry[] = useMemo(() => {
     if (roundMode === 'round') {
+      if (metric === 'work') return roundWorkEntries ?? [];
       return metric === 'difficulty'
         ? roundDifficultyEntries ?? []
         : roundLoyaltyEntries ?? [];
     }
     return metric === 'difficulty' ? difficultyEntries : loyaltyEntries;
-  }, [roundMode, metric, difficultyEntries, loyaltyEntries, roundDifficultyEntries, roundLoyaltyEntries]);
+  }, [roundMode, metric, difficultyEntries, loyaltyEntries, roundDifficultyEntries, roundLoyaltyEntries, roundWorkEntries]);
 
   const userIndex = useMemo(
     () =>
@@ -217,7 +234,7 @@ export function LeaderboardCard({
         const isUser = !!userAddress && addressMatches(entry.address, userAddress);
         return (
           <Row
-            key={`${entry.id}-${index}`}
+            key={'id' in entry ? `${entry.id}-${index}` : `${entry.address}-${index}`}
             rank={`#${index + 1}`}
             label={isUser ? t('common.you') : truncateAddress(entry.address, 6)}
             value={formatValue(metric, entry)}
@@ -267,6 +284,13 @@ export function LeaderboardCard({
           active={metric === 'loyalty'}
           onPress={() => handleMetric('loyalty')}
         />
+        {roundMode === 'round' && (
+          <Segment
+            label={t('pool.work')}
+            active={metric === 'work'}
+            onPress={() => handleMetric('work')}
+          />
+        )}
       </View>
 
       {/* Meta + jump-to-you */}

@@ -11,6 +11,7 @@ import type {
   LoyaltyLeaderboardEntry,
   LeaderboardEntry,
   RoundSummary,
+  RoundWorkLeaderboardEntry,
   UserStats,
   UserStatsApiResponse,
   UserWorkerApiResponse,
@@ -229,6 +230,20 @@ export async function getLoyaltyLeaderboard(
   if (round) params.set('round', round);
   return fetchWithTimeout<LoyaltyLeaderboardEntry[]>(
     `${BASE_URL}/api/leaderboard?${params}`
+  );
+}
+
+/**
+ * Get the current-round total-work leaderboard.
+ * Round-scoped only — the all-time /api/leaderboard has no work data.
+ * @param limit - Number of entries to return (default: 420, API max: 999)
+ */
+export async function getRoundWorkLeaderboard(
+  limit: number = 420
+): Promise<ApiResult<RoundWorkLeaderboardEntry[]>> {
+  const params = new URLSearchParams({ type: 'work', limit: limit.toString() });
+  return fetchWithTimeout<RoundWorkLeaderboardEntry[]>(
+    `${BASE_URL}/api/rounds/current?${params}`
   );
 }
 

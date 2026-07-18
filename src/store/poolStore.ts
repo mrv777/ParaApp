@@ -12,6 +12,7 @@ import type {
   LoyaltyLeaderboardEntry,
   LeaderboardEntry,
   RoundSummary,
+  RoundWorkLeaderboardEntry,
   HistoricalPeriod,
   HistoricalInterval,
 } from '@/types';
@@ -27,6 +28,7 @@ interface PoolState {
   loyaltyLeaderboard: CachedData<LoyaltyLeaderboardEntry[]> | null;
   roundDifficultyLeaderboard: CachedData<DifficultyLeaderboardEntry[]> | null;
   roundLoyaltyLeaderboard: CachedData<LoyaltyLeaderboardEntry[]> | null;
+  roundWorkLeaderboard: CachedData<RoundWorkLeaderboardEntry[]> | null;
   blocks: CachedData<LeaderboardEntry[]> | null;
   rounds: CachedData<RoundSummary[]> | null;
 
@@ -69,6 +71,7 @@ const initialState: PoolState = {
   loyaltyLeaderboard: null,
   roundDifficultyLeaderboard: null,
   roundLoyaltyLeaderboard: null,
+  roundWorkLeaderboard: null,
   blocks: null,
   rounds: null,
   historicalPeriod: '24h',
@@ -140,9 +143,10 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
   fetchRoundLeaderboards: async (limit = 420) => {
     set({ isLoadingRoundLeaderboards: true });
 
-    const [diffResult, loyaltyResult] = await Promise.all([
+    const [diffResult, loyaltyResult, workResult] = await Promise.all([
       parasite.getDifficultyLeaderboard(limit, 'current'),
       parasite.getLoyaltyLeaderboard(limit, 'current'),
+      parasite.getRoundWorkLeaderboard(limit),
     ]);
 
     const timestamp = Date.now();
@@ -164,6 +168,13 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
     } else if (!hasError) {
       set({ error: loyaltyResult.error });
     }
+
+    if (isSuccess(workResult)) {
+      set({
+        roundWorkLeaderboard: { data: workResult.data, timestamp },
+      });
+    }
+    // Work leaderboard failures are non-critical — keep the last data silently
 
     set({ isLoadingRoundLeaderboards: false });
   },
@@ -266,6 +277,8 @@ export const selectRoundDifficultyLeaderboard = (state: PoolState) =>
   state.roundDifficultyLeaderboard?.data;
 export const selectRoundLoyaltyLeaderboard = (state: PoolState) =>
   state.roundLoyaltyLeaderboard?.data;
+export const selectRoundWorkLeaderboard = (state: PoolState) =>
+  state.roundWorkLeaderboard?.data;
 export const selectBlocks = (state: PoolState) => state.blocks?.data;
 export const selectRounds = (state: PoolState) => state.rounds?.data;
 export const selectHistorical = (state: PoolState) => state.historical?.data;

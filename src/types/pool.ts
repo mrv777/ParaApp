@@ -83,6 +83,20 @@ export interface LoyaltyLeaderboardEntry {
 }
 
 /**
+ * Round work leaderboard entry from /api/rounds/current?type=work
+ * (round-scoped only — the all-time /api/leaderboard has no work data).
+ * `address` arrives server-truncated ("abcd...wxyz").
+ */
+export interface RoundWorkLeaderboardEntry {
+  rank: number;
+  address: string;
+  claimed?: boolean;
+  top_diff: number;
+  blocks_participated: number;
+  total_work: number;
+}
+
+/**
  * Bitcoin price data from mempool.space
  */
 export interface BitcoinPrices {

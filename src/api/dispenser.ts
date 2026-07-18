@@ -6,10 +6,18 @@
  * rather than a network error, so callers can render an empty UI cleanly.
  */
 
-import type { ApiResult, Eligibility } from '@/types';
+import type { ApiResult, AssetInfo, Eligibility, TierInfo } from '@/types';
 import { fetchWithTimeout } from './client';
 
 const BASE_URL = 'https://parasite.space';
+
+export async function getDispenserTiers(): Promise<ApiResult<TierInfo[]>> {
+  return fetchWithTimeout<TierInfo[]>(`${BASE_URL}/api/dispenser/tiers`);
+}
+
+export async function getDispenserAssets(): Promise<ApiResult<AssetInfo[]>> {
+  return fetchWithTimeout<AssetInfo[]>(`${BASE_URL}/api/dispenser/assets`);
+}
 
 export async function getDispenserEligibility(
   address: string

@@ -14,6 +14,7 @@ import { TipBanner } from '@/components/TipBanner';
 import { AddAddressPrompt } from '@/components/home/AddAddressPrompt';
 import { FleetOverviewCard } from '@/components/home/FleetOverviewCard';
 import { MiningRewardCard } from '@/components/home/MiningRewardCard';
+import { RefineryCard } from '@/components/home/RefineryCard';
 import { PoolStatsBar } from '@/components/home/PoolStatsBar';
 import { RoundsTable } from '@/components/home/RoundsTable';
 import { BadgeDetailSheet, type BadgeDetail } from '@/components/home/BadgeDetailSheet';
@@ -104,6 +105,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const fetchRounds = useUserStore((s) => s.fetchRounds);
   const fetchRefineryBadge = useUserStore((s) => s.fetchRefineryBadge);
+  const fetchRefineryOrders = useUserStore((s) => s.fetchRefineryOrders);
   const clearUserData = useUserStore((s) => s.clearUserData);
   const prevAddressRef = useRef(bitcoinAddress);
   useEffect(() => {
@@ -118,6 +120,7 @@ export function HomeMainScreen({ navigation }: Props) {
         // badge once; stats come from polling.
         fetchRounds();
         fetchRefineryBadge();
+        fetchRefineryOrders();
       }
     } else if (prevAddressRef.current) {
       // Address was removed
@@ -129,6 +132,7 @@ export function HomeMainScreen({ navigation }: Props) {
     refreshUser,
     fetchRounds,
     fetchRefineryBadge,
+    fetchRefineryOrders,
     clearUserData,
     bitcoinAddress,
   ]);
@@ -276,8 +280,11 @@ export function HomeMainScreen({ navigation }: Props) {
               isLoading={isUserLoading}
             />
 
-            {/* Mining Reward (dispenser) — self-hides when address has no eligibility */}
+            {/* Mining Reward (dispenser) — slot grid when eligible, rewards-catalog entry for everyone */}
             <MiningRewardCard />
+
+            {/* Refinery orders — self-hides when address has no orders */}
+            <RefineryCard />
 
             {/* Fleet Overview Card */}
             {fleetStats && (

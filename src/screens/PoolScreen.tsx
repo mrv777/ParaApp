@@ -23,6 +23,7 @@ import {
   selectLoyaltyLeaderboard,
   selectRoundDifficultyLeaderboard,
   selectRoundLoyaltyLeaderboard,
+  selectRoundWorkLeaderboard,
   selectBlocks,
   selectHistorical,
   selectBitcoinPrice,
@@ -47,6 +48,7 @@ export function PoolScreen(_props: Props) {
   const loyaltyLeaderboard = usePoolStore(selectLoyaltyLeaderboard);
   const roundDifficultyLeaderboard = usePoolStore(selectRoundDifficultyLeaderboard);
   const roundLoyaltyLeaderboard = usePoolStore(selectRoundLoyaltyLeaderboard);
+  const roundWorkLeaderboard = usePoolStore(selectRoundWorkLeaderboard);
   const blocks = usePoolStore(selectBlocks);
   const historical = usePoolStore(selectHistorical);
   const bitcoinPrice = usePoolStore(selectBitcoinPrice);
@@ -183,6 +185,7 @@ export function PoolScreen(_props: Props) {
           loyaltyEntries={loyaltyLeaderboard ?? []}
           roundDifficultyEntries={roundDifficultyLeaderboard ?? []}
           roundLoyaltyEntries={roundLoyaltyLeaderboard ?? []}
+          roundWorkEntries={roundWorkLeaderboard ?? []}
           userAddress={userAddress ?? undefined}
           totalMembers={stats?.users}
           isLoading={showLeaderboardsSkeleton}

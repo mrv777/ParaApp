@@ -15,6 +15,56 @@ export interface Eligibility {
   claims: Record<string, number[]>;
 }
 
+/** Tier definition from /api/dispenser/tiers. Thresholds are raw difficulty. */
+export interface TierInfo {
+  name: string;
+  threshold: number;
+  asset: string;
+  start_height?: number;
+  end_height?: number;
+}
+
+/** Asset definition from /api/dispenser/assets. */
+export interface AssetInfo {
+  name: string;
+  description?: string;
+  kind: string;
+  total_utxos: number;
+  assigned: number;
+  is_override_asset: boolean;
+}
+
+/** One row of the "Available Rewards" catalog. */
+export interface RewardCatalogEntry {
+  name: string;
+  description?: string;
+  /** Lowest share-difficulty target for this reward (raw difficulty). */
+  threshold: number;
+}
+
+/**
+ * Build the rewards catalog: only assets with pool remaining, each paired with
+ * the lowest tier threshold that awards it, sorted easiest-first.
+ * Ported from parastats `app/components/dispenser/DispenserRewards.tsx#buildRewards`.
+ */
+export function buildRewardCatalog(
+  assets: AssetInfo[],
+  tiers: TierInfo[]
+): RewardCatalogEntry[] {
+  const rewards: RewardCatalogEntry[] = [];
+  for (const asset of assets) {
+    if (asset.assigned >= asset.total_utxos) continue;
+    const assetTiers = tiers.filter((tier) => tier.asset === asset.name);
+    if (assetTiers.length === 0) continue;
+    rewards.push({
+      name: asset.name,
+      description: asset.description,
+      threshold: Math.min(...assetTiers.map((tier) => tier.threshold)),
+    });
+  }
+  return rewards.sort((a, b) => a.threshold - b.threshold);
+}
+
 export interface DispenserSlot {
   tier: string;
   utxo: string | null;

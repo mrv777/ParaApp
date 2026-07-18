@@ -11,6 +11,9 @@ export {
 // Parasite Pool API
 export * as parasite from './parasite';
 
+// Parasite Pool Refinery (router) API — read-only order monitoring
+export * as refinery from './refinery';
+
 // AxeOS Miner API
 export * as axeOS from './axeOS';
 

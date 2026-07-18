@@ -9,11 +9,12 @@ import type {
   UserStats,
   UserHistoricalPoint,
   UserRoundsResponse,
+  RefineryOrderSummary,
   Account,
   HistoricalPeriod,
   HistoricalInterval,
 } from '@/types';
-import { parasite, isSuccess } from '@/api';
+import { parasite, refinery, isSuccess } from '@/api';
 import { getIntervalForPeriod } from '@/utils/historical';
 import { useSettingsStore } from './settingsStore';
 
@@ -27,6 +28,7 @@ interface UserState {
   historical: CachedData<UserHistoricalPoint[]> | null;
   rounds: CachedData<UserRoundsResponse> | null;
   refineryBadge: CachedData<boolean> | null;
+  refineryOrders: CachedData<RefineryOrderSummary[]> | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -44,6 +46,7 @@ interface UserActions {
   fetchAccount: () => Promise<void>;
   fetchRounds: () => Promise<void>;
   fetchRefineryBadge: () => Promise<void>;
+  fetchRefineryOrders: () => Promise<void>;
   fetchHistorical: (
     period: HistoricalPeriod,
     interval?: HistoricalInterval
@@ -61,6 +64,7 @@ const initialState: UserState = {
   historical: null,
   rounds: null,
   refineryBadge: null,
+  refineryOrders: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
@@ -239,6 +243,24 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     }
   },
 
+  fetchRefineryOrders: async () => {
+    const address = useSettingsStore.getState().bitcoinAddress;
+    if (!address) return;
+
+    const result = await refinery.getRefineryOrders(address);
+
+    // Skip if address changed during fetch
+    if (useSettingsStore.getState().bitcoinAddress !== address) return;
+
+    // Only update on success so the orders list survives transient failures;
+    // address changes are handled by clearUserData().
+    if (isSuccess(result)) {
+      set({
+        refineryOrders: { data: result.data, timestamp: Date.now() },
+      });
+    }
+  },
+
   fetchHistorical: async (period, interval) => {
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
@@ -283,6 +305,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       historical: null,
       rounds: null,
       refineryBadge: null,
+      refineryOrders: null,
       isLoading: false,
       isLoadingHistorical: false,
       error: null,
@@ -292,13 +315,19 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const { fetchUserStats, fetchAccount, fetchRounds, fetchRefineryBadge } =
-      get();
+    const {
+      fetchUserStats,
+      fetchAccount,
+      fetchRounds,
+      fetchRefineryBadge,
+      fetchRefineryOrders,
+    } = get();
     await Promise.all([
       fetchUserStats(),
       fetchAccount(),
       fetchRounds(),
       fetchRefineryBadge(),
+      fetchRefineryOrders(),
     ]);
   },
 }));
@@ -316,5 +345,7 @@ export const selectUserHistorical = (state: UserState) =>
 export const selectUserRounds = (state: UserState) => state.rounds?.data;
 export const selectRefineryBadge = (state: UserState) =>
   state.refineryBadge?.data ?? false;
+export const selectRefineryOrders = (state: UserState) =>
+  state.refineryOrders?.data;
 export const selectIsUserLoading = (state: UserState) => state.isLoading;
 export const selectUserError = (state: UserState) => state.error;
