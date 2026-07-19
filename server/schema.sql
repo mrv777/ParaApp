@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   notify_blocks INTEGER DEFAULT 1,
   notify_workers INTEGER DEFAULT 1,
   notify_best_diff INTEGER DEFAULT 1,
+  notify_rewards INTEGER DEFAULT 1,
   updated_at INTEGER DEFAULT (unixepoch())
 );
 
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS user_state (
   btc_address TEXT PRIMARY KEY,
   worker_statuses TEXT,  -- JSON: {"worker1": {"offlineChecks": 0, "notifiedOffline": false}}
   best_difficulty TEXT,  -- User's overall best difficulty (e.g., "1.12T")
+  dispenser_state TEXT,  -- JSON watermark: {"tier": assignedCount, "__override": n}; NULL = no baseline yet
   last_checked INTEGER
 );
 

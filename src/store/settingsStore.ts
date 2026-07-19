@@ -18,6 +18,7 @@ export interface NotificationPrefs {
   blocks: boolean;
   workers: boolean;
   bestDiff: boolean;
+  rewards: boolean;
 }
 
 interface SettingsState {
@@ -93,7 +94,7 @@ const initialState: SettingsState = {
   language: 'auto',
   bitcoinAddress: null,
   notificationsEnabled: false,
-  notificationPrefs: { blocks: true, workers: true, bestDiff: true },
+  notificationPrefs: { blocks: true, workers: true, bestDiff: true, rewards: true },
   pushToken: null,
   widgetUpdatesEnabled: true,
   chatEulaVersion: null,
@@ -136,7 +137,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
           if (
             next.blocks === state.notificationPrefs.blocks &&
             next.workers === state.notificationPrefs.workers &&
-            next.bestDiff === state.notificationPrefs.bestDiff
+            next.bestDiff === state.notificationPrefs.bestDiff &&
+            next.rewards === state.notificationPrefs.rewards
           ) {
             return state;
           }
@@ -206,7 +208,9 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       },
       // v1: widget background refresh became opt-out (default on).
       // v2: canonicalize persisted uppercase Bech32/Bech32m addresses.
-      version: 2,
+      // v3: notificationPrefs gained `rewards` (default on); the nested object
+      //     is persisted whole, so older snapshots lack the key.
+      version: 3,
       migrate: (persistedState, version) => {
         let state = (persistedState ?? {}) as Partial<SettingsState>;
         if (version < 1) {
@@ -216,6 +220,18 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
           state = {
             ...state,
             bitcoinAddress: normalizeBitcoinAddress(state.bitcoinAddress),
+          };
+        }
+        if (version < 3) {
+          state = {
+            ...state,
+            notificationPrefs: {
+              blocks: true,
+              workers: true,
+              bestDiff: true,
+              ...(state.notificationPrefs ?? {}),
+              rewards: true,
+            },
           };
         }
         return state;

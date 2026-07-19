@@ -30,6 +30,8 @@ interface RegisterResponse {
     blocks: boolean;
     workers: boolean;
     bestDiff: boolean;
+    /** Absent on worker builds predating dispenser-reward notifications */
+    rewards?: boolean;
   } | null;
 }
 

@@ -423,6 +423,7 @@ const pt = {
     blockNotifications: 'Bloco do Pool Encontrado',
     workerNotifications: 'Status do Worker',
     bestDiffNotifications: 'Nova Melhor Dificuldade',
+    rewardNotifications: 'Recompensas de Mineração',
     notificationsDenied:
       'As permissões de notificação foram negadas. Ative-as nas configurações do sistema para receber alertas.',
     widgets: 'Widgets',

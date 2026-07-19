@@ -40,7 +40,8 @@ function notificationPrefsEqual(a: NotificationPrefs, b: NotificationPrefs): boo
   return (
     a.blocks === b.blocks &&
     a.workers === b.workers &&
-    a.bestDiff === b.bestDiff
+    a.bestDiff === b.bestDiff &&
+    a.rewards === b.rewards
   );
 }
 
@@ -189,6 +190,8 @@ export function useNotifications() {
             blocks: result.data.preferences.blocks,
             workers: result.data.preferences.workers,
             bestDiff: result.data.preferences.bestDiff,
+            // Older worker builds omit `rewards`; default to enabled.
+            rewards: result.data.preferences.rewards ?? true,
           }
         );
       }
@@ -250,6 +253,7 @@ export function useNotifications() {
                     blocks: retryResult.data.preferences.blocks,
                     workers: retryResult.data.preferences.workers,
                     bestDiff: retryResult.data.preferences.bestDiff,
+                    rewards: retryResult.data.preferences.rewards ?? true,
                   }
                 );
               }

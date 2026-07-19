@@ -2,7 +2,12 @@
  * Parasite Pool API client for Cloudflare Workers
  */
 
-import type { ParasiteUserResponse, ParasitePoolStatsResponse } from './types';
+import type {
+  ParasiteUserResponse,
+  ParasitePoolStatsResponse,
+  DispenserEligibilityResponse,
+  DispenserTier,
+} from './types';
 
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
 
@@ -10,6 +15,8 @@ interface FetchResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+  /** HTTP status of a non-ok response; callers use it to tell 404 from outage */
+  status?: number;
 }
 
 /**
@@ -36,6 +43,7 @@ async function fetchWithTimeout<T>(
       return {
         success: false,
         error: `HTTP ${response.status}: ${response.statusText}`,
+        status: response.status,
       };
     }
 
@@ -68,6 +76,32 @@ export async function getUser(
     `${baseUrl}/api/user/${encodeURIComponent(address)}`,
     timeoutMs
   );
+}
+
+/**
+ * Get dispenser eligibility for an address. 404 (surfaced via `status`) means
+ * the dispenser has never seen the address — a well-defined "zero slots" state,
+ * distinct from an outage.
+ */
+export async function getDispenserEligibility(
+  baseUrl: string,
+  address: string,
+  timeoutMs: number = DEFAULT_TIMEOUT
+): Promise<FetchResult<DispenserEligibilityResponse>> {
+  return fetchWithTimeout<DispenserEligibilityResponse>(
+    `${baseUrl}/api/dispenser/eligibility/${encodeURIComponent(address)}`,
+    timeoutMs
+  );
+}
+
+/**
+ * Get dispenser tier definitions (tier name → asset), used to name the asset
+ * in reward notifications.
+ */
+export async function getDispenserTiers(
+  baseUrl: string
+): Promise<FetchResult<DispenserTier[]>> {
+  return fetchWithTimeout<DispenserTier[]>(`${baseUrl}/api/dispenser/tiers`);
 }
 
 /**

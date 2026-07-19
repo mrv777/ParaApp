@@ -426,6 +426,7 @@ const fr = {
     blockNotifications: 'Bloc du pool trouvé',
     workerNotifications: 'Statut du worker',
     bestDiffNotifications: 'Nouvelle meilleure difficulté',
+    rewardNotifications: 'Récompenses de minage',
     notificationsDenied:
       'Les autorisations de notification ont été refusées. Activez-les dans les paramètres système pour recevoir des alertes.',
     widgets: 'Widgets',

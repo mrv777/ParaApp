@@ -463,6 +463,7 @@ const en = {
     blockNotifications: 'Pool Block Found',
     workerNotifications: 'Worker Status',
     bestDiffNotifications: 'New Best Difficulty',
+    rewardNotifications: 'Mining Rewards',
     notificationsDenied:
       'Notification permissions were denied. Enable them in system settings to receive alerts.',
     widgets: 'Widgets',

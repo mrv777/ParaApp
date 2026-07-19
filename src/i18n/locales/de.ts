@@ -424,6 +424,7 @@ const de = {
     blockNotifications: 'Pool-Block gefunden',
     workerNotifications: 'Worker-Status',
     bestDiffNotifications: 'Neue beste Schwierigkeit',
+    rewardNotifications: 'Mining-Belohnungen',
     notificationsDenied:
       'Benachrichtigungsberechtigungen wurden verweigert. Aktiviere sie in den Systemeinstellungen, um Benachrichtigungen zu erhalten.',
     widgets: 'Widgets',

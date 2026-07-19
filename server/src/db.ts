@@ -92,11 +92,12 @@ export async function verifyTokenOwnership(
 export async function upsertPreferences(
   db: D1Database,
   btcAddress: string,
-  prefs: { blocks?: boolean; workers?: boolean; bestDiff?: boolean }
+  prefs: { blocks?: boolean; workers?: boolean; bestDiff?: boolean; rewards?: boolean }
 ): Promise<void> {
   const blocks = prefs.blocks !== undefined ? (prefs.blocks ? 1 : 0) : null;
   const workers = prefs.workers !== undefined ? (prefs.workers ? 1 : 0) : null;
   const bestDiff = prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : null;
+  const rewards = prefs.rewards !== undefined ? (prefs.rewards ? 1 : 0) : null;
 
   // One atomic statement covers every state:
   // - missing row: undefined fields receive the schema's enabled-by-default value
@@ -109,13 +110,15 @@ export async function upsertPreferences(
         btc_address,
         notify_blocks,
         notify_workers,
-        notify_best_diff
+        notify_best_diff,
+        notify_rewards
       )
-      VALUES (?, COALESCE(?, 1), COALESCE(?, 1), COALESCE(?, 1))
+      VALUES (?, COALESCE(?, 1), COALESCE(?, 1), COALESCE(?, 1), COALESCE(?, 1))
       ON CONFLICT(btc_address) DO UPDATE SET
         notify_blocks = COALESCE(?, notification_preferences.notify_blocks),
         notify_workers = COALESCE(?, notification_preferences.notify_workers),
         notify_best_diff = COALESCE(?, notification_preferences.notify_best_diff),
+        notify_rewards = COALESCE(?, notification_preferences.notify_rewards),
         updated_at = unixepoch()
     `
     )
@@ -124,9 +127,11 @@ export async function upsertPreferences(
       blocks,
       workers,
       bestDiff,
+      rewards,
       blocks,
       workers,
-      bestDiff
+      bestDiff,
+      rewards
     )
     .run();
 }
@@ -142,13 +147,13 @@ export async function upsertPreferences(
 export async function ensurePreferences(
   db: D1Database,
   btcAddress: string,
-  prefs: { blocks?: boolean; workers?: boolean; bestDiff?: boolean }
+  prefs: { blocks?: boolean; workers?: boolean; bestDiff?: boolean; rewards?: boolean }
 ): Promise<void> {
   await db
     .prepare(
       `
-      INSERT INTO notification_preferences (btc_address, notify_blocks, notify_workers, notify_best_diff)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO notification_preferences (btc_address, notify_blocks, notify_workers, notify_best_diff, notify_rewards)
+      VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(btc_address) DO NOTHING
     `
     )
@@ -156,7 +161,8 @@ export async function ensurePreferences(
       btcAddress,
       prefs.blocks !== undefined ? (prefs.blocks ? 1 : 0) : 1,
       prefs.workers !== undefined ? (prefs.workers ? 1 : 0) : 1,
-      prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : 1
+      prefs.bestDiff !== undefined ? (prefs.bestDiff ? 1 : 0) : 1,
+      prefs.rewards !== undefined ? (prefs.rewards ? 1 : 0) : 1
     )
     .run();
 }
@@ -295,26 +301,30 @@ export async function getUserState(
 }
 
 /**
- * Upsert user state
+ * Upsert user state. `dispenserState` is only written when non-null — the
+ * dispenser is checked on a slower cadence than the per-minute worker loop, so
+ * ticks that didn't check it must preserve the stored watermark.
  */
 export async function upsertUserState(
   db: D1Database,
   btcAddress: string,
   workerStatuses: string,
-  bestDifficulty: string
+  bestDifficulty: string,
+  dispenserState: string | null = null
 ): Promise<void> {
   await db
     .prepare(
       `
-      INSERT INTO user_state (btc_address, worker_statuses, best_difficulty, last_checked)
-      VALUES (?, ?, ?, unixepoch())
+      INSERT INTO user_state (btc_address, worker_statuses, best_difficulty, dispenser_state, last_checked)
+      VALUES (?, ?, ?, ?, unixepoch())
       ON CONFLICT(btc_address) DO UPDATE SET
         worker_statuses = excluded.worker_statuses,
         best_difficulty = excluded.best_difficulty,
+        dispenser_state = COALESCE(excluded.dispenser_state, user_state.dispenser_state),
         last_checked = unixepoch()
     `
     )
-    .bind(btcAddress, workerStatuses, bestDifficulty)
+    .bind(btcAddress, workerStatuses, bestDifficulty, dispenserState)
     .run();
 }
 

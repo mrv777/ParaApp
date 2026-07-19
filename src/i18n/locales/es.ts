@@ -421,6 +421,7 @@ const es = {
     blockNotifications: 'Bloque del Pool Encontrado',
     workerNotifications: 'Estado del Worker',
     bestDiffNotifications: 'Nueva Mejor Dificultad',
+    rewardNotifications: 'Recompensas de Minería',
     notificationsDenied:
       'Los permisos de notificación fueron denegados. Actívalos en los ajustes del sistema para recibir alertas.',
     widgets: 'Widgets',

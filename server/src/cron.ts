@@ -10,6 +10,7 @@ import type {
   ExpoPushMessage,
   ParasiteWorker,
   PushSubscription,
+  DispenserEligibilityResponse,
 } from './types';
 import {
   getUserState,
@@ -28,7 +29,12 @@ import {
   pruneCronRuns,
 } from './db';
 import { pruneChatMessages, pruneExpiredBans, pruneAuditLog } from './chat/db';
-import { getUser, getPoolStats } from './parasite-api';
+import {
+  getUser,
+  getPoolStats,
+  getDispenserEligibility,
+  getDispenserTiers,
+} from './parasite-api';
 import {
   sendPushNotifications,
   createPushMessage,
@@ -62,6 +68,11 @@ const CHAT_AUDIT_RETENTION_SEC = 90 * 24 * 60 * 60;
 // spanning 61 seconds, long enough to overlap the next one-minute tick.
 const USER_BATCH_SIZE = 6;
 const CRON_USER_TIMEOUT_MS = 5000;
+// Each address's dispenser eligibility is checked every Nth tick (rotating
+// shard), not every minute: reward assignment is rare and a few minutes of
+// latency is invisible, while a per-tick check would double the per-address
+// subrequest fan-out and halve the ~1000-address subrequest ceiling.
+const DISPENSER_CHECK_INTERVAL_TICKS = 5;
 const CRON_USER_DEADLINE_MS = 45_000;
 const CRON_DURATION_WARNING_MS = 52_000;
 
@@ -153,6 +164,87 @@ export function getUserRotationOffset(
   while (greatestCommonDivisor(stride, addressCount) !== 1) stride++;
   const tick = Math.floor(scheduledTime / 60_000) % addressCount;
   return (tick * stride) % addressCount;
+}
+
+/**
+ * Deterministic rotating shard for dispenser checks: each address hashes to a
+ * fixed slot in [0, DISPENSER_CHECK_INTERVAL_TICKS) and is checked on the ticks
+ * whose minute index lands on that slot — every address exactly once per
+ * interval, ~1/N of them per tick.
+ */
+export function shouldCheckDispenser(
+  address: string,
+  scheduledTime: number
+): boolean {
+  const tick = Math.floor(scheduledTime / 60_000);
+  let hash = 5381;
+  for (let i = 0; i < address.length; i++) {
+    hash = (Math.imul(hash, 33) ^ address.charCodeAt(i)) >>> 0;
+  }
+  return (
+    tick % DISPENSER_CHECK_INTERVAL_TICKS ===
+    hash % DISPENSER_CHECK_INTERVAL_TICKS
+  );
+}
+
+/** Per-tier assigned-slot counts (override slots under the `__override` key). */
+export type DispenserSlotCounts = Record<string, number>;
+
+/**
+ * Collapse an eligibility payload to per-tier assigned-slot counts. Only tiers
+ * with at least one assigned inscription appear; tier_shares without an
+ * assignment (e.g. exhausted asset pool) are deliberately excluded — a reward
+ * only counts once there is actually something to claim.
+ */
+export function buildDispenserCounts(
+  data: DispenserEligibilityResponse
+): DispenserSlotCounts {
+  const counts: DispenserSlotCounts = {};
+  for (const [tier, ids] of Object.entries(data.assigned_inscription_ids ?? {})) {
+    if (Array.isArray(ids) && ids.length > 0) counts[tier] = ids.length;
+  }
+  if (typeof data.override_slots === 'number' && data.override_slots > 0) {
+    counts.__override = data.override_slots;
+  }
+  return counts;
+}
+
+/**
+ * Diff current dispenser slot counts against the stored watermark.
+ *
+ * Watermark semantics — the stored count per tier only ever rises: a tier that
+ * flaps low (partial payload, dispenser glitch) and recovers must not re-fire,
+ * and a tier disappearing (ended campaign) must not mask a genuine increase in
+ * another tier. First observation (no stored state, including unparseable
+ * state) establishes a baseline and never notifies — otherwise every existing
+ * slot-holder would be alerted the first time this runs.
+ */
+export function diffDispenserRewards(
+  storedJson: string | null | undefined,
+  current: DispenserSlotCounts
+): { newSlots: { tier: string; count: number }[]; nextState: string } {
+  let stored: DispenserSlotCounts | null = null;
+  if (storedJson) {
+    try {
+      const parsed = JSON.parse(storedJson);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        stored = parsed as DispenserSlotCounts;
+      }
+    } catch {
+      // fall through to baseline
+    }
+  }
+
+  const watermark: DispenserSlotCounts = { ...(stored ?? {}) };
+  const newSlots: { tier: string; count: number }[] = [];
+  for (const [tier, count] of Object.entries(current)) {
+    const prev = typeof watermark[tier] === 'number' ? watermark[tier] : 0;
+    if (count > prev) {
+      if (stored !== null) newSlots.push({ tier, count: count - prev });
+      watermark[tier] = count;
+    }
+  }
+  return { newSlots, nextState: JSON.stringify(watermark) };
 }
 
 /**
@@ -328,6 +420,20 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     totalAddresses = entries.length;
     const offset = getUserRotationOffset(scheduledTime, entries.length);
     const orderedEntries = entries.slice(offset).concat(entries.slice(0, offset));
+
+    // Tier → asset names for reward notification bodies. One subrequest, only
+    // when at least one address is in this tick's dispenser shard; failure just
+    // degrades to a generic message.
+    let tierAssets: Map<string, string> | null = null;
+    if (entries.some(([address]) => shouldCheckDispenser(address, scheduledTime))) {
+      const tiersResult = await getDispenserTiers(env.PARASITE_API_URL);
+      if (tiersResult.success && Array.isArray(tiersResult.data)) {
+        tierAssets = new Map(
+          tiersResult.data.map((tier) => [tier.name, tier.asset])
+        );
+      }
+    }
+
     for (let i = 0; i < orderedEntries.length; i += USER_BATCH_SIZE) {
       if (Date.now() - runStartedAt >= CRON_USER_DEADLINE_MS) {
         deadlineReached = true;
@@ -337,7 +443,12 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
       const batch = orderedEntries.slice(i, i + USER_BATCH_SIZE);
       attemptedAddresses += batch.length;
       const results = await Promise.allSettled(
-        batch.map(([address, tokens]) => processUser(env, address, tokens))
+        batch.map(([address, tokens]) =>
+          processUser(env, address, tokens, {
+            checkDispenser: shouldCheckDispenser(address, scheduledTime),
+            tierAssets,
+          })
+        )
       );
       for (let j = 0; j < results.length; j++) {
         const result = results[j];
@@ -524,7 +635,11 @@ async function checkPoolBlock(
 async function processUser(
   env: Env,
   address: string,
-  tokens: PushSubscription[]
+  tokens: PushSubscription[],
+  dispenser: {
+    checkDispenser: boolean;
+    tierAssets: Map<string, string> | null;
+  }
 ): Promise<{
   messages: ExpoPushMessage[];
   widgetTokens: string[];
@@ -537,12 +652,14 @@ async function processUser(
     return { messages, widgetTokens, stateUpdated: false }; // Defensive only
   }
 
-  // Fetch user data from Parasite Pool
-  const userResult = await getUser(
-    env.PARASITE_API_URL,
-    address,
-    CRON_USER_TIMEOUT_MS
-  );
+  // Fetch user data from Parasite Pool (and, on this address's dispenser tick,
+  // its eligibility in parallel so the 45s deadline budget barely moves)
+  const [userResult, eligibilityResult] = await Promise.all([
+    getUser(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS),
+    dispenser.checkDispenser
+      ? getDispenserEligibility(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS)
+      : Promise.resolve(null),
+  ]);
   if (!userResult.success || !userResult.data) {
     console.log(`Failed to fetch user ${address}, skipping`);
     return { messages, widgetTokens, stateUpdated: false };
@@ -575,6 +692,57 @@ async function processUser(
 
   const workersEnabled = prefs ? prefs.notify_workers === 1 : true;
   const bestDiffEnabled = prefs ? prefs.notify_best_diff === 1 : true;
+  // Rows predating migration 0012 have notify_rewards NULL — treat as enabled,
+  // matching the column default.
+  const rewardsEnabled = prefs ? prefs.notify_rewards !== 0 : true;
+
+  // Dispenser reward diff. 404 = known zero-slot state (valid baseline); any
+  // other failure preserves the stored watermark (dispenserState stays null so
+  // the upsert's COALESCE keeps it) and sends nothing.
+  let dispenserState: string | null = null;
+  if (eligibilityResult) {
+    const knownEmpty =
+      !eligibilityResult.success && eligibilityResult.status === 404;
+    if ((eligibilityResult.success && eligibilityResult.data) || knownEmpty) {
+      const counts = eligibilityResult.success
+        ? buildDispenserCounts(eligibilityResult.data ?? {})
+        : {};
+      const { newSlots, nextState } = diffDispenserRewards(
+        userState?.dispenser_state,
+        counts
+      );
+      dispenserState = nextState;
+
+      if (rewardsEnabled && newSlots.length > 0) {
+        const total = newSlots.reduce((sum, slot) => sum + slot.count, 0);
+        const assetNames = [
+          ...new Set(
+            newSlots
+              .filter((slot) => slot.tier !== '__override')
+              .map((slot) => dispenser.tierAssets?.get(slot.tier))
+              .filter((name): name is string => Boolean(name))
+          ),
+        ];
+        const title =
+          total === 1 ? 'Mining Reward Earned!' : 'Mining Rewards Earned!';
+        const body =
+          total === 1
+            ? assetNames.length === 1
+              ? `You earned a mining reward: ${assetNames[0]}. Claim it on parasite.space`
+              : 'You earned a mining reward! Claim it on parasite.space'
+            : `You earned ${total} mining rewards! Claim them on parasite.space`;
+        for (const sub of tokens) {
+          if (sub.notifications_enabled !== 1) continue;
+          messages.push(
+            createPushMessage(sub.push_token, title, body, {
+              type: 'dispenser_reward',
+              count: total,
+            })
+          );
+        }
+      }
+    }
+  }
 
   // Parse stored worker statuses
   let storedStatuses: WorkerStatusMap = {};
@@ -722,7 +890,8 @@ async function processUser(
     env.DB,
     address,
     JSON.stringify(newStatuses),
-    userData.bestDifficulty || ''
+    userData.bestDifficulty || '',
+    dispenserState
   );
 
   return { messages, widgetTokens, stateUpdated: true };

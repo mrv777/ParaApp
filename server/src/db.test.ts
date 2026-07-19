@@ -32,6 +32,8 @@ describe('upsertPreferences', () => {
       null,
       null,
       null,
+      null,
+      null,
     ]);
   });
 
@@ -40,6 +42,7 @@ describe('upsertPreferences', () => {
     await upsertPreferences(db, 'bc1qtest', {
       blocks: false,
       bestDiff: true,
+      rewards: false,
     });
 
     expect(calls).toHaveLength(1);
@@ -49,8 +52,10 @@ describe('upsertPreferences', () => {
       null,
       1,
       0,
+      0,
       null,
       1,
+      0,
     ]);
   });
 });

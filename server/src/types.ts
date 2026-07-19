@@ -25,6 +25,7 @@ export interface NotificationPreferences {
   notify_blocks: number; // 1 or 0
   notify_workers: number;
   notify_best_diff: number;
+  notify_rewards: number;
   updated_at: number;
 }
 
@@ -32,6 +33,7 @@ export interface UserState {
   btc_address: string;
   worker_statuses: string | null; // JSON string of WorkerStatusMap
   best_difficulty: string | null; // User's overall best difficulty (e.g., "1.12T")
+  dispenser_state: string | null; // JSON watermark of per-tier assigned-slot counts
   last_checked: number | null;
 }
 
@@ -79,6 +81,18 @@ export interface ParasitePoolStatsResponse {
   hashrate: number;
   users: number;
   workers: number;
+}
+
+// Dispenser eligibility (only the fields the reward diff needs; the endpoint
+// returns more). 404 = address unknown to the dispenser = zero slots.
+export interface DispenserEligibilityResponse {
+  override_slots?: number;
+  assigned_inscription_ids?: Record<string, string[]>;
+}
+
+export interface DispenserTier {
+  name: string;
+  asset: string;
 }
 
 // ============================================

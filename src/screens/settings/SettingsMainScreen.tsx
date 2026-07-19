@@ -499,6 +499,14 @@ export function SettingsMainScreen({ navigation }: Props) {
                   />
                 </SettingRow>
               )}
+              {notificationsEnabled && permissionStatus === 'granted' && (
+                <SettingRow label={t('settings.rewardNotifications')}>
+                  <Switch
+                    value={notificationPrefs.rewards}
+                    onValueChange={() => handleToggleNotificationPref('rewards')}
+                  />
+                </SettingRow>
+              )}
             </SettingsCard>
           )}
 

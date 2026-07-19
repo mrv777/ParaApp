@@ -12,7 +12,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 beforeEach(() => {
   useSettingsStore.setState({
     bitcoinAddress: null,
-    notificationPrefs: { blocks: true, workers: true, bestDiff: true },
+    notificationPrefs: { blocks: true, workers: true, bestDiff: true, rewards: true },
   });
 });
 

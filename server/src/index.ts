@@ -178,6 +178,7 @@ app.post('/register', async (c) => {
                 blocks: prefs.notify_blocks === 1,
                 workers: prefs.notify_workers === 1,
                 bestDiff: prefs.notify_best_diff === 1,
+                rewards: prefs.notify_rewards !== 0,
               }
             : null,
         });
@@ -213,6 +214,7 @@ app.post('/register', async (c) => {
             blocks: prefs.notify_blocks === 1,
             workers: prefs.notify_workers === 1,
             bestDiff: prefs.notify_best_diff === 1,
+            rewards: prefs.notify_rewards !== 0,
           }
         : null,
     });

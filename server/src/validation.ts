@@ -9,6 +9,7 @@ export const registerSchema = z.object({
       blocks: z.boolean().default(true),
       workers: z.boolean().default(true),
       bestDiff: z.boolean().default(true),
+      rewards: z.boolean().default(true),
     })
     .optional(),
   widgetUpdatesEnabled: z.boolean().optional(),
@@ -25,6 +26,7 @@ export const preferencesSchema = z.object({
   blocks: z.boolean().optional(),
   workers: z.boolean().optional(),
   bestDiff: z.boolean().optional(),
+  rewards: z.boolean().optional(),
   widgetUpdatesEnabled: z.boolean().optional(),
   notificationsEnabled: z.boolean().optional(),
 });
