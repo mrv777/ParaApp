@@ -24,6 +24,7 @@ export {
   selectUserStats,
   selectUserWorkers,
   selectUserHistorical,
+  selectUserDifficultyHits,
   selectIsUserLoading,
   selectUserError,
 } from './userStore';

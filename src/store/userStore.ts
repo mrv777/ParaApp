@@ -8,6 +8,7 @@ import type {
   ApiError,
   UserStats,
   UserHistoricalPoint,
+  UserDifficultyHit,
   UserRoundsResponse,
   RefineryOrderSummary,
   Account,
@@ -26,6 +27,8 @@ interface UserState {
   statsAddress: string | null;
   account: CachedData<Account | null> | null;
   historical: CachedData<UserHistoricalPoint[]> | null;
+  difficultyHits: CachedData<UserDifficultyHit[]> | null;
+  difficultyHitsAddress: string | null;
   rounds: CachedData<UserRoundsResponse> | null;
   refineryBadge: CachedData<boolean> | null;
   refineryOrders: CachedData<RefineryOrderSummary[]> | null;
@@ -36,6 +39,8 @@ interface UserState {
   // Loading states
   isLoading: boolean;
   isLoadingHistorical: boolean;
+  isLoadingDifficultyHits: boolean;
+  difficultyHitsLastAttempt: number | null;
 
   // Error state
   error: ApiError | null;
@@ -47,10 +52,8 @@ interface UserActions {
   fetchRounds: () => Promise<void>;
   fetchRefineryBadge: () => Promise<void>;
   fetchRefineryOrders: () => Promise<void>;
-  fetchHistorical: (
-    period: HistoricalPeriod,
-    interval?: HistoricalInterval
-  ) => Promise<void>;
+  fetchDifficultyHits: (options?: { force?: boolean }) => Promise<void>;
+  fetchHistorical: (period: HistoricalPeriod, interval?: HistoricalInterval) => Promise<void>;
   setHistoricalPeriod: (period: HistoricalPeriod) => void;
   clearError: () => void;
   clearUserData: () => void;
@@ -62,12 +65,16 @@ const initialState: UserState = {
   statsAddress: null,
   account: null,
   historical: null,
+  difficultyHits: null,
+  difficultyHitsAddress: null,
   rounds: null,
   refineryBadge: null,
   refineryOrders: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
+  isLoadingDifficultyHits: false,
+  difficultyHitsLastAttempt: null,
   error: null,
 };
 
@@ -96,6 +103,7 @@ function calculateAverageHashrate(
 // Duration constants
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const DIFFICULTY_HITS_MAX_AGE_MS = 5 * 60 * 1000;
 
 function historicalSeriesEqual(
   a: UserHistoricalPoint[] | undefined,
@@ -103,9 +111,7 @@ function historicalSeriesEqual(
 ): boolean {
   if (!a || a.length !== b.length) return false;
   return a.every(
-    (point, index) =>
-      point.timestamp === b[index].timestamp &&
-      point.hashrate === b[index].hashrate
+    (point, index) => point.timestamp === b[index].timestamp && point.hashrate === b[index].hashrate
   );
 }
 
@@ -142,14 +148,8 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
 
       // Compute averages from historical data
       if (isSuccess(historicalResult) && historicalResult.data.length > 0) {
-        const hashrate1h = calculateAverageHashrate(
-          historicalResult.data,
-          ONE_HOUR_MS
-        );
-        const hashrate24h = calculateAverageHashrate(
-          historicalResult.data,
-          TWENTY_FOUR_HOURS_MS
-        );
+        const hashrate1h = calculateAverageHashrate(historicalResult.data, ONE_HOUR_MS);
+        const hashrate24h = calculateAverageHashrate(historicalResult.data, TWENTY_FOUR_HOURS_MS);
 
         statsWithAverages = {
           ...userResult.data,
@@ -163,10 +163,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       const shouldRefreshChart =
         isSuccess(historicalResult) &&
         currentState.historicalPeriod === '24h' &&
-        !historicalSeriesEqual(
-          currentState.historical?.data,
-          historicalResult.data
-        );
+        !historicalSeriesEqual(currentState.historical?.data, historicalResult.data);
 
       set({
         stats: { data: statsWithAverages, timestamp: fetchedAt },
@@ -261,6 +258,58 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     }
   },
 
+  fetchDifficultyHits: async (options) => {
+    const address = useSettingsStore.getState().bitcoinAddress;
+    if (!address) return;
+
+    const now = Date.now();
+    const {
+      difficultyHits,
+      difficultyHitsAddress,
+      difficultyHitsLastAttempt,
+      isLoadingDifficultyHits,
+    } = get();
+    const cacheIsFresh =
+      difficultyHitsAddress === address &&
+      difficultyHits != null &&
+      now - difficultyHits.timestamp < DIFFICULTY_HITS_MAX_AGE_MS;
+    const attemptedRecently =
+      difficultyHitsAddress === address &&
+      difficultyHitsLastAttempt != null &&
+      now - difficultyHitsLastAttempt < DIFFICULTY_HITS_MAX_AGE_MS;
+
+    if (isLoadingDifficultyHits || (!options?.force && (cacheIsFresh || attemptedRecently))) {
+      return;
+    }
+
+    set({
+      isLoadingDifficultyHits: true,
+      difficultyHitsAddress: address,
+      difficultyHitsLastAttempt: now,
+    });
+    const result = await parasite.getUserDifficultyHits(address, 500);
+
+    // A late response must never attach one wallet's hits to another wallet.
+    if (useSettingsStore.getState().bitcoinAddress !== address) {
+      if (get().difficultyHitsAddress === address) {
+        set({ isLoadingDifficultyHits: false });
+      }
+      return;
+    }
+
+    if (isSuccess(result)) {
+      set({
+        difficultyHits: { data: result.data, timestamp: Date.now() },
+        difficultyHitsAddress: address,
+        isLoadingDifficultyHits: false,
+      });
+    } else {
+      // This enhancement is non-critical. Keep any stale markers and do not
+      // replace the primary user error shown on Home.
+      set({ isLoadingDifficultyHits: false });
+    }
+  },
+
   fetchHistorical: async (period, interval) => {
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
@@ -268,11 +317,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     set({ isLoadingHistorical: true, historicalPeriod: period });
 
     const actualInterval = interval || getIntervalForPeriod(period);
-    const result = await parasite.getUserHistorical(
-      address,
-      period,
-      actualInterval
-    );
+    const result = await parasite.getUserHistorical(address, period, actualInterval);
 
     // Skip if address changed during fetch
     if (useSettingsStore.getState().bitcoinAddress !== address) return;
@@ -303,11 +348,15 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       statsAddress: null,
       account: null,
       historical: null,
+      difficultyHits: null,
+      difficultyHitsAddress: null,
       rounds: null,
       refineryBadge: null,
       refineryOrders: null,
       isLoading: false,
       isLoadingHistorical: false,
+      isLoadingDifficultyHits: false,
+      difficultyHitsLastAttempt: null,
       error: null,
     }),
 
@@ -321,6 +370,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       fetchRounds,
       fetchRefineryBadge,
       fetchRefineryOrders,
+      fetchDifficultyHits,
     } = get();
     await Promise.all([
       fetchUserStats(),
@@ -328,24 +378,24 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       fetchRounds(),
       fetchRefineryBadge(),
       fetchRefineryOrders(),
+      fetchDifficultyHits({ force: true }),
     ]);
   },
 }));
 
 // Stable empty array for selectors (prevents infinite loops)
 const EMPTY_WORKERS: import('@/types').UserWorker[] = [];
+const EMPTY_DIFFICULTY_HITS: UserDifficultyHit[] = [];
 
 // Selectors
 export const selectUserStats = (state: UserState) => state.stats?.data;
 export const selectUserAccount = (state: UserState) => state.account?.data;
-export const selectUserWorkers = (state: UserState) =>
-  state.stats?.data?.workers ?? EMPTY_WORKERS;
-export const selectUserHistorical = (state: UserState) =>
-  state.historical?.data;
+export const selectUserWorkers = (state: UserState) => state.stats?.data?.workers ?? EMPTY_WORKERS;
+export const selectUserHistorical = (state: UserState) => state.historical?.data;
+export const selectUserDifficultyHits = (state: UserState) =>
+  state.difficultyHits?.data ?? EMPTY_DIFFICULTY_HITS;
 export const selectUserRounds = (state: UserState) => state.rounds?.data;
-export const selectRefineryBadge = (state: UserState) =>
-  state.refineryBadge?.data ?? false;
-export const selectRefineryOrders = (state: UserState) =>
-  state.refineryOrders?.data;
+export const selectRefineryBadge = (state: UserState) => state.refineryBadge?.data ?? false;
+export const selectRefineryOrders = (state: UserState) => state.refineryOrders?.data;
 export const selectIsUserLoading = (state: UserState) => state.isLoading;
 export const selectUserError = (state: UserState) => state.error;

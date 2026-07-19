@@ -18,6 +18,8 @@ import type {
   UserWorker,
   UserHistoricalPoint,
   UserHistoricalPointApiResponse,
+  UserDifficultyHit,
+  UserDifficultyHitApiResponse,
   UserRoundsResponse,
   Account,
   AccountApiResponse,
@@ -112,12 +114,29 @@ function transformAccount(raw: AccountApiResponse): Account | null {
 /**
  * Transform raw historical point to app format
  */
-function transformHistoricalPoint(
-  raw: UserHistoricalPointApiResponse
-): UserHistoricalPoint {
+function transformHistoricalPoint(raw: UserHistoricalPointApiResponse): UserHistoricalPoint {
   return {
     timestamp: new Date(raw.timestamp).getTime(),
     hashrate: raw.hashrate,
+  };
+}
+
+function transformDifficultyHit(raw: UserDifficultyHitApiResponse): UserDifficultyHit | null {
+  if (
+    !Number.isInteger(raw.block_height) ||
+    raw.block_height <= 0 ||
+    !Number.isFinite(raw.difficulty) ||
+    raw.difficulty <= 0 ||
+    !Number.isFinite(raw.block_timestamp) ||
+    (raw.block_timestamp ?? 0) <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    blockHeight: raw.block_height,
+    difficulty: raw.difficulty,
+    timestamp: raw.block_timestamp! * 1000,
   };
 }
 
@@ -138,9 +157,7 @@ export async function getPoolHistorical(
   interval: HistoricalInterval
 ): Promise<ApiResult<PoolHistoricalPoint[]>> {
   const params = new URLSearchParams({ period, interval });
-  return fetchWithTimeout<PoolHistoricalPoint[]>(
-    `${BASE_URL}/api/pool-stats/historical?${params}`
-  );
+  return fetchWithTimeout<PoolHistoricalPoint[]>(`${BASE_URL}/api/pool-stats/historical?${params}`);
 }
 
 /**
@@ -148,9 +165,7 @@ export async function getPoolHistorical(
  * @param address - Bitcoin address
  */
 export async function getAccount(address: string): Promise<ApiResult<Account | null>> {
-  const result = await fetchWithTimeout<AccountApiResponse>(
-    `${BASE_URL}/api/account/${address}`
-  );
+  const result = await fetchWithTimeout<AccountApiResponse>(`${BASE_URL}/api/account/${address}`);
 
   if (result.success && result.data) {
     return { success: true, data: transformAccount(result.data) };
@@ -163,9 +178,7 @@ export async function getAccount(address: string): Promise<ApiResult<Account | n
  * @param address - Bitcoin address
  */
 export async function getUser(address: string): Promise<ApiResult<UserStats>> {
-  const result = await fetchWithTimeout<UserStatsApiResponse>(
-    `${BASE_URL}/api/user/${address}`
-  );
+  const result = await fetchWithTimeout<UserStatsApiResponse>(`${BASE_URL}/api/user/${address}`);
 
   if (result.success && result.data) {
     return { success: true, data: transformUserStats(result.data) };
@@ -196,6 +209,41 @@ export async function getUserHistorical(
 }
 
 /**
+ * Get the user's best difficulty for recent Bitcoin blocks.
+ * The upstream endpoint retains and returns at most 500 blocks.
+ */
+export async function getUserDifficultyHits(
+  address: string,
+  limit: number = 500
+): Promise<ApiResult<UserDifficultyHit[]>> {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 1, 1), 500);
+  const params = new URLSearchParams({
+    address,
+    type: 'user-diffs',
+    limit: safeLimit.toString(),
+  });
+  const result = await fetchWithTimeout<UserDifficultyHitApiResponse[]>(
+    `${BASE_URL}/api/highest-diff?${params}`
+  );
+
+  if (result.success && Array.isArray(result.data)) {
+    const hits: UserDifficultyHit[] = [];
+    for (const raw of result.data) {
+      const hit = transformDifficultyHit(raw);
+      if (hit) hits.push(hit);
+    }
+    return { success: true, data: hits };
+  }
+  if (result.success) {
+    return {
+      success: false,
+      error: { message: 'Invalid difficulty history response' },
+    };
+  }
+  return result as ApiResult<UserDifficultyHit[]>;
+}
+
+/**
  * Get difficulty leaderboard
  * @param limit - Number of entries to return (default: 420)
  * @param round - Optional round scope ('current' for since last block)
@@ -209,9 +257,7 @@ export async function getDifficultyLeaderboard(
     limit: limit.toString(),
   });
   if (round) params.set('round', round);
-  return fetchWithTimeout<DifficultyLeaderboardEntry[]>(
-    `${BASE_URL}/api/leaderboard?${params}`
-  );
+  return fetchWithTimeout<DifficultyLeaderboardEntry[]>(`${BASE_URL}/api/leaderboard?${params}`);
 }
 
 /**
@@ -228,9 +274,7 @@ export async function getLoyaltyLeaderboard(
     limit: limit.toString(),
   });
   if (round) params.set('round', round);
-  return fetchWithTimeout<LoyaltyLeaderboardEntry[]>(
-    `${BASE_URL}/api/leaderboard?${params}`
-  );
+  return fetchWithTimeout<LoyaltyLeaderboardEntry[]>(`${BASE_URL}/api/leaderboard?${params}`);
 }
 
 /**
@@ -242,9 +286,7 @@ export async function getRoundWorkLeaderboard(
   limit: number = 420
 ): Promise<ApiResult<RoundWorkLeaderboardEntry[]>> {
   const params = new URLSearchParams({ type: 'work', limit: limit.toString() });
-  return fetchWithTimeout<RoundWorkLeaderboardEntry[]>(
-    `${BASE_URL}/api/rounds/current?${params}`
-  );
+  return fetchWithTimeout<RoundWorkLeaderboardEntry[]>(`${BASE_URL}/api/rounds/current?${params}`);
 }
 
 /**
@@ -256,9 +298,7 @@ export async function getHighestDiffBlocks(
   limit: number = 25
 ): Promise<ApiResult<LeaderboardEntry[]>> {
   const params = new URLSearchParams({ limit: limit.toString() });
-  return fetchWithTimeout<LeaderboardEntry[]>(
-    `${BASE_URL}/api/highest-diff?${params}`
-  );
+  return fetchWithTimeout<LeaderboardEntry[]>(`${BASE_URL}/api/highest-diff?${params}`);
 }
 
 /**
@@ -267,15 +307,11 @@ export async function getHighestDiffBlocks(
  * and any round without a winner_diff.
  */
 export async function getRounds(): Promise<ApiResult<RoundSummary[]>> {
-  const result = await fetchWithTimeout<RoundSummary[]>(
-    `${BASE_URL}/api/rounds`
-  );
+  const result = await fetchWithTimeout<RoundSummary[]>(`${BASE_URL}/api/rounds`);
   if (result.success) {
     return {
       success: true,
-      data: result.data.filter(
-        (r) => r.block_height > 0 && r.winner_diff != null
-      ),
+      data: result.data.filter((r) => r.block_height > 0 && r.winner_diff != null),
     };
   }
   return result;
@@ -291,9 +327,7 @@ export async function getUserRounds(
   limit: number = 100
 ): Promise<ApiResult<UserRoundsResponse>> {
   const params = new URLSearchParams({ limit: limit.toString() });
-  return fetchWithTimeout<UserRoundsResponse>(
-    `${BASE_URL}/api/user/${address}/rounds?${params}`
-  );
+  return fetchWithTimeout<UserRoundsResponse>(`${BASE_URL}/api/user/${address}/rounds?${params}`);
 }
 
 /**
@@ -303,9 +337,7 @@ export async function getUserRounds(
  * unknown/private/invalid addresses, so a non-success result maps to false.
  * @param address - Bitcoin address
  */
-export async function getRefineryOperatorBadge(
-  address: string
-): Promise<ApiResult<boolean>> {
+export async function getRefineryOperatorBadge(address: string): Promise<ApiResult<boolean>> {
   const result = await fetchWithTimeout<{ hasRefineryOperatorBadge?: boolean }>(
     `${BASE_URL}/api/router/refinery-operator?address=${encodeURIComponent(address)}`
   );

@@ -51,6 +51,12 @@ const fr = {
     workers: 'Workers',
     hashrate: 'Hashrate',
     bestDiff: 'Meilleure diff.',
+    hashrateAndBestDiff: 'Hashrate et meilleure diff.',
+    bestDiffShortRangeNote:
+      'Les marqueurs de meilleure difficulté sont disponibles dans les vues 1h et 24h.',
+    tapDifficultyTimeline: 'Touchez la chronologie pour consulter',
+    blockNumber: 'Bloc #{{height}}',
+    bestDiffHitAccessibility: 'Meilleure diff. {{diff}}, bloc {{block}}, {{time}}',
     fleet: 'Flotte de mineurs',
     swarm: 'Essaim',
     noMiners: 'Aucun mineur configuré',

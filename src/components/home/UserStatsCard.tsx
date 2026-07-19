@@ -11,27 +11,38 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { SkeletonStatItem } from '../SkeletonLoader';
-import { TimePresetButtons, UserHashrateChart } from '../charts';
+import {
+  getDifficultyHitPosition,
+  getHighestDifficultyHit,
+  selectVisibleDifficultyHits,
+  TimePresetButtons,
+  UserHashrateChart,
+} from '../charts';
 import { formatXAxisLabel } from '../charts/chart-utils';
 import { BlockMedal, RefineryMedal } from './BadgeMedals';
-import { formatHashrate, truncateAddress } from '@/utils/formatting';
+import { formatDifficulty, formatHashrate, truncateAddress } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
 import type {
   UserStats,
+  UserDifficultyHit,
   UserHistoricalPoint,
+  UserRoundHistoryEntry,
   UserRoundsResponse,
   HistoricalPeriod,
 } from '@/types';
 
 const CHART_HEIGHT = 96;
 const EMPTY_HISTORY: UserHistoricalPoint[] = [];
+const EMPTY_DIFFICULTY_HITS: UserDifficultyHit[] = [];
+const EMPTY_ROUND_HISTORY: UserRoundHistoryEntry[] = [];
 
 export interface UserStatsCardProps {
   stats: UserStats | null;
   walletAddress?: string;
   period: HistoricalPeriod;
   historical?: UserHistoricalPoint[];
+  difficultyHits?: UserDifficultyHit[];
   onPeriodChange: (period: HistoricalPeriod) => void;
   isLoadingHistorical?: boolean;
   onChartPress?: () => void;
@@ -54,7 +65,10 @@ function splitHashrate(value: string): [string, string] {
 function SubStat({ label, value }: { label: string; value: string }) {
   return (
     <Text variant="mono" style={{ fontSize: 12, color: colors.textMuted }}>
-      {label} <Text variant="mono" style={{ fontSize: 12, color: colors.textValue }}>{value}</Text>
+      {label}{' '}
+      <Text variant="mono" style={{ fontSize: 12, color: colors.textValue }}>
+        {value}
+      </Text>
     </Text>
   );
 }
@@ -64,6 +78,7 @@ export function UserStatsCard({
   walletAddress = '',
   period,
   historical = EMPTY_HISTORY,
+  difficultyHits = EMPTY_DIFFICULTY_HITS,
   onPeriodChange,
   isLoadingHistorical = false,
   onChartPress,
@@ -90,9 +105,18 @@ export function UserStatsCard({
     const last = historical[historical.length - 1];
     return [first, mid, last].map((p) => formatXAxisLabel(p.timestamp, period));
   }, [historical, period]);
+  const compactDifficultyHit = useMemo(() => {
+    const hit = getHighestDifficultyHit(
+      selectVisibleDifficultyHits(difficultyHits, historical, period)
+    );
+    if (!hit) return null;
+
+    const position = getDifficultyHitPosition(hit, historical);
+    return position === null ? null : { hit, position };
+  }, [difficultyHits, historical, period]);
 
   // Badge avatars (real medals) + total count for the footer.
-  const history = rounds?.history ?? [];
+  const history = rounds?.history ?? EMPTY_ROUND_HISTORY;
   const totalBadges = history.length + (hasRefineryBadge ? 1 : 0);
   const avatarMedals = useMemo(() => {
     const medals: ReactNode[] = history
@@ -191,10 +215,7 @@ export function UserStatsCard({
                 label={t('home.oneDayShort')}
                 value={stats?.hashrate24h ? formatHashrate(stats.hashrate24h) : '--'}
               />
-              <SubStat
-                label={t('home.bestShort')}
-                value={stats?.bestDifficultyFormatted || '--'}
-              />
+              <SubStat label={t('home.bestShort')} value={stats?.bestDifficultyFormatted || '--'} />
             </View>
           </>
         )}
@@ -202,8 +223,24 @@ export function UserStatsCard({
         {/* Chart — a sparkline; tap anywhere opens the full-screen interactive
             chart. pointerEvents="none" lets the tap fall through to the Pressable
             (and keeps the embedded chart from showing its own clipped tooltip). */}
-        <Pressable onPress={onChartPress} style={{ marginTop: 12 }}>
-          <View pointerEvents="none">
+        {compactDifficultyHit ? (
+          <View className="flex-row items-center justify-end" style={{ marginTop: 10, gap: 5 }}>
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: colors.chartDifficulty,
+              }}
+            />
+            <Text variant="caption" style={{ color: colors.textFaint, fontSize: 9 }}>
+              {t('home.bestDiff')} {formatDifficulty(compactDifficultyHit.hit.difficulty)} ·{' '}
+              {t('home.tapToExpand')}
+            </Text>
+          </View>
+        ) : null}
+        <Pressable onPress={onChartPress} style={{ marginTop: compactDifficultyHit ? 4 : 12 }}>
+          <View pointerEvents="none" style={{ position: 'relative' }}>
             <UserHashrateChart
               data={historical}
               period={period}
@@ -211,21 +248,39 @@ export function UserStatsCard({
               height={CHART_HEIGHT}
               variant="embedded"
             />
+            {compactDifficultyHit ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  left: `${compactDifficultyHit.position * 100}%`,
+                  bottom: 7,
+                  width: 2,
+                  height: 14,
+                  transform: [{ translateX: -1 }],
+                  backgroundColor: colors.chartDifficulty,
+                }}
+              >
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: -3,
+                    top: -4,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: colors.chartDifficulty,
+                  }}
+                />
+              </View>
+            ) : null}
           </View>
         </Pressable>
 
         {/* Axis labels */}
         {axisLabels.length === 3 && (
-          <View
-            className="flex-row justify-between"
-            style={{ paddingBottom: 12, marginTop: 2 }}
-          >
+          <View className="flex-row justify-between" style={{ paddingBottom: 12, marginTop: 2 }}>
             {axisLabels.map((label, i) => (
-              <Text
-                key={i}
-                variant="mono"
-                style={{ fontSize: 10, color: colors.textFaint }}
-              >
+              <Text key={i} variant="mono" style={{ fontSize: 10, color: colors.textFaint }}>
                 {label}
               </Text>
             ))}

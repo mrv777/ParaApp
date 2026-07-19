@@ -51,6 +51,12 @@ const pt = {
     workers: 'Workers',
     hashrate: 'Hashrate',
     bestDiff: 'Melhor dif.',
+    hashrateAndBestDiff: 'Hashrate e melhor dif.',
+    bestDiffShortRangeNote:
+      'Os marcadores de melhor dificuldade estão disponíveis nas visualizações de 1h e 24h.',
+    tapDifficultyTimeline: 'Toque na linha do tempo para ver',
+    blockNumber: 'Bloco #{{height}}',
+    bestDiffHitAccessibility: 'Melhor dif. {{diff}}, bloco {{block}}, {{time}}',
     fleet: 'Frota de mineradores',
     swarm: 'Enxame',
     noMiners: 'Nenhum minerador configurado',

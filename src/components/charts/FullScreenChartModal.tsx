@@ -10,14 +10,7 @@
  */
 
 import { useEffect, useCallback, useState, ReactNode } from 'react';
-import {
-  View,
-  Modal,
-  Pressable,
-  StatusBar,
-  Dimensions,
-  Platform,
-} from 'react-native';
+import { View, Modal, Pressable, StatusBar, Dimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -38,6 +31,7 @@ export interface FullScreenChartModalProps<T> {
   period: HistoricalPeriod;
   onPeriodChange: (period: HistoricalPeriod) => void;
   isLoading?: boolean;
+  chartAccessory?: ReactNode;
   renderChart: (props: { data: T[]; height: number }) => ReactNode;
 }
 
@@ -50,6 +44,7 @@ export function FullScreenChartModal<T>({
   period,
   onPeriodChange,
   isLoading = false,
+  chartAccessory,
   renderChart,
 }: FullScreenChartModalProps<T>) {
   // Track dimensions for responsive chart sizing
@@ -59,18 +54,12 @@ export function FullScreenChartModal<T>({
   useEffect(() => {
     if (Platform.OS === 'android') {
       if (visible) {
-        ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE
-        ).catch(() => {});
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
       } else {
-        ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.PORTRAIT_UP
-        ).catch(() => {});
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
       }
       return () => {
-        ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.PORTRAIT_UP
-        ).catch(() => {});
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
       };
     }
   }, [visible]);
@@ -96,20 +85,16 @@ export function FullScreenChartModal<T>({
     [onPeriodChange]
   );
 
-  const chartHeight = dimensions.height > 0 ? dimensions.height * 0.6 : 200;
+  const chartHeight =
+    dimensions.height > 0 ? dimensions.height * (chartAccessory ? 0.4 : 0.6) : 200;
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      onRequestClose={handleClose}
-      statusBarTranslucent
-    >
+    <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
       <StatusBar hidden={visible} />
       <SafeAreaView
-          edges={['top', 'bottom', 'left', 'right']}
-          style={{ flex: 1, backgroundColor: colors.background }}
-        >
+        edges={['top', 'bottom', 'left', 'right']}
+        style={{ flex: 1, backgroundColor: colors.background }}
+      >
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 pt-2 pb-2">
           <View className="flex-1">
@@ -120,18 +105,15 @@ export function FullScreenChartModal<T>({
               {currentHashrate ? formatHashrate(currentHashrate) : '--'}
             </Text>
           </View>
-          <Pressable
-            onPress={handleClose}
-            className="p-2 rounded-full bg-secondary"
-            hitSlop={12}
-          >
+          <Pressable onPress={handleClose} className="p-2 rounded-full bg-secondary" hitSlop={12}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
         </View>
 
         {/* Chart */}
-        <View className="flex-1 px-4 py-6">
+        <View className={`flex-1 px-4 ${chartAccessory ? 'py-2' : 'py-6'}`}>
           {renderChart({ data, height: chartHeight })}
+          {chartAccessory}
         </View>
 
         {/* Time preset buttons */}

@@ -17,6 +17,7 @@ export function useUserPolling(): UsePollingReturn {
   const fetchUserStats = useUserStore((s) => s.fetchUserStats);
   const fetchRounds = useUserStore((s) => s.fetchRounds);
   const fetchRefineryOrders = useUserStore((s) => s.fetchRefineryOrders);
+  const fetchDifficultyHits = useUserStore((s) => s.fetchDifficultyHits);
 
   // Note: the Refinery Operator badge is effectively static, so it is fetched
   // on initial load / address change / pull-to-refresh (see HomeMainScreen and
@@ -27,8 +28,9 @@ export function useUserPolling(): UsePollingReturn {
       fetchUserStats({ silent: true }),
       fetchRounds(),
       fetchRefineryOrders(),
+      fetchDifficultyHits(),
     ]);
-  }, [fetchUserStats, fetchRounds, fetchRefineryOrders]);
+  }, [fetchUserStats, fetchRounds, fetchRefineryOrders, fetchDifficultyHits]);
 
   return usePolling({
     onPoll,

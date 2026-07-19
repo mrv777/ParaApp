@@ -23,22 +23,25 @@ import { UserStatsCard } from '@/components/home/UserStatsCard';
 import { WorkersPreviewCard } from '@/components/home/WorkersPreviewCard';
 import { UserFullScreenChart } from '@/components/charts';
 import { usePoolPolling, useUserPolling } from '@/hooks';
-import {
-  usePoolStore,
-  selectPoolError,
-} from '@/store/poolStore';
+import { usePoolStore, selectPoolError } from '@/store/poolStore';
 import {
   useUserStore,
   selectUserStats,
   selectUserWorkers,
   selectUserHistorical,
+  selectUserDifficultyHits,
   selectUserRounds,
   selectRefineryBadge,
   selectIsUserLoading,
   selectUserError,
 } from '@/store/userStore';
 import { haptics } from '@/utils/haptics';
-import { useSettingsStore, selectHasAddress, selectWorkerSortOrder, selectWorkerNotes } from '@/store/settingsStore';
+import {
+  useSettingsStore,
+  selectHasAddress,
+  selectWorkerSortOrder,
+  selectWorkerNotes,
+} from '@/store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useMinerStore, selectFleetStats } from '@/store/minerStore';
 import { sortWorkers } from '@/utils/sorting';
@@ -58,7 +61,13 @@ export function HomeMainScreen({ navigation }: Props) {
 
   // Share stats functionality
   const shareCardRef = useRef<View>(null);
-  const { isSharing, captureAndShare, shareError, clearError: clearShareError, shouldRenderCard } = useShareStats(shareCardRef);
+  const {
+    isSharing,
+    captureAndShare,
+    shareError,
+    clearError: clearShareError,
+    shouldRenderCard,
+  } = useShareStats(shareCardRef);
 
   // Settings store
   const hasAddress = useSettingsStore(selectHasAddress);
@@ -80,6 +89,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const userStats = useUserStore(selectUserStats);
   const workers = useUserStore(selectUserWorkers);
   const historical = useUserStore(selectUserHistorical);
+  const difficultyHits = useUserStore(selectUserDifficultyHits);
   const userRounds = useUserStore(selectUserRounds);
   const hasRefineryBadge = useUserStore(selectRefineryBadge);
   const historicalPeriod = useUserStore((s) => s.historicalPeriod);
@@ -106,6 +116,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const fetchRounds = useUserStore((s) => s.fetchRounds);
   const fetchRefineryBadge = useUserStore((s) => s.fetchRefineryBadge);
   const fetchRefineryOrders = useUserStore((s) => s.fetchRefineryOrders);
+  const fetchDifficultyHits = useUserStore((s) => s.fetchDifficultyHits);
   const clearUserData = useUserStore((s) => s.clearUserData);
   const prevAddressRef = useRef(bitcoinAddress);
   useEffect(() => {
@@ -121,6 +132,7 @@ export function HomeMainScreen({ navigation }: Props) {
         fetchRounds();
         fetchRefineryBadge();
         fetchRefineryOrders();
+        fetchDifficultyHits();
       }
     } else if (prevAddressRef.current) {
       // Address was removed
@@ -133,6 +145,7 @@ export function HomeMainScreen({ navigation }: Props) {
     fetchRounds,
     fetchRefineryBadge,
     fetchRefineryOrders,
+    fetchDifficultyHits,
     clearUserData,
     bitcoinAddress,
   ]);
@@ -259,6 +272,7 @@ export function HomeMainScreen({ navigation }: Props) {
               walletAddress={bitcoinAddress ?? ''}
               period={historicalPeriod}
               historical={historical ?? []}
+              difficultyHits={difficultyHits}
               onPeriodChange={handlePeriodChange}
               isLoadingHistorical={isLoadingHistorical}
               onChartPress={openFullScreen}
@@ -287,9 +301,7 @@ export function HomeMainScreen({ navigation }: Props) {
             <RefineryCard />
 
             {/* Fleet Overview Card */}
-            {fleetStats && (
-              <FleetOverviewCard {...fleetStats} onPress={handleFleetPress} />
-            )}
+            {fleetStats && <FleetOverviewCard {...fleetStats} onPress={handleFleetPress} />}
 
             {/* Tip for users without miners */}
             {!fleetStats && (
@@ -304,9 +316,7 @@ export function HomeMainScreen({ navigation }: Props) {
             <AddAddressPrompt onPress={handleAddAddress} />
 
             {/* Fleet Overview Card (shown even without address) */}
-            {fleetStats && (
-              <FleetOverviewCard {...fleetStats} onPress={handleFleetPress} />
-            )}
+            {fleetStats && <FleetOverviewCard {...fleetStats} onPress={handleFleetPress} />}
           </View>
         )}
       </ScrollView>
@@ -327,12 +337,12 @@ export function HomeMainScreen({ navigation }: Props) {
         onClose={() => setSelectedBadge(null)}
       />
 
-
       {/* Full Screen Chart Modal */}
       <UserFullScreenChart
         visible={fullScreenVisible}
         onClose={closeFullScreen}
         data={historical ?? []}
+        difficultyHits={difficultyHits}
         currentHashrate={userStats?.hashrate}
         period={historicalPeriod}
         onPeriodChange={handlePeriodChange}

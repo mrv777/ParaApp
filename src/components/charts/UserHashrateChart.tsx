@@ -10,6 +10,7 @@ import { formatXAxisLabel } from './chart-utils';
 import { initEcharts, getEcharts, getSvgChart, isEchartsReady } from './echarts-init';
 import { colors } from '@/constants/colors';
 import { formatHashrate } from '@/utils/formatting';
+import { useTranslation } from '@/i18n';
 import type { UserHistoricalPoint, HistoricalPeriod } from '@/types';
 
 export interface UserHashrateChartProps {
@@ -30,10 +31,7 @@ export interface UserHashrateChartProps {
  * Downsample data to a maximum number of points for performance
  * Uses LTTB (Largest Triangle Three Buckets) simplified approach
  */
-function downsampleData(
-  data: UserHistoricalPoint[],
-  maxPoints: number
-): UserHistoricalPoint[] {
+function downsampleData(data: UserHistoricalPoint[], maxPoints: number): UserHistoricalPoint[] {
   if (data.length <= maxPoints) return data;
 
   const result: UserHistoricalPoint[] = [];
@@ -66,6 +64,10 @@ function downsampleData(
 // Maximum data points to render (for performance)
 const MAX_CHART_POINTS = 200;
 
+interface TooltipParam {
+  value?: [number, number];
+}
+
 export function UserHashrateChart({
   data,
   period,
@@ -75,6 +77,7 @@ export function UserHashrateChart({
   className = '',
   variant = 'default',
 }: UserHashrateChartProps) {
+  const { t } = useTranslation();
   const embedded = variant === 'embedded';
   const chartRef = useRef<unknown>(null);
   const chartInstanceRef = useRef<ReturnType<typeof import('echarts/core').init> | null>(null);
@@ -97,11 +100,10 @@ export function UserHashrateChart({
   }, [data]);
 
   const chartData = useMemo(() => {
-    return sampledData.map((point) => [
-      point.timestamp,
-      point.hashrate,
-    ]);
+    return sampledData.map((point) => [point.timestamp, point.hashrate]);
   }, [sampledData]);
+
+  const hashrateSeriesName = t('home.hashrate');
 
   // Generate chart options
   const option = useMemo(() => {
@@ -111,7 +113,13 @@ export function UserHashrateChart({
       backgroundColor: 'transparent',
       grid: embedded
         ? { left: 0, right: 0, top: 6, bottom: 6, containLabel: false }
-        : { left: 55, right: 15, top: 15, bottom: 25, containLabel: false },
+        : {
+            left: 55,
+            right: 15,
+            top: 15,
+            bottom: 25,
+            containLabel: false,
+          },
       xAxis: {
         type: 'time' as const,
         axisLine: {
@@ -155,7 +163,9 @@ export function UserHashrateChart({
       },
       series: [
         {
+          name: hashrateSeriesName,
           type: 'line' as const,
+          yAxisIndex: 0,
           data: chartData,
           smooth: true,
           symbol: 'none',
@@ -189,17 +199,24 @@ export function UserHashrateChart({
           color: colors.text,
           fontSize: 12,
         },
-        formatter: (params: { value: [number, number] }[]) => {
+        formatter: (params: TooltipParam[]) => {
           if (!params || params.length === 0) return '';
-          const [timestamp, value] = params[0].value;
+          const firstValue = params.find((param) => param.value)?.value;
+          if (!firstValue) return '';
+          const [timestamp] = firstValue;
           const date = new Date(timestamp);
-          const timeStr = date.toLocaleString('en-US', {
+          const timeStr = date.toLocaleString(undefined, {
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
           });
-          return `${timeStr}\n${formatHashrate(value)}`;
+          const lines = [timeStr];
+          for (const param of params) {
+            if (!param.value) continue;
+            lines.push(`${hashrateSeriesName}: ${formatHashrate(param.value[1])}`);
+          }
+          return lines.join('\n');
         },
         axisPointer: {
           type: 'line' as const,
@@ -210,7 +227,7 @@ export function UserHashrateChart({
         },
       },
     };
-  }, [chartData, period, embedded]);
+  }, [chartData, period, embedded, hashrateSeriesName]);
 
   // Keep option ref in sync for use in chart creation effect
   const optionRef = useRef(option);
@@ -256,9 +273,13 @@ export function UserHashrateChart({
     const chart = chartInstanceRef.current;
     if (!chart || !onDataPointSelect) return;
 
-    const handleClick = (params: { dataIndex?: number }) => {
-      if (params.dataIndex !== undefined && sampledData[params.dataIndex]) {
-        onDataPointSelect(sampledData[params.dataIndex]);
+    const handleClick = (params: { dataIndex?: number; seriesIndex?: number }) => {
+      if (
+        params.seriesIndex === 0 &&
+        params.dataIndex !== undefined &&
+        sampledData[params.dataIndex]
+      ) {
+        onDataPointSelect?.(sampledData[params.dataIndex]);
       }
     };
 

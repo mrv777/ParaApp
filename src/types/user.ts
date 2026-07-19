@@ -147,6 +147,29 @@ export interface UserHistoricalPointApiResponse {
 }
 
 /**
+ * Raw per-block difficulty point from /api/highest-diff?type=user-diffs
+ */
+export interface UserDifficultyHitApiResponse {
+  block_height: number;
+  difficulty: number;
+  /** Bitcoin block timestamp in Unix seconds; may be absent for incomplete data. */
+  block_timestamp: number | null;
+  /** Privacy-preserving truncated address returned by the API. */
+  address: string;
+  claimed?: boolean;
+}
+
+/**
+ * A user's highest submitted difficulty for one Bitcoin block.
+ */
+export interface UserDifficultyHit {
+  blockHeight: number;
+  difficulty: number;
+  /** Bitcoin block timestamp in Unix milliseconds. */
+  timestamp: number;
+}
+
+/**
  * Single round history entry from /api/user/{address}/rounds
  */
 export interface UserRoundHistoryEntry {
