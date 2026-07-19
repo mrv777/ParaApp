@@ -14,8 +14,13 @@ const BASE_URL = 'https://parasite.space';
 export async function getRefineryOrders(
   address: string
 ): Promise<ApiResult<RefineryOrderSummary[]>> {
+  // No retries: this is called from the shared 10s user-poll cycle, whose
+  // in-flight guard skips ticks — default retries+backoff (~47s worst case)
+  // would let a router outage stall core stats polling. The poll cadence
+  // itself is the retry.
   return fetchWithTimeout<RefineryOrderSummary[]>(
-    `${BASE_URL}/api/router/orders?address=${encodeURIComponent(address)}`
+    `${BASE_URL}/api/router/orders?address=${encodeURIComponent(address)}`,
+    { retries: 0 }
   );
 }
 

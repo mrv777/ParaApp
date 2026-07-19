@@ -85,8 +85,9 @@ export interface ParasitePoolStatsResponse {
 
 // Dispenser eligibility (only the fields the reward diff needs; the endpoint
 // returns more). 404 = address unknown to the dispenser = zero slots.
+// Admin/whitelist grants appear as the "override" tier once assigned; the
+// payload's separate `override_slots` grant counter is intentionally unused.
 export interface DispenserEligibilityResponse {
-  override_slots?: number;
   assigned_inscription_ids?: Record<string, string[]>;
 }
 

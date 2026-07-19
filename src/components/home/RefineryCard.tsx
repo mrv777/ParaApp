@@ -8,7 +8,7 @@
  * an empty card would be noise on Home.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -60,6 +60,13 @@ export function RefineryCard({ className = '' }: RefineryCardProps) {
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const orders = useUserStore(selectRefineryOrders);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+
+  // The card stays mounted while hidden (it returns null below), so a
+  // selection must not survive an address switch — the sheet would reopen on
+  // the previous address's order once the new address's orders load.
+  useEffect(() => {
+    setSelectedOrderId(null);
+  }, [bitcoinAddress]);
 
   if (!bitcoinAddress || !orders || orders.length === 0) return null;
 

@@ -128,18 +128,22 @@ describe('shouldCheckDispenser', () => {
 });
 
 describe('buildDispenserCounts', () => {
-  it('counts assigned inscriptions per tier and override slots', () => {
+  it('counts assigned inscriptions per tier, including the override tier', () => {
     expect(
       buildDispenserCounts({
-        override_slots: 2,
-        assigned_inscription_ids: { gold: ['a', 'b'], silver: ['c'], empty: [] },
+        assigned_inscription_ids: {
+          gold: ['a', 'b'],
+          silver: ['c'],
+          empty: [],
+          override: ['d'],
+        },
       })
-    ).toEqual({ gold: 2, silver: 1, __override: 2 });
+    ).toEqual({ gold: 2, silver: 1, override: 1 });
   });
 
   it('returns empty counts for an empty payload', () => {
     expect(buildDispenserCounts({})).toEqual({});
-    expect(buildDispenserCounts({ override_slots: 0 })).toEqual({});
+    expect(buildDispenserCounts({ assigned_inscription_ids: {} })).toEqual({});
   });
 });
 
@@ -187,11 +191,11 @@ describe('diffDispenserRewards', () => {
     expect(JSON.parse(nextState)).toEqual({ ended: 2, fresh: 1 });
   });
 
-  it('detects override slot grants', () => {
-    const { newSlots } = diffDispenserRewards(JSON.stringify({ __override: 1 }), {
-      __override: 2,
+  it('detects newly assigned override-tier grants', () => {
+    const { newSlots } = diffDispenserRewards(JSON.stringify({ override: 1 }), {
+      override: 2,
     });
-    expect(newSlots).toEqual([{ tier: '__override', count: 1 }]);
+    expect(newSlots).toEqual([{ tier: 'override', count: 1 }]);
   });
 
   it('baseline of zero slots (404) then a first reward notifies', () => {

@@ -187,14 +187,18 @@ export function shouldCheckDispenser(
   );
 }
 
-/** Per-tier assigned-slot counts (override slots under the `__override` key). */
+/** Per-tier assigned-slot counts (admin grants appear as the "override" tier). */
 export type DispenserSlotCounts = Record<string, number>;
 
 /**
  * Collapse an eligibility payload to per-tier assigned-slot counts. Only tiers
  * with at least one assigned inscription appear; tier_shares without an
  * assignment (e.g. exhausted asset pool) are deliberately excluded — a reward
- * only counts once there is actually something to claim.
+ * only counts once there is actually something to claim. Admin/whitelist grants
+ * are already present as the "override" tier in `assigned_inscription_ids`
+ * once assigned, so the payload's separate `override_slots` grant counter is
+ * deliberately NOT counted — it would double-count assigned grants and fire on
+ * grants with nothing claimable yet.
  */
 export function buildDispenserCounts(
   data: DispenserEligibilityResponse
@@ -202,9 +206,6 @@ export function buildDispenserCounts(
   const counts: DispenserSlotCounts = {};
   for (const [tier, ids] of Object.entries(data.assigned_inscription_ids ?? {})) {
     if (Array.isArray(ids) && ids.length > 0) counts[tier] = ids.length;
-  }
-  if (typeof data.override_slots === 'number' && data.override_slots > 0) {
-    counts.__override = data.override_slots;
   }
   return counts;
 }
@@ -715,10 +716,11 @@ async function processUser(
 
       if (rewardsEnabled && newSlots.length > 0) {
         const total = newSlots.reduce((sum, slot) => sum + slot.count, 0);
+        // Tiers without a catalog entry (e.g. the "override" whitelist tier)
+        // simply fall back to the generic body below.
         const assetNames = [
           ...new Set(
             newSlots
-              .filter((slot) => slot.tier !== '__override')
               .map((slot) => dispenser.tierAssets?.get(slot.tier))
               .filter((name): name is string => Boolean(name))
           ),
