@@ -78,3 +78,8 @@ HAMMER_API.md
 
 # Legal pages to upload to mrv777.com (website content, not app code).
 legal/
+
+# Local build artifacts (EAS/Xcode exports land in the repo root).
+*.ipa
+*.apk
+*.aab
