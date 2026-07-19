@@ -15,6 +15,8 @@ export interface PoolStats {
   hashrate: number;
   users: number;
   workers: number;
+  /** Exact accepted-share work for the current round, when provided by the API. */
+  workSinceLastBlock?: number | null;
 }
 
 /**
@@ -107,4 +109,9 @@ export interface BitcoinPrices {
   CHF: number;
   AUD: number;
   JPY: number;
+}
+
+/** Mining overview returned by mempool.space's hashrate endpoint. */
+export interface MiningHashrateResponse {
+  currentDifficulty: number;
 }

@@ -128,7 +128,8 @@ const pt = {
     miningRewardTierTarget: 'Alvo {{diff}}',
     rewardsView: 'Ver recompensas',
     rewardsCatalogTitle: 'Recompensas Disponíveis',
-    rewardsCatalogIntro: 'Recompensas e a dificuldade mínima de share necessária para ganhar cada uma.',
+    rewardsCatalogIntro:
+      'Recompensas e a dificuldade mínima de share necessária para ganhar cada uma.',
     rewardsCatalogEmpty: 'Ainda não há recompensas disponíveis.',
     rewardsNextTarget: 'Próximo alvo',
     rewardsYourBest: 'Sua melhor: {{diff}}',
@@ -164,10 +165,13 @@ const pt = {
     noShares: 'Ainda não há shares',
     users: 'Usuários',
     workers: 'Workers',
-    lastBlock: 'Último bloco',
+    lastBlock: 'Último bloco encontrado',
     uptime: 'Tempo ativo',
     difficulty: 'Dificuldade',
     btcPrice: 'Preço BTC',
+    avgToFindBlock: 'Média para achar bloco',
+    poolWork: 'Trabalho do pool',
+    minDiffNeeded: 'Dif. mínima necessária',
     leaderboard: 'Classificação',
     topDifficulty: 'Maior dificuldade',
     topLoyalty: 'Maior lealdade',
@@ -353,13 +357,11 @@ const pt = {
     luxosNoProfiles: 'O minerador não reporta perfis',
     luxosProfileHint:
       'Ao trocar de perfil o minerador se reajusta — o hashrate cai por vários minutos.',
-    luxosProfileAtmNote:
-      'O Advanced Thermal Management está ativado e segue o perfil selecionado.',
+    luxosProfileAtmNote: 'O Advanced Thermal Management está ativado e segue o perfil selecionado.',
     luxosLocate: 'Localizar Minerador',
     luxosLocateHint: 'Faz o LED vermelho frontal piscar até ser desligado.',
     luxosPools: 'Pools',
-    luxosPoolsLoadFailed:
-      'Falha ao carregar os pools — toque para tentar novamente',
+    luxosPoolsLoadFailed: 'Falha ao carregar os pools — toque para tentar novamente',
     luxosPoolsHint:
       'As alterações valem imediatamente. Tornar um pool primário causa uma reconexão.',
     luxosAddPool: 'Adicionar Pool',
@@ -397,9 +399,11 @@ const pt = {
     blockedUsers: 'Usuários bloqueados',
     blockedUsersSettingsHint: 'Gerencie pessoas ocultas do chat da comunidade.',
     blockedUsersNoAddress: 'Nenhum endereço Bitcoin definido',
-    blockedUsersNoAddressHint: 'Adicione seu endereço de mineração para gerenciar bloqueios do chat.',
+    blockedUsersNoAddressHint:
+      'Adicione seu endereço de mineração para gerenciar bloqueios do chat.',
     blockedUsersLocked: 'Acesso ao chat necessário',
-    blockedUsersLockedHint: 'Apenas mineradores ativos da Parasite Pool podem gerenciar bloqueios do chat.',
+    blockedUsersLockedHint:
+      'Apenas mineradores ativos da Parasite Pool podem gerenciar bloqueios do chat.',
     blockedUsersLoadFailed: 'Não foi possível carregar usuários bloqueados',
     blockedUsersRetryHint: 'Verifique sua conexão e tente novamente.',
     blockedUsersEmpty: 'Nenhum usuário bloqueado',
@@ -458,7 +462,8 @@ const pt = {
     nicknameError: 'Não foi possível salvar o apelido',
     nicknameTaken: 'Esse apelido já está em uso',
     nicknameLocked: 'Seu identificador é gerenciado por um administrador',
-    nicknameLockedHint: 'Este identificador foi atribuído por um administrador e não pode ser alterado.',
+    nicknameLockedHint:
+      'Este identificador foi atribuído por um administrador e não pode ser alterado.',
     report: 'Denunciar',
     block: 'Bloquear',
     reply: 'Responder',

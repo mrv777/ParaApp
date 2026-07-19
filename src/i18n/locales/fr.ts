@@ -130,7 +130,8 @@ const fr = {
     miningRewardTierTarget: 'Cible {{diff}}',
     rewardsView: 'Voir les récompenses',
     rewardsCatalogTitle: 'Récompenses disponibles',
-    rewardsCatalogIntro: 'Les récompenses et la difficulté de partage minimale requise pour chacune.',
+    rewardsCatalogIntro:
+      'Les récompenses et la difficulté de partage minimale requise pour chacune.',
     rewardsCatalogEmpty: 'Aucune récompense disponible pour le moment.',
     rewardsNextTarget: 'Prochaine cible',
     rewardsYourBest: 'Votre meilleure : {{diff}}',
@@ -166,10 +167,13 @@ const fr = {
     noShares: 'Aucun partage pour le moment',
     users: 'Utilisateurs',
     workers: 'Workers',
-    lastBlock: 'Dernier bloc',
+    lastBlock: 'Dernier bloc trouvé',
     uptime: 'Disponibilité',
     difficulty: 'Difficulté',
     btcPrice: 'Prix BTC',
+    avgToFindBlock: 'Temps moy. pour bloc',
+    poolWork: 'Travail du pool',
+    minDiffNeeded: 'Diff. minimale requise',
     leaderboard: 'Classement',
     topDifficulty: 'Meilleure difficulté',
     topLoyalty: 'Meilleure fidélité',
@@ -355,14 +359,11 @@ const fr = {
     luxosNoProfiles: 'Le mineur ne signale aucun profil',
     luxosProfileHint:
       'Changer de profil relance le réglage du mineur — le hashrate baissera pendant quelques minutes.',
-    luxosProfileAtmNote:
-      "L'Advanced Thermal Management est activé et suit le profil sélectionné.",
+    luxosProfileAtmNote: "L'Advanced Thermal Management est activé et suit le profil sélectionné.",
     luxosLocate: 'Localiser le mineur',
-    luxosLocateHint:
-      "Fait clignoter la LED rouge en façade jusqu'à désactivation.",
+    luxosLocateHint: "Fait clignoter la LED rouge en façade jusqu'à désactivation.",
     luxosPools: 'Pools',
-    luxosPoolsLoadFailed:
-      'Échec du chargement des pools — touchez pour réessayer',
+    luxosPoolsLoadFailed: 'Échec du chargement des pools — touchez pour réessayer',
     luxosPoolsHint:
       "Les changements s'appliquent immédiatement. Rendre un pool prioritaire déclenche une reconnexion.",
     luxosAddPool: 'Ajouter un pool',
@@ -402,7 +403,8 @@ const fr = {
     blockedUsersNoAddress: 'Aucune adresse Bitcoin définie',
     blockedUsersNoAddressHint: 'Ajoutez votre adresse de minage pour gérer les blocages du chat.',
     blockedUsersLocked: 'Accès au chat requis',
-    blockedUsersLockedHint: 'Seuls les mineurs actifs de Parasite Pool peuvent gérer les blocages du chat.',
+    blockedUsersLockedHint:
+      'Seuls les mineurs actifs de Parasite Pool peuvent gérer les blocages du chat.',
     blockedUsersLoadFailed: 'Impossible de charger les utilisateurs bloqués',
     blockedUsersRetryHint: 'Vérifiez votre connexion et réessayez.',
     blockedUsersEmpty: 'Aucun utilisateur bloqué',
@@ -461,7 +463,8 @@ const fr = {
     nicknameError: 'Impossible d’enregistrer le pseudo',
     nicknameTaken: 'Ce pseudo est déjà pris',
     nicknameLocked: 'Votre pseudo est géré par un administrateur',
-    nicknameLockedHint: 'Ce pseudo a été attribué par un administrateur et ne peut pas être modifié.',
+    nicknameLockedHint:
+      'Ce pseudo a été attribué par un administrateur et ne peut pas être modifié.',
     report: 'Signaler',
     block: 'Bloquer',
     reply: 'Répondre',
@@ -549,9 +552,9 @@ const fr = {
     kboxUnauthorized: "Clé API refusée — vérifiez-la dans l'interface web de la KBox",
     kboxApiDisabled: "L'accès à l'API est désactivé sur cette KBox",
     kboxVerifyFailed: 'Impossible de joindre la KBox pour vérifier la clé',
-    kboxRestartDebounced: 'Redémarrage refusé — la KBox autorise un redémarrage toutes les 90 secondes',
-    luxosSessionBusy:
-      'Un autre outil configure ce mineur — réessayez dans un instant',
+    kboxRestartDebounced:
+      'Redémarrage refusé — la KBox autorise un redémarrage toutes les 90 secondes',
+    luxosSessionBusy: 'Un autre outil configure ce mineur — réessayez dans un instant',
     kboxInvalidEffect: 'Effet LED inconnu — liste des effets actualisée',
     kboxEffectsLoadFailed: 'Échec du chargement des effets LED — touchez pour réessayer',
   },

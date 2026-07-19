@@ -19,11 +19,14 @@ import type {
 import { parasite, mempool, isSuccess } from '@/api';
 import { getIntervalForPeriod } from '@/utils/historical';
 
+const NETWORK_DIFFICULTY_MAX_AGE_MS = 60 * 60 * 1000;
+
 interface PoolState {
   // Cached data
   stats: CachedData<PoolStats> | null;
   historical: CachedData<PoolHistoricalPoint[]> | null;
   bitcoinPrice: CachedData<number> | null;
+  networkDifficulty: CachedData<number> | null;
   difficultyLeaderboard: CachedData<DifficultyLeaderboardEntry[]> | null;
   loyaltyLeaderboard: CachedData<LoyaltyLeaderboardEntry[]> | null;
   roundDifficultyLeaderboard: CachedData<DifficultyLeaderboardEntry[]> | null;
@@ -31,6 +34,7 @@ interface PoolState {
   roundWorkLeaderboard: CachedData<RoundWorkLeaderboardEntry[]> | null;
   blocks: CachedData<LeaderboardEntry[]> | null;
   rounds: CachedData<RoundSummary[]> | null;
+  networkDifficultyLastAttempt: number | null;
 
   // Current historical period
   historicalPeriod: HistoricalPeriod;
@@ -42,6 +46,7 @@ interface PoolState {
   isLoadingRoundLeaderboards: boolean;
   isLoadingBlocks: boolean;
   isLoadingRounds: boolean;
+  isLoadingNetworkDifficulty: boolean;
 
   // Error state
   error: ApiError | null;
@@ -53,20 +58,19 @@ interface PoolActions {
   fetchRoundLeaderboards: (limit?: number) => Promise<void>;
   fetchBlocks: (limit?: number) => Promise<void>;
   fetchRounds: () => Promise<void>;
-  fetchHistorical: (
-    period: HistoricalPeriod,
-    interval?: HistoricalInterval
-  ) => Promise<void>;
+  fetchHistorical: (period: HistoricalPeriod, interval?: HistoricalInterval) => Promise<void>;
   fetchBitcoinPrice: () => Promise<void>;
+  fetchNetworkDifficulty: (options?: { force?: boolean }) => Promise<void>;
   setHistoricalPeriod: (period: HistoricalPeriod) => void;
   clearError: () => void;
-  refreshAll: () => Promise<void>;
+  refreshAll: (options?: { forceNetworkDifficulty?: boolean }) => Promise<void>;
 }
 
 const initialState: PoolState = {
   stats: null,
   historical: null,
   bitcoinPrice: null,
+  networkDifficulty: null,
   difficultyLeaderboard: null,
   loyaltyLeaderboard: null,
   roundDifficultyLeaderboard: null,
@@ -74,6 +78,7 @@ const initialState: PoolState = {
   roundWorkLeaderboard: null,
   blocks: null,
   rounds: null,
+  networkDifficultyLastAttempt: null,
   historicalPeriod: '24h',
   isLoading: false,
   isLoadingHistorical: false,
@@ -81,6 +86,7 @@ const initialState: PoolState = {
   isLoadingRoundLeaderboards: false,
   isLoadingBlocks: false,
   isLoadingRounds: false,
+  isLoadingNetworkDifficulty: false,
   error: null,
 };
 
@@ -241,6 +247,40 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
     // Don't set error for price fetch - it's not critical
   },
 
+  fetchNetworkDifficulty: async (options) => {
+    const { networkDifficulty, networkDifficultyLastAttempt, isLoadingNetworkDifficulty } = get();
+    const now = Date.now();
+    const isFresh =
+      networkDifficulty && now - networkDifficulty.timestamp < NETWORK_DIFFICULTY_MAX_AGE_MS;
+    const attemptedRecently =
+      networkDifficultyLastAttempt != null &&
+      now - networkDifficultyLastAttempt < NETWORK_DIFFICULTY_MAX_AGE_MS;
+
+    // Both Home and Pool can mount the shared polling hook. The loading guard
+    // deduplicates their first request, and the age guard keeps the otherwise
+    // 10-second poll from refetching difficulty more than hourly.
+    if (isLoadingNetworkDifficulty || (!options?.force && (isFresh || attemptedRecently))) {
+      return;
+    }
+
+    set({
+      isLoadingNetworkDifficulty: true,
+      networkDifficultyLastAttempt: now,
+    });
+    const result = await mempool.getNetworkDifficulty();
+
+    if (isSuccess(result)) {
+      set({
+        networkDifficulty: { data: result.data, timestamp: Date.now() },
+        isLoadingNetworkDifficulty: false,
+      });
+    } else {
+      // Network difficulty is non-critical; preserve any cached value and do
+      // not replace the pool error banner with a mempool.space failure.
+      set({ isLoadingNetworkDifficulty: false });
+    }
+  },
+
   setHistoricalPeriod: (period) => {
     set({ historicalPeriod: period });
     // Automatically fetch new data
@@ -249,13 +289,14 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  refreshAll: async () => {
+  refreshAll: async (options) => {
     const {
       fetchPoolStats,
       fetchLeaderboards,
       fetchRoundLeaderboards,
       fetchBlocks,
       fetchBitcoinPrice,
+      fetchNetworkDifficulty,
     } = get();
     await Promise.all([
       fetchPoolStats(),
@@ -263,27 +304,25 @@ export const usePoolStore = create<PoolState & PoolActions>()((set, get) => ({
       fetchRoundLeaderboards(),
       fetchBlocks(),
       fetchBitcoinPrice(),
+      fetchNetworkDifficulty({ force: options?.forceNetworkDifficulty }),
     ]);
   },
 }));
 
 // Selectors
 export const selectPoolStats = (state: PoolState) => state.stats?.data;
-export const selectDifficultyLeaderboard = (state: PoolState) =>
-  state.difficultyLeaderboard?.data;
-export const selectLoyaltyLeaderboard = (state: PoolState) =>
-  state.loyaltyLeaderboard?.data;
+export const selectDifficultyLeaderboard = (state: PoolState) => state.difficultyLeaderboard?.data;
+export const selectLoyaltyLeaderboard = (state: PoolState) => state.loyaltyLeaderboard?.data;
 export const selectRoundDifficultyLeaderboard = (state: PoolState) =>
   state.roundDifficultyLeaderboard?.data;
 export const selectRoundLoyaltyLeaderboard = (state: PoolState) =>
   state.roundLoyaltyLeaderboard?.data;
-export const selectRoundWorkLeaderboard = (state: PoolState) =>
-  state.roundWorkLeaderboard?.data;
+export const selectRoundWorkLeaderboard = (state: PoolState) => state.roundWorkLeaderboard?.data;
 export const selectBlocks = (state: PoolState) => state.blocks?.data;
 export const selectRounds = (state: PoolState) => state.rounds?.data;
 export const selectHistorical = (state: PoolState) => state.historical?.data;
-export const selectBitcoinPrice = (state: PoolState) =>
-  state.bitcoinPrice?.data;
+export const selectBitcoinPrice = (state: PoolState) => state.bitcoinPrice?.data;
+export const selectNetworkDifficulty = (state: PoolState) => state.networkDifficulty?.data;
 export const selectIsPoolLoading = (state: PoolState) => state.isLoading;
 export const selectPoolError = (state: PoolState) => state.error;
 

@@ -164,10 +164,13 @@ const de = {
     noShares: 'Noch keine Shares',
     users: 'Benutzer',
     workers: 'Worker',
-    lastBlock: 'Letzter Block',
+    lastBlock: 'Letzter gefundener Block',
     uptime: 'Betriebszeit',
     difficulty: 'Schwierigkeit',
     btcPrice: 'BTC-Preis',
+    avgToFindBlock: 'Ø bis zum Block',
+    poolWork: 'Pool-Arbeit',
+    minDiffNeeded: 'Benötigte Mindest-Diff.',
     leaderboard: 'Rangliste',
     topDifficulty: 'Höchste Schwierigkeit',
     topLoyalty: 'Höchste Treue',
@@ -356,11 +359,9 @@ const de = {
     luxosProfileAtmNote:
       'Advanced Thermal Management ist aktiviert und folgt dem gewählten Profil.',
     luxosLocate: 'Miner lokalisieren',
-    luxosLocateHint:
-      'Lässt die rote Front-LED blinken, bis sie ausgeschaltet wird.',
+    luxosLocateHint: 'Lässt die rote Front-LED blinken, bis sie ausgeschaltet wird.',
     luxosPools: 'Pools',
-    luxosPoolsLoadFailed:
-      'Pools konnten nicht geladen werden — zum Wiederholen tippen',
+    luxosPoolsLoadFailed: 'Pools konnten nicht geladen werden — zum Wiederholen tippen',
     luxosPoolsHint:
       'Änderungen gelten sofort. Einen Pool als primär zu setzen löst eine Neuverbindung aus.',
     luxosAddPool: 'Pool hinzufügen',
@@ -398,7 +399,8 @@ const de = {
     blockedUsers: 'Blockierte Nutzer',
     blockedUsersSettingsHint: 'Verwalte Personen, die im Community-Chat ausgeblendet sind.',
     blockedUsersNoAddress: 'Keine Bitcoin-Adresse festgelegt',
-    blockedUsersNoAddressHint: 'Füge deine Mining-Adresse hinzu, um Chat-Blockierungen zu verwalten.',
+    blockedUsersNoAddressHint:
+      'Füge deine Mining-Adresse hinzu, um Chat-Blockierungen zu verwalten.',
     blockedUsersLocked: 'Chat-Zugriff erforderlich',
     blockedUsersLockedHint: 'Nur aktive Parasite-Pool-Miner können Chat-Blockierungen verwalten.',
     blockedUsersLoadFailed: 'Blockierte Nutzer konnten nicht geladen werden',
@@ -459,7 +461,8 @@ const de = {
     nicknameError: 'Spitzname konnte nicht gespeichert werden',
     nicknameTaken: 'Dieser Spitzname ist bereits vergeben',
     nicknameLocked: 'Dein Name wird von einem Admin verwaltet',
-    nicknameLockedHint: 'Dieser Name wurde von einem Admin vergeben und kann nicht geändert werden.',
+    nicknameLockedHint:
+      'Dieser Name wurde von einem Admin vergeben und kann nicht geändert werden.',
     report: 'Melden',
     block: 'Blockieren',
     reply: 'Antworten',

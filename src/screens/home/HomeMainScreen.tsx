@@ -167,7 +167,7 @@ export function HomeMainScreen({ navigation }: Props) {
       hasAddress && historicalPeriod !== '24h'
         ? fetchHistorical(historicalPeriod)
         : Promise.resolve(),
-      refreshPool(),
+      refreshPool({ forceNetworkDifficulty: true }),
     ]);
     setRefreshing(false);
   }, [hasAddress, refreshUser, fetchHistorical, historicalPeriod, refreshPool]);

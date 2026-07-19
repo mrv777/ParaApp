@@ -27,6 +27,7 @@ import {
   selectBlocks,
   selectHistorical,
   selectBitcoinPrice,
+  selectNetworkDifficulty,
   selectPoolError,
   isCacheStale,
 } from '@/store/poolStore';
@@ -52,6 +53,7 @@ export function PoolScreen(_props: Props) {
   const blocks = usePoolStore(selectBlocks);
   const historical = usePoolStore(selectHistorical);
   const bitcoinPrice = usePoolStore(selectBitcoinPrice);
+  const networkDifficulty = usePoolStore(selectNetworkDifficulty);
   const error = usePoolStore(selectPoolError);
   const period = usePoolStore((s) => s.historicalPeriod);
   const isLoading = usePoolStore((s) => s.isLoading);
@@ -85,7 +87,12 @@ export function PoolScreen(_props: Props) {
   const onPollRoundLeaderboards = useCallback(async () => {
     await Promise.all([fetchRoundLeaderboards(), fetchBlocks()]);
   }, [fetchRoundLeaderboards, fetchBlocks]);
-  usePolling({ onPoll: onPollRoundLeaderboards, immediate: true, enabled: isFocused, interval: 60000 });
+  usePolling({
+    onPoll: onPollRoundLeaderboards,
+    immediate: true,
+    enabled: isFocused,
+    interval: 60000,
+  });
 
   // Cold start: refreshAll with loading indicators (subsequent polls are silent)
   const hasMountFetched = useRef(false);
@@ -116,10 +123,7 @@ export function PoolScreen(_props: Props) {
   // Pull-to-refresh handler (refreshAll covers stats + leaderboards + round leaderboards + price)
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      refreshAll(),
-      fetchHistorical(period),
-    ]);
+    await Promise.all([refreshAll({ forceNetworkDifficulty: true }), fetchHistorical(period)]);
     setRefreshing(false);
   }, [refreshAll, fetchHistorical, period]);
 
@@ -146,7 +150,12 @@ export function PoolScreen(_props: Props) {
     <SafeAreaView className="flex-1 bg-background" edges={['top']}>
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 100, gap: 16 }}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 14,
+          paddingBottom: 100,
+          gap: 16,
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -176,6 +185,8 @@ export function PoolScreen(_props: Props) {
         <PoolStatsGrid
           stats={stats ?? null}
           bitcoinPrice={bitcoinPrice ?? null}
+          networkDifficulty={networkDifficulty ?? null}
+          roundWorkEntries={roundWorkLeaderboard}
           isLoading={showStatsSkeleton}
         />
 
@@ -192,11 +203,7 @@ export function PoolScreen(_props: Props) {
         />
 
         {/* Best Shares — highest diff submitted by a pool member per block */}
-        <BlocksList
-          blocks={blocks ?? []}
-          isLoading={isLoadingBlocks && !blocks}
-          maxItems={10}
-        />
+        <BlocksList blocks={blocks ?? []} isLoading={isLoadingBlocks && !blocks} maxItems={10} />
       </ScrollView>
 
       {/* Full Screen Chart Modal */}

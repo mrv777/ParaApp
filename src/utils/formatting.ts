@@ -224,6 +224,63 @@ export function formatDifficulty(diff: number): string {
 }
 
 /**
+ * Format the statistically expected time to find a Bitcoin block at a given
+ * pool hashrate. Uses the standard difficulty × 2^32 / hashrate relationship.
+ */
+export function formatExpectedBlockTime(
+  poolHashrate: number | null | undefined,
+  networkDifficulty: number | null | undefined
+): string {
+  if (
+    typeof poolHashrate !== 'number' ||
+    typeof networkDifficulty !== 'number' ||
+    !Number.isFinite(poolHashrate) ||
+    !Number.isFinite(networkDifficulty) ||
+    poolHashrate <= 0 ||
+    networkDifficulty <= 0
+  ) {
+    return '--';
+  }
+
+  const seconds = Math.round((networkDifficulty * Math.pow(2, 32)) / poolHashrate);
+  if (!Number.isFinite(seconds) || seconds < 0) return '--';
+
+  const MINUTE = 60;
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+  const YEAR = 365 * DAY;
+
+  if (seconds >= YEAR) {
+    const totalDays = Math.round(seconds / DAY);
+    const years = Math.floor(totalDays / 365);
+    const days = totalDays % 365;
+    return days > 0 ? `${years}y ${days}d` : `${years}y`;
+  }
+
+  if (seconds >= DAY) {
+    const totalHours = Math.round(seconds / HOUR);
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+  }
+
+  if (seconds >= HOUR) {
+    const totalMinutes = Math.round(seconds / MINUTE);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours === 24) return '1d';
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+
+  if (seconds >= MINUTE) {
+    const minutes = Math.round(seconds / MINUTE);
+    return minutes === 60 ? '1h' : `${minutes}m`;
+  }
+
+  return `${seconds}s`;
+}
+
+/**
  * Format hash-days with auto-scaling (Refinery order sizes).
  * The router API reports raw hash-days; 1 PHd = 1e15.
  * @param hashDays - Raw hash-days value

@@ -128,7 +128,8 @@ const es = {
     miningRewardTierTarget: 'Objetivo {{diff}}',
     rewardsView: 'Ver recompensas',
     rewardsCatalogTitle: 'Recompensas Disponibles',
-    rewardsCatalogIntro: 'Recompensas y la dificultad mínima de share necesaria para ganar cada una.',
+    rewardsCatalogIntro:
+      'Recompensas y la dificultad mínima de share necesaria para ganar cada una.',
     rewardsCatalogEmpty: 'Aún no hay recompensas disponibles.',
     rewardsNextTarget: 'Próximo objetivo',
     rewardsYourBest: 'Tu mejor: {{diff}}',
@@ -164,10 +165,13 @@ const es = {
     noShares: 'Aún no hay shares',
     users: 'Usuarios',
     workers: 'Workers',
-    lastBlock: 'Último Bloque',
+    lastBlock: 'Último bloque encontrado',
     uptime: 'Tiempo Activo',
     difficulty: 'Dificultad',
     btcPrice: 'Precio BTC',
+    avgToFindBlock: 'Prom. para hallar bloque',
+    poolWork: 'Trabajo del pool',
+    minDiffNeeded: 'Dif. mínima necesaria',
     leaderboard: 'Clasificación',
     topDifficulty: 'Mayor Dificultad',
     topLoyalty: 'Mayor Lealtad',
@@ -354,8 +358,7 @@ const es = {
     luxosProfileAtmNote:
       'Advanced Thermal Management está activado y sigue el perfil seleccionado.',
     luxosLocate: 'Localizar Minero',
-    luxosLocateHint:
-      'Hace parpadear el LED rojo frontal hasta que se apague.',
+    luxosLocateHint: 'Hace parpadear el LED rojo frontal hasta que se apague.',
     luxosPools: 'Pools',
     luxosPoolsLoadFailed: 'Error al cargar los pools — toca para reintentar',
     luxosPoolsHint:
@@ -397,7 +400,8 @@ const es = {
     blockedUsersNoAddress: 'No hay dirección Bitcoin',
     blockedUsersNoAddressHint: 'Añade tu dirección de minería para gestionar bloqueos del chat.',
     blockedUsersLocked: 'Se requiere acceso al chat',
-    blockedUsersLockedHint: 'Solo mineros activos de Parasite Pool pueden gestionar bloqueos del chat.',
+    blockedUsersLockedHint:
+      'Solo mineros activos de Parasite Pool pueden gestionar bloqueos del chat.',
     blockedUsersLoadFailed: 'No se pudieron cargar los usuarios bloqueados',
     blockedUsersRetryHint: 'Comprueba tu conexión e inténtalo de nuevo.',
     blockedUsersEmpty: 'No hay usuarios bloqueados',
