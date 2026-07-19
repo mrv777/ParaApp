@@ -83,3 +83,5 @@ legal/
 *.ipa
 *.apk
 *.aab
+
+**/.claude/settings.local.json
