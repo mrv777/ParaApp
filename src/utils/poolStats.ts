@@ -13,9 +13,10 @@ export function getPoolBlockUrl(blockHeight: string | null | undefined): string 
 }
 
 /**
- * Prefer a trustworthy exact current-round total. Until the pool API provides
- * one, return the sum of the already-loaded visible work entries as an
- * explicitly marked lower bound.
+ * Prefer the pool API's exact current-round total (`workSinceLastBlock`). When
+ * it's unavailable — null/zero, or lagging behind what we can already see — fall
+ * back to the sum of the loaded visible work entries as an explicitly marked
+ * lower bound.
  */
 export function derivePoolWork(
   exactWork: number | null | undefined,

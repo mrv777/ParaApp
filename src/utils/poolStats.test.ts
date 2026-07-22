@@ -51,7 +51,7 @@ describe('derivePoolWork', () => {
     });
   });
 
-  it('uses the visible sum when the API still returns its zero placeholder', () => {
+  it('uses the visible sum when the API returns its zero/null placeholder', () => {
     expect(derivePoolWork(0, [workEntry(100), workEntry(200)])).toEqual({
       value: 300,
       isLowerBound: true,
