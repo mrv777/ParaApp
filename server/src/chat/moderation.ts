@@ -48,8 +48,17 @@ export type ModerationReason = 'english' | 'multilingual' | null;
  * it (or `null` when clean) so callers can log *why* a message was blocked.
  */
 export function classifyText(text: string): ModerationReason {
-  if (englishMatcher.hasMatch(text)) return 'english';
-  if (multilingual.exists(text)) return 'multilingual';
+  // Numbers must never trigger a block — mining chat is full of hashrates,
+  // difficulties, and block heights. Two failure modes otherwise: obscenity's
+  // leetspeak transformer folds digits into letters ("455" -> "ass"), and
+  // `@2toad/profanity` flags the bare token "5". Replacing digits with spaces
+  // before matching neutralizes both (space, not "", preserves token boundaries
+  // so the whitespace tokenizer can't be tricked into gluing words). Tradeoff:
+  // deliberate digit-leetspeak ("5h1t") slips through; plain profanity,
+  // symbol-leet ("$h!t", "@ss"), and spaced profanity are still caught.
+  const deDigited = text.replace(/[0-9]/g, ' ');
+  if (englishMatcher.hasMatch(deDigited)) return 'english';
+  if (multilingual.exists(deDigited)) return 'multilingual';
   return null;
 }
 

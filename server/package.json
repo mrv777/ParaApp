@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx scripts/chat-smoke.ts",
-    "seed": "tsx scripts/chat-seed.ts"
+    "seed": "tsx scripts/chat-seed.ts",
+    "test:moderation": "tsx scripts/moderation-check.ts"
   },
   "dependencies": {
     "@2toad/profanity": "^3.3.0",
