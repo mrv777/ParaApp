@@ -1,14 +1,17 @@
 /**
- * AsicHeatmap - Per-ASIC temperature grid for Avalon miners.
+ * AsicHeatmap - Per-ASIC temperature grid.
  *
- * Renders one colored cell per ASIC (160 cells on the Q's single
- * hashboard) so the user can spot a hot or dead chip at a glance.
- * Collapsed by default — expand prompts the parent to start fetching
- * `estats` (heavier than `stats`) via the `onExpand` callback.
+ * Renders one colored cell per ASIC (160 cells on the Avalon Q's single
+ * hashboard; 4 chips on a Hammer) so the user can spot a hot or dead chip
+ * at a glance. Collapsed by default.
  *
- * Color thresholds are tuned for Avalon's BM-class ASICs which run
- * notably hotter than the BM13xx chips in AxeOS — the AxeOS-wide
- * tempThresholds (68°C caution) would mark every cell red here.
+ * Two data sources:
+ *  - Avalon: self-fetches `estats` (heavier than `stats`) while expanded.
+ *  - Static (`temps` prop): the parent already has per-chip temps from its
+ *    regular poll (e.g. Hammer v3's `chips[]`) — no extra fetch/poll here.
+ *
+ * Color buckets are tuned per `profile`: Avalon's BM-class ASICs run notably
+ * hotter than the BM13xx chips in AxeOS/Hammer, so each gets its own bands.
  */
 
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
@@ -27,45 +30,83 @@ import { isSuccess } from '@/api/client';
  * stats poll on the detail screen. */
 const HEATMAP_POLL_MS = 10000;
 
+/** Color tuning per ASIC family. */
+type HeatmapProfile = 'avalon' | 'bm13xx';
+
 export interface AsicHeatmapProps {
-  /** Miner IP — used to fetch estats when the section is expanded */
+  /** Miner IP — used to fetch estats when the section is expanded (Avalon) */
   ip: string;
   /** Fixed grid width — ASICs per row. Defaults to 16 (160/16=10 rows on Q) */
   cols?: number;
+  /**
+   * Pre-supplied per-chip temps. When provided, render these directly and
+   * skip the Avalon estats self-fetch — used by miners whose regular poll
+   * already carries chip temps (Hammer v3).
+   */
+  temps?: number[];
+  /** Color-band tuning. Defaults to 'avalon'. */
+  profile?: HeatmapProfile;
 }
 
-/**
- * Avalon-tuned temperature buckets. Tweak as we see real-world data
- * from other Canaan models — the Q's normal range is ~70–90°C under
- * load with a target of 80°C.
- */
-function tempColor(t: number): string {
+/** Temperature band definitions per profile: [ceiling, color, label]. */
+const TEMP_BANDS: Record<
+  HeatmapProfile,
+  { max: number; color: string; label: string }[]
+> = {
+  // Avalon Q normal range ~70–90°C under load, target 80°C.
+  avalon: [
+    { max: 70, color: '#3b82f6', label: '<70' },
+    { max: 80, color: '#22c55e', label: '70-80' },
+    { max: 90, color: '#eab308', label: '80-90' },
+    { max: 95, color: '#f97316', label: '90-95' },
+    { max: Infinity, color: colors.danger, label: '>95' },
+  ],
+  // BM13xx chip-die temps (AxeOS/Hammer) run much cooler — ~55–60°C typical.
+  bm13xx: [
+    { max: 50, color: '#3b82f6', label: '<50' },
+    { max: 60, color: '#22c55e', label: '50-60' },
+    { max: 70, color: '#eab308', label: '60-70' },
+    { max: 80, color: '#f97316', label: '70-80' },
+    { max: Infinity, color: colors.danger, label: '>80' },
+  ],
+};
+
+function tempColor(t: number, profile: HeatmapProfile): string {
   if (t === 0) return colors.surfaceElevated;
-  if (t < 70) return '#3b82f6'; // cool — blue
-  if (t < 80) return '#22c55e'; // normal — green
-  if (t < 90) return '#eab308'; // warm — yellow
-  if (t < 95) return '#f97316'; // hot — orange
-  return colors.danger; // critical — red
+  const band = TEMP_BANDS[profile].find((b) => t < b.max);
+  return band ? band.color : colors.danger;
 }
 
-export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
+export function AsicHeatmap({
+  ip,
+  cols = 16,
+  temps: providedTemps,
+  profile = 'avalon',
+}: AsicHeatmapProps) {
   const { t } = useTranslation();
+  const isStatic = providedTemps !== undefined;
   const [expanded, setExpanded] = useState(false);
-  const [temps, setTemps] = useState<number[] | undefined>(undefined);
+  const [fetchedTemps, setFetchedTemps] = useState<number[] | undefined>(
+    undefined
+  );
   const [loading, setLoading] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Static mode renders the parent-supplied temps; otherwise use fetched.
+  const temps = isStatic ? providedTemps : fetchedTemps;
 
   const fetchTemps = useCallback(async () => {
     setLoading(true);
     const result = await avalon.getEStats(ip);
     if (isSuccess(result)) {
-      setTemps(result.data.hb?.PVT_T0);
+      setFetchedTemps(result.data.hb?.PVT_T0);
     }
     setLoading(false);
   }, [ip]);
 
-  // Start/stop polling when expansion changes
+  // Start/stop polling when expansion changes (Avalon self-fetch mode only)
   useEffect(() => {
+    if (isStatic) return;
     if (!expanded) {
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -81,7 +122,7 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
         pollTimerRef.current = null;
       }
     };
-  }, [expanded, fetchTemps]);
+  }, [isStatic, expanded, fetchTemps]);
 
   const stats = useMemo(() => {
     if (!temps || temps.length === 0) {
@@ -134,7 +175,7 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
             </Text>
           ) : (
             <>
-              <View className="flex-row flex-wrap gap-[2px]">
+              <View className="flex-row flex-wrap">
                 {temps.map((temp, i) => (
                   <View
                     key={i}
@@ -147,7 +188,7 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
                     <View
                       style={{
                         flex: 1,
-                        backgroundColor: tempColor(temp),
+                        backgroundColor: tempColor(temp, profile),
                         borderRadius: 2,
                       }}
                     />
@@ -168,13 +209,7 @@ export function AsicHeatmap({ ip, cols = 16 }: AsicHeatmapProps) {
                 </View>
               )}
               <View className="flex-row justify-center gap-3 mt-2">
-                {[
-                  { color: '#3b82f6', label: '<70' },
-                  { color: '#22c55e', label: '70-80' },
-                  { color: '#eab308', label: '80-90' },
-                  { color: '#f97316', label: '90-95' },
-                  { color: colors.danger, label: '>95' },
-                ].map((band) => (
+                {TEMP_BANDS[profile].map((band) => (
                   <View key={band.label} className="flex-row items-center gap-1">
                     <View
                       style={{

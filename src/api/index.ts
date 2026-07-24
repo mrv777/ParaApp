@@ -17,6 +17,9 @@ export * as refinery from './refinery';
 // AxeOS Miner API
 export * as axeOS from './axeOS';
 
+// Hammer v3 firmware API (the `/v2/*` REST API on port 80)
+export * as hammer from './hammer';
+
 // Canaan Avalon Miner API (CGMiner JSON RPC on port 4028)
 export * as avalon from './avalon';
 

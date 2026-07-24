@@ -18,7 +18,7 @@ import type {
   DiscoveryProgress,
   DiscoveryOptions,
 } from '@/types';
-import { axeOS, avalon, avalonWeb, kbox, luxos, isSuccess } from '@/api';
+import { axeOS, hammer, avalon, avalonWeb, kbox, luxos, isSuccess } from '@/api';
 import { scanSubnet } from '@/utils/discovery';
 import { getKBoxApiKey, clearKBoxApiKey } from '@/utils/kboxAuth';
 import { formatTemperature, parseDifficulty } from '@/utils/formatting';
@@ -107,6 +107,8 @@ interface MinerActions {
   // Miner controls
   restartMiner: (ip: string) => Promise<boolean>;
   identifyMiner: (ip: string) => Promise<boolean>;
+  /** Start on-device autotune (Hammer v3 only; no-op otherwise). */
+  autotuneMiner: (ip: string) => Promise<boolean>;
   updateMinerSettings: (
     ip: string,
     settings: MinerSettings
@@ -254,6 +256,9 @@ function parseSystemInfo(ip: string, info: AxeOSSystemInfo): LocalMiner {
     isUsingFallbackStratum: (info.isUsingFallbackStratum ?? 0) > 0,
     serialNumber: info.sn_str,
     bootMode: info.boot_mode,
+    // Legacy AxeOS-style Hammer firmware (2.x). v3 (`/v2/*`) is handled by
+    // fetchHammer / the hammer client and tagged version 2.
+    hammerApiVersion: minerType === 'hammer' ? 1 : undefined,
     rawConfig: minerType === 'hammer' ? {
       flipscreen: info.flipscreen,
       invertfanpolarity: info.invertfanpolarity,
@@ -313,10 +318,21 @@ async function fetchMiner(
   if (preferredType === 'luxos') {
     return fetchLuxOS(ip);
   }
+  if (preferredType === 'hammer') {
+    // Known Hammer — resolve its firmware generation (v2 first) directly.
+    return fetchHammer(ip);
+  }
 
   const axeOsResult = await axeOS.getSystemInfo(ip);
   if (isSuccess(axeOsResult)) {
     return { success: true, data: parseSystemInfo(ip, axeOsResult.data) };
+  }
+
+  // Hammer v3 firmware only answers the `/v2/*` API — its legacy
+  // /api/system/info is gone, so the AxeOS probe above missed it. One cheap
+  // HTTP probe catches a manually-added v3 Hammer before the other protocols.
+  if (await hammer.isHammerV2(ip)) {
+    return fetchHammer(ip, 2);
   }
 
   // AxeOS failed — try KBox: also HTTP on port 80, but under /api/v1/,
@@ -490,6 +506,49 @@ async function fetchLuxOS(ip: string): Promise<ApiResult<LocalMiner>> {
   };
 }
 
+/** Fetch a Hammer via the v3 `/v2/*` API (tagged hammerApiVersion: 2). */
+async function fetchHammerV2(ip: string): Promise<ApiResult<LocalMiner>> {
+  const snapshot = await hammer.getSnapshot(ip);
+  if (!isSuccess(snapshot)) return snapshot;
+  return {
+    success: true,
+    data: hammer.adaptToLocalMiner({ ip, snapshot: snapshot.data }),
+  };
+}
+
+/** Fetch a Hammer via the legacy AxeOS-style API (tagged hammerApiVersion: 1). */
+async function fetchHammerLegacy(ip: string): Promise<ApiResult<LocalMiner>> {
+  const result = await axeOS.getSystemInfo(ip);
+  if (!isSuccess(result)) return result;
+  return { success: true, data: parseSystemInfo(ip, result.data) };
+}
+
+/**
+ * Fetch a Hammer over whichever firmware generation responds. Tries the
+ * preferred generation first (v2 by default), and on failure tries the other.
+ * This makes a firmware upgrade/downgrade transparent: a miner saved as one
+ * generation that has since switched won't go offline — it just re-resolves,
+ * and the caller persists the new `hammerApiVersion`.
+ */
+async function fetchHammer(
+  ip: string,
+  preferred?: 1 | 2
+): Promise<ApiResult<LocalMiner>> {
+  const tryVersion = (v: 1 | 2) =>
+    v === 2 ? fetchHammerV2(ip) : fetchHammerLegacy(ip);
+  const first: 1 | 2 = preferred === 1 ? 1 : 2;
+  const second: 1 | 2 = first === 2 ? 1 : 2;
+
+  const firstResult = await tryVersion(first);
+  if (isSuccess(firstResult)) return firstResult;
+
+  const secondResult = await tryVersion(second);
+  if (isSuccess(secondResult)) return secondResult;
+
+  // Both generations failed — surface the preferred generation's error.
+  return firstResult;
+}
+
 /** Guard for LuxOS writes: fail fast when the miner isn't a LuxOS */
 function getLuxOSGuard(
   ip: string,
@@ -610,7 +669,11 @@ export const useMinerStore = create<MinerState & MinerActions>()(
               miners: [...state.miners, miner],
               savedMiners: [
                 ...state.savedMiners,
-                { ip, minerType: miner.minerType },
+                {
+                  ip,
+                  minerType: miner.minerType,
+                  hammerApiVersion: miner.hammerApiVersion,
+                },
               ],
               isLoading: false,
             };
@@ -669,7 +732,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
                 ? await fetchKBox(ip)
                 : known?.minerType === 'luxos'
                   ? await fetchLuxOS(ip)
-                  : await fetchMiner(ip);
+                  : known?.minerType === 'hammer'
+                    ? await fetchHammer(ip, known.hammerApiVersion)
+                    : await fetchMiner(ip);
 
           if (isSuccess(result)) {
             set((state) => {
@@ -682,17 +747,28 @@ export const useMinerStore = create<MinerState & MinerActions>()(
               // savedMiners when the type actually changed — mapping
               // unconditionally would trigger a persist write per poll.
               const savedEntry = state.savedMiners.find((m) => m.ip === ip);
-              const typeChanged =
-                savedEntry && savedEntry.minerType !== updatedMiner.minerType;
+              // Persist type and (for Hammer) firmware generation so a
+              // rehydrated miner takes the right fast path next launch and a
+              // firmware upgrade/downgrade sticks. Only write when something
+              // actually changed — mapping unconditionally persists per poll.
+              const dispatchChanged =
+                savedEntry &&
+                (savedEntry.minerType !== updatedMiner.minerType ||
+                  savedEntry.hammerApiVersion !==
+                    updatedMiner.hammerApiVersion);
               return {
                 miners: state.miners.map((m) =>
                   m.ip === ip ? updatedMiner : m
                 ),
-                ...(typeChanged
+                ...(dispatchChanged
                   ? {
                       savedMiners: state.savedMiners.map((m) =>
                         m.ip === ip
-                          ? { ...m, minerType: updatedMiner.minerType }
+                          ? {
+                              ...m,
+                              minerType: updatedMiner.minerType,
+                              hammerApiVersion: updatedMiner.hammerApiVersion,
+                            }
                           : m
                       ),
                     }
@@ -778,7 +854,9 @@ export const useMinerStore = create<MinerState & MinerActions>()(
         const result =
           miner?.minerType === 'avalon'
             ? await avalon.reboot(ip)
-            : await axeOS.restart(ip);
+            : miner?.minerType === 'hammer' && miner.hammerApiVersion === 2
+              ? await hammer.reboot(ip)
+              : await axeOS.restart(ip);
         if (!isSuccess(result)) {
           set({ error: result.error });
         }
@@ -825,11 +903,38 @@ export const useMinerStore = create<MinerState & MinerActions>()(
           }, 15000);
           return true;
         }
+        if (miner?.minerType === 'hammer') {
+          // v3 firmware can flash its RGB LED; legacy Hammer has no identify.
+          if (miner.hammerApiVersion === 2) {
+            const result = await hammer.identify(ip);
+            if (!isSuccess(result)) {
+              set({ error: result.error });
+              return false;
+            }
+            return true;
+          }
+          return false;
+        }
         const result = await axeOS.identify(ip);
         if (!isSuccess(result)) {
           set({ error: result.error });
         }
         return isSuccess(result);
+      },
+
+      autotuneMiner: async (ip) => {
+        const miner = get().miners.find((m) => m.ip === ip);
+        if (miner?.minerType !== 'hammer' || miner.hammerApiVersion !== 2) {
+          return false;
+        }
+        const result = await hammer.autotune(ip);
+        if (!isSuccess(result)) {
+          set({ error: result.error });
+          return false;
+        }
+        // Autotune walks freq/voltage over time; a refresh surfaces the change.
+        void get().refreshMiner(ip);
+        return true;
       },
 
       /**
@@ -1060,10 +1165,14 @@ export const useMinerStore = create<MinerState & MinerActions>()(
       updateMinerSettings: async (ip, settings) => {
         const miner = get().miners.find((m) => m.ip === ip);
 
-        // Hammer requires full payload with boot_mode
-        const result = miner?.minerType === 'hammer'
-          ? await axeOS.updateHammerSettings(ip, settings, miner)
-          : await axeOS.updateSettings(ip, settings);
+        // Hammer v3 (`/v2/*`): clean PUT of the merged config. Legacy Hammer:
+        // full-payload PATCH with boot_mode. Everything else: AxeOS PATCH.
+        const result =
+          miner?.minerType === 'hammer' && miner.hammerApiVersion === 2
+            ? await hammer.updateConfig(ip, settings)
+            : miner?.minerType === 'hammer'
+              ? await axeOS.updateHammerSettings(ip, settings, miner)
+              : await axeOS.updateSettings(ip, settings);
 
         if (isSuccess(result)) {
           // Refresh to get updated values
@@ -1227,6 +1336,7 @@ export const useMinerStore = create<MinerState & MinerActions>()(
             // Known type routes the first refresh down the right fast
             // path (critical for KBox, whose fetch needs the stored key)
             minerType: sm.minerType ?? ('unknown' as MinerType),
+            hammerApiVersion: sm.hammerApiVersion,
             expectedHashrate: 0,
             hashRate: 0,
             power: 0,

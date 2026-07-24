@@ -47,9 +47,9 @@ export function supportsIdentify(miner: LocalMiner): boolean {
     return false;
   }
 
-  // Hammer firmware doesn't support identify LED
+  // Hammer: v3 firmware (`/v2/*`) can flash its RGB LED; legacy 2.x can't.
   if (miner.minerType === 'hammer') {
-    return false;
+    return miner.hammerApiVersion === 2;
   }
 
   // Avalon Q firmware has no LED-identify equivalent (no `led` option in

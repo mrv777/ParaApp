@@ -51,8 +51,14 @@ export function MinerControlsSection({
 
   const restartMiner = useMinerStore((s) => s.restartMiner);
   const identifyMiner = useMinerStore((s) => s.identifyMiner);
+  const autotuneMiner = useMinerStore((s) => s.autotuneMiner);
   const setAvalonWorkMode = useMinerStore((s) => s.setAvalonWorkMode);
   const [pendingMode, setPendingMode] = useState<AvalonWorkMode | null>(null);
+  const [isAutotuning, setIsAutotuning] = useState(false);
+
+  // Hammer v3 (`/v2/*`) exposes an on-device autotune routine.
+  const supportsAutotune =
+    miner.minerType === 'hammer' && miner.hammerApiVersion === 2;
 
   // Refs for cleanup
   const identifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,6 +234,7 @@ export function MinerControlsSection({
     stopPulsing,
     dismissError,
     showError,
+    t,
   ]);
 
   const handleSetWorkMode = useCallback(
@@ -246,6 +253,23 @@ export function MinerControlsSection({
     },
     [pendingMode, miner.ip, setAvalonWorkMode, dismissError, showError, t]
   );
+
+  // Handle autotune (Hammer v3). The routine runs on-device with no
+  // completion signal, so we just confirm it started and let the regular
+  // poll surface the freq/voltage drift.
+  const handleAutotune = useCallback(async () => {
+    if (isAutotuning) return;
+    setIsAutotuning(true);
+    dismissError();
+    const ok = await autotuneMiner(miner.ip);
+    setIsAutotuning(false);
+    if (ok) {
+      haptics.success();
+    } else {
+      haptics.error();
+      showError(t('errors.failedToAutotune'));
+    }
+  }, [isAutotuning, autotuneMiner, miner.ip, dismissError, showError, t]);
 
   // Handle restart
   const handleRestart = useCallback(async () => {
@@ -416,6 +440,36 @@ export function MinerControlsSection({
             </View>
             {isIdentifying && (
               <ActivityIndicator size="small" color={colors.warning} />
+            )}
+          </Pressable>
+        )}
+
+        {/* Autotune Button — Hammer v3 only */}
+        {supportsAutotune && (
+          <Pressable
+            onPress={handleAutotune}
+            disabled={isAutotuning || isReconnecting}
+            className={`flex-row items-center justify-between py-3 px-4 bg-background border border-border ${
+              isAutotuning || isReconnecting ? 'opacity-50' : 'active:opacity-70'
+            }`}
+          >
+            <View className="flex-row items-center gap-3">
+              <Ionicons
+                name="options-outline"
+                size={24}
+                color={colors.text}
+              />
+              <View>
+                <Text variant="body" className="font-medium">
+                  {isAutotuning ? t('miners.autotuneRunning') : t('miners.autotune')}
+                </Text>
+                <Text variant="caption" color="muted">
+                  {t('miners.autotuneHint')}
+                </Text>
+              </View>
+            </View>
+            {isAutotuning && (
+              <ActivityIndicator size="small" color={colors.text} />
             )}
           </Pressable>
         )}

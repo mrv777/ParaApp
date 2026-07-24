@@ -137,6 +137,12 @@ export interface LocalMiner {
   serialNumber?: string;
   /** Boot mode — 0=normal, 1=overclock, 2=custom (Hammer) */
   bootMode?: number;
+  /**
+   * Hammer firmware generation. 2 = new `/v2/*` REST API (firmware 3.x);
+   * 1/undefined = legacy AxeOS-style `/api/system/*`. Drives API dispatch
+   * only — all UI keeps branching on `minerType === 'hammer'`.
+   */
+  hammerApiVersion?: 1 | 2;
   /** Raw device config fields needed for Hammer full-payload PATCH */
   rawConfig?: {
     flipscreen: number;
@@ -417,6 +423,102 @@ export interface AxeOSSystemInfo {
 }
 
 /**
+ * Hammer v3 firmware `/v2/*` API responses. Every read is wrapped in an
+ * `{ ok, data }` envelope (except a couple of endpoints we don't use).
+ */
+export interface HammerV2Envelope<T> {
+  ok: boolean;
+  data: T;
+}
+
+/** GET /v2/device/info — static device identity */
+export interface HammerV2DeviceInfo {
+  device_model: string;
+  hardware_version: string;
+  firmware_version: string;
+  mac_address: string;
+  serial_number: string;
+  chip_type: string;
+  detected_chips_count: number;
+}
+
+/** GET /v2/device/status — live device status */
+export interface HammerV2DeviceStatus {
+  uptime_seconds: number;
+  free_heap_bytes: number;
+  cpu_temp: number;
+  wifi_rssi: number;
+  wifi_ssid: string;
+  network_connected: boolean;
+  ip_address: string;
+}
+
+/** One entry in the miner/status `chips[]` array */
+export interface HammerV2Chip {
+  chip_id: number;
+  domain_id: number;
+  temperature: number;
+  hashrate: number;
+  hardware_errors: number;
+  status: string;
+}
+
+/** GET /v2/miner/status — miner runtime status (H/s for hashrate) */
+export interface HammerV2MinerStatus {
+  current_hashrate: number;
+  fan_speed_rpm: number;
+  temp_board: number;
+  temp_vcore: number;
+  power_consumption: number;
+  frequency: number;
+  boot_mode: number;
+  coreVoltage: number;
+  fan_mode: number;
+  fan_target_speed: number;
+  shares_accepted: number;
+  shares_rejected: number;
+  bestDiff: number;
+  bestSessionDiff: number;
+  overheat_mode: number;
+  isUsingFallbackStratum: boolean;
+  hwNumber: number;
+  hwRate: number;
+  pool_url: string;
+  pool_worker: string;
+  pool_port: number;
+  fallback_pool_url: string;
+  fallback_pool_worker: string;
+  fallback_pool_port: number;
+  chips?: HammerV2Chip[];
+}
+
+/** GET/PUT /v2/miner/config — mining config */
+export interface HammerV2MinerConfig {
+  pool_url: string;
+  pool_worker: string;
+  pool_port: number;
+  fallback_pool_url: string;
+  fallback_pool_worker: string;
+  fallback_pool_port: number;
+  core_frequency: number;
+  core_voltage: number;
+  boot_mode: number;
+  Customizefrequency: number;
+  coreCustomizeVoltage: number;
+  fan_mode: number;
+  fan_target_speed: number;
+  [key: string]: unknown;
+}
+
+/** GET /v2/network/config — network configuration */
+export interface HammerV2NetworkConfig {
+  ip_address: string;
+  hostname: string;
+  wifi_ssid: string;
+  wifi_rssi: number;
+}
+
+/**
  * Saved miner data for persistence (minimal)
  */
 export interface SavedMiner {
@@ -430,6 +532,11 @@ export interface SavedMiner {
    * stored API key). Absent on entries persisted before this field existed.
    */
   minerType?: MinerType;
+  /**
+   * Last resolved Hammer firmware generation (see LocalMiner.hammerApiVersion).
+   * Lets a rehydrated Hammer dispatch to the right endpoints without re-probing.
+   */
+  hammerApiVersion?: 1 | 2;
 }
 
 /**

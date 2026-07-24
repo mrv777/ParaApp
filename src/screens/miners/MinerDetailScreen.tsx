@@ -292,10 +292,22 @@ export function MinerDetailScreen({ route, navigation }: Props) {
           </Card>
         )}
 
-        {/* Per-ASIC heatmap (Avalon only). Self-fetches estats while expanded. */}
+        {/* Per-ASIC heatmap. Avalon self-fetches estats while expanded;
+            Hammer v3 already has per-chip temps in its regular poll. */}
         {miner.isOnline && miner.minerType === 'avalon' && (
           <AsicHeatmap ip={miner.ip} />
         )}
+        {miner.isOnline &&
+          miner.minerType === 'hammer' &&
+          miner.asicTemps &&
+          miner.asicTemps.length > 0 && (
+            <AsicHeatmap
+              ip={miner.ip}
+              temps={miner.asicTemps}
+              profile="bm13xx"
+              cols={miner.asicTemps.length <= 4 ? miner.asicTemps.length : 8}
+            />
+          )}
 
         {/* Device info */}
         <DeviceInfoSection miner={miner} />

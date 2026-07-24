@@ -1,10 +1,10 @@
 /**
  * Network discovery utilities for local miners.
  *
- * Probes port 80 twice (AxeOS/Hammer at /api/system/info, KBox at
- * /api/v1/status), port 8080 (LuxOS HTTP RPC) and port 4028 (Canaan
- * Avalon CGMiner JSON RPC) per IP, in parallel, returning as soon as
- * any probe succeeds.
+ * Probes port 80 three times (legacy AxeOS/Hammer at /api/system/info,
+ * Hammer v3 at /v2/device/info, KBox at /api/v1/status), port 8080 (LuxOS
+ * HTTP RPC) and port 4028 (Canaan Avalon CGMiner JSON RPC) per IP, in
+ * parallel, returning as soon as any probe succeeds.
  */
 
 import NetInfo from '@react-native-community/netinfo';
@@ -12,6 +12,7 @@ import type { DiscoveryProgress, DiscoveryOptions, MinerType } from '@/types';
 import { isAvalon } from '@/api/avalon';
 import { isKBox } from '@/api/kbox';
 import { isLuxOS } from '@/api/luxos';
+import { isHammerV2 } from '@/api/hammer';
 import { extractSubnet } from './validation';
 
 /** Timeout for discovery probes (ms) - no retries, fast fail */
@@ -116,6 +117,13 @@ async function probeMiner(
   const probes = [
     probeAxeOS(ip, signal).then((ok) =>
       ok ? ('unknown' as MinerType) : Promise.reject()
+    ),
+    // Hammer v3 firmware answers only the `/v2/*` API; its legacy
+    // `/api/system/info` is gone, so probeAxeOS can't see it. A hit here
+    // resolves straight to 'hammer' (v2); legacy Hammers still come through
+    // probeAxeOS as 'unknown' and split to 'hammer' at parse time.
+    isHammerV2(ip, signal).then((ok) =>
+      ok ? ('hammer' as MinerType) : Promise.reject()
     ),
     // KBox is identifiable without its API key: an unauthenticated
     // GET /api/v1/status returns a distinctive 401/403 JSON envelope.
