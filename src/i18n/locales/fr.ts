@@ -121,6 +121,7 @@ const fr = {
     badgeParticipants: 'Participants',
     badgeTopDiff: 'Difficulté max',
     badgeWinnerDiff: 'Diff gagnante',
+    badgeWorkShare: 'Votre travail : {{share}} du bloc',
     badgeWon: 'Bloc gagné',
     badgeParticipated: 'Participé',
     viewOnMempool: 'Voir sur mempool.space',
@@ -139,6 +140,7 @@ const fr = {
     rewardsCatalogIntro:
       'Les récompenses et la difficulté de partage minimale requise pour chacune.',
     rewardsCatalogEmpty: 'Aucune récompense disponible pour le moment.',
+    rewardsLeft: '{{remaining}}/{{total}} restants',
     rewardsNextTarget: 'Prochaine cible',
     rewardsYourBest: 'Votre meilleure : {{diff}}',
     refinery: 'Refinery',

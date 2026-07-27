@@ -2,6 +2,54 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.6.3] - 2026-07-27
+
+### Added
+- Block achievement badges now show your share of that block's total pool work, alongside the work total you already contributed; precision scales with the size of the share, so contributions well under one percent stay readable instead of rounding away to zero
+- The rewards catalog now shows how many units of each reward are still available out of the total minted, matching the pool website
+
+## [0.6.2] - 2026-07-24
+
+### Added
+- Hammer v3 miner support, including the per-chip ASIC heatmap and one-tap autotune that tunes frequency and voltage on the device
+
+### Fixed
+- Stopped the chat profanity filter rejecting ordinary mining talk that contains numbers; digits were being folded into letters before matching (so "455" read as profanity) and bare numerals could be flagged outright. Symbol-based leetspeak and spaced-out profanity are still caught
+
+## [0.6.1] - 2026-07-21
+
+### Added
+- Best Diff markers on the Home hashrate chart — a timeline of your difficulty hits in the 1h and 24h views, tappable to inspect the difficulty, block, and time of each hit
+- Pool Work, Avg to Find Block, and Min Diff Needed tiles on the pool stats grid, with network difficulty sourced from mempool.space
+
+### Changed
+- Renamed the "Last Block" tile to "Last Block Found" and made it open the block on parasite.space; the Users and Workers tiles were replaced by the new stats above
+
+## [0.6.0] - 2026-07-18
+
+### Added
+- Rewards catalog sheet listing every dispenser tier and asset with your progress toward the next target; the Mining Reward card is now always the entry point to it
+- Push notification when you earn a dispenser reward, with a new toggle (on by default) in all five languages
+- Read-only Refinery order card and order detail sheet, shown only when your address has orders
+- "Work" sort option on the round leaderboard
+
+### Fixed
+- Stopped admin-granted dispenser rewards being counted twice, which could fire a reward notification when nothing was actually claimable yet
+- Cleared the selected Refinery order when the address changes, so the detail sheet can no longer reopen showing the previous address's order
+- Stopped a Refinery router outage from stalling core user-stats polling
+
+## [0.5.9] - 2026-07-17
+
+### Added
+- LuxOS (Luxor firmware) Antminer support: monitoring, restart, LED locate, power-profile switching, and pool configuration, localized in all five languages
+
+## [0.5.6] - 2026-07-16
+
+### Added
+- GekkoScience KBox support: monitoring, restart, fan and power modes (including custom frequency and core voltage), and ambient LED control. Devices are unlocked with an API key held in secure storage per device, and a reachable but locked KBox shows as online with a lock badge instead of appearing offline
+- Admin-assigned chat badges displayed next to a name or address; tap a badge to see what it means
+- Block achievement badges now show the winning share difficulty for that block, and the shareable badge image is square
+
 ## [0.5.5] - 2026-07-12
 
 ### Fixed

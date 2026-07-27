@@ -141,6 +141,16 @@ function RewardRow({
         </View>
         <Text
           variant="mono"
+          style={{
+            fontSize: 11,
+            color: reached ? colors.textDim : colors.textFaint,
+            flexShrink: 0,
+          }}
+        >
+          {t('home.rewardsLeft', { remaining: reward.remaining, total: reward.total })}
+        </Text>
+        <Text
+          variant="mono"
           className="font-bold"
           style={{ fontSize: 13, color: reached ? colors.textDim : colors.text }}
         >

@@ -47,3 +47,27 @@ export function derivePoolWork(
 
   return { value: null, isLowerBound: false };
 }
+
+/**
+ * Format one miner's contribution to a block as a share of the pool's total
+ * work for that block. Returns null when either side is unusable so callers can
+ * omit the line entirely rather than render a placeholder.
+ *
+ * A typical miner's share is well under 1%, so precision scales with the value
+ * instead of using `formatPercent`, which rounds everything to whole percent.
+ */
+export function formatWorkShare(
+  userWork: number | null | undefined,
+  roundWork: number | null | undefined
+): string | null {
+  if (typeof roundWork !== 'number' || !Number.isFinite(roundWork) || roundWork <= 0) return null;
+  if (typeof userWork !== 'number' || !Number.isFinite(userWork) || userWork < 0) return null;
+
+  const percent = Math.min(1, userWork / roundWork) * 100;
+
+  if (percent === 0) return '0%';
+  if (percent < 0.01) return '<0.01%';
+  if (percent < 1) return `${percent.toFixed(2)}%`;
+  if (percent < 10) return `${percent.toFixed(1)}%`;
+  return `${Math.round(percent)}%`;
+}

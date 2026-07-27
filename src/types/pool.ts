@@ -57,6 +57,8 @@ export interface RoundSummary {
   /** Difficulty of the share that solved the block */
   winner_diff: number | null;
   winner_username: string | null;
+  /** Pool-wide accepted-share work spent solving this block. */
+  total_work: number;
 }
 
 /**

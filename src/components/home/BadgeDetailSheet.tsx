@@ -15,6 +15,7 @@ import { usePoolStore, selectRounds, isCacheStale } from '@/store';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { formatDifficulty } from '@/utils/formatting';
+import { formatWorkShare } from '@/utils/poolStats';
 import { useTranslation } from '@/i18n';
 
 export type BadgeDetail =
@@ -99,12 +100,15 @@ export function BadgeDetailSheet({
   }, [visible, displayBadge]);
 
   const rounds = usePoolStore(selectRounds);
-  const winnerDiff = useMemo(() => {
-    if (displayBadge?.type !== 'block') return null;
-    return (
-      rounds?.find((r) => r.block_height === displayBadge.blockHeight)
-        ?.winner_diff ?? null
-    );
+  // One lookup feeds both the winning diff and the miner's share of the block's
+  // pool-wide work; the round is missing until /api/rounds resolves.
+  const { winnerDiff, workShare } = useMemo(() => {
+    if (displayBadge?.type !== 'block') return { winnerDiff: null, workShare: null };
+    const round = rounds?.find((r) => r.block_height === displayBadge.blockHeight);
+    return {
+      winnerDiff: round?.winner_diff ?? null,
+      workShare: formatWorkShare(displayBadge.totalWork, round?.total_work),
+    };
   }, [rounds, displayBadge]);
 
   const handleShare = useCallback(async () => {
@@ -221,6 +225,11 @@ export function BadgeDetailSheet({
                 value={winnerDiff != null ? formatDifficulty(winnerDiff) : '--'}
               />
             </View>
+            {workShare && (
+              <Text variant="caption" align="center" color="muted" className="mt-3">
+                {t('home.badgeWorkShare', { share: workShare })}
+              </Text>
+            )}
             <Text
               variant="caption"
               align="center"

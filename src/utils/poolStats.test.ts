@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { RoundWorkLeaderboardEntry } from '@/types';
 import { formatExpectedBlockTime } from './formatting';
-import { derivePoolWork, getPoolBlockUrl } from './poolStats';
+import { derivePoolWork, formatWorkShare, getPoolBlockUrl } from './poolStats';
 
 function workEntry(totalWork: number): RoundWorkLeaderboardEntry {
   return {
@@ -85,6 +85,39 @@ describe('derivePoolWork', () => {
       value: null,
       isLowerBound: false,
     });
+  });
+});
+
+describe('formatWorkShare', () => {
+  it.each([
+    [50, 100, '50%'],
+    [21, 1_000, '2.1%'],
+    [42, 10_000, '0.42%'],
+    [1, 10_000, '0.01%'],
+    [1, 1_000_000, '<0.01%'],
+    [0, 100, '0%'],
+  ])('scales precision to the size of the share (%s / %s)', (userWork, roundWork, expected) => {
+    expect(formatWorkShare(userWork, roundWork)).toBe(expected);
+  });
+
+  it('clamps a share that exceeds the round total', () => {
+    expect(formatWorkShare(150, 100)).toBe('100%');
+  });
+
+  it.each([
+    [100, 0],
+    [100, -1],
+    [100, Number.NaN],
+    [100, Number.POSITIVE_INFINITY],
+    [100, null],
+    [100, undefined],
+    [-1, 100],
+    [Number.NaN, 100],
+    [Number.POSITIVE_INFINITY, 100],
+    [null, 100],
+    [undefined, 100],
+  ])('returns null for unusable inputs (%s, %s)', (userWork, roundWork) => {
+    expect(formatWorkShare(userWork, roundWork)).toBeNull();
   });
 });
 

@@ -40,6 +40,10 @@ export interface RewardCatalogEntry {
   description?: string;
   /** Lowest share-difficulty target for this reward (raw difficulty). */
   threshold: number;
+  /** Units still unassigned in the pool. */
+  remaining: number;
+  /** Total units minted for this asset. */
+  total: number;
 }
 
 /**
@@ -60,6 +64,8 @@ export function buildRewardCatalog(
       name: asset.name,
       description: asset.description,
       threshold: Math.min(...assetTiers.map((tier) => tier.threshold)),
+      remaining: asset.total_utxos - asset.assigned,
+      total: asset.total_utxos,
     });
   }
   return rewards.sort((a, b) => a.threshold - b.threshold);
