@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getUserDifficultyHits } from '../parasite';
+import { getUserBadges, getUserDifficultyHits } from '../parasite';
 
-function response(body: unknown): Response {
+function response(body: unknown, status = 200): Response {
   return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -91,5 +91,43 @@ describe('getUserDifficultyHits', () => {
       success: false,
       error: { message: 'Invalid difficulty history response' },
     });
+  });
+});
+
+describe('getUserBadges', () => {
+  const payload = {
+    version: 2,
+    computed_at: '2026-08-06T00:00:00Z',
+    types: {
+      block: { kind: 'unique_then_bucket', unique: [{ blockheight: 900_000 }], bucket: { count: 2 }, total: 3 },
+    },
+  };
+
+  it('returns the payload and hits the badges endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(payload));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getUserBadges('bc1qtest')).resolves.toEqual({
+      success: true,
+      data: payload,
+    });
+    expect(new URL(fetchMock.mock.calls[0][0]).pathname).toBe('/api/user/bc1qtest/badges');
+  });
+
+  it.each([403, 404])('maps %i to success with null data', async (status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ error: 'nope' }, status)));
+
+    await expect(getUserBadges('bc1qtest')).resolves.toEqual({
+      success: true,
+      data: null,
+    });
+  });
+
+  it('propagates other HTTP failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ error: 'boom' }, 400)));
+
+    const result = await getUserBadges('bc1qtest');
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.status).toBe(400);
   });
 });

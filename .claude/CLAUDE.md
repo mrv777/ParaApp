@@ -175,7 +175,9 @@ flight. Fixed by `patches/react-native-tcp-socket.patch` (coalesces host fields 
 - `GET /user/{address}` - User stats and workers
 - `GET /user/{address}/historical` - User historical data
 - `PATCH /user/{address}` - Update visibility preference
+- `GET /user/{address}/badges` - Canonical badge payload (8 kinds; 403 = private, 404 = none). Replaced the removed `/router/refinery-operator` (parastats Badge Reform, Jul 2026)
 - `GET /highest-diff` - Leaderboard data
+- `GET /dispenser/auctions` - Live Parabid auctions for dispenser assets (auction house: https://auction.parasite.space)
 
 **AxeOS (local miners):** `http://{ip}/api/`
 - `GET /system/info` - System info (discovery probe)

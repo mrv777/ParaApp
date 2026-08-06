@@ -19,23 +19,22 @@ import {
   UserHashrateChart,
 } from '../charts';
 import { formatXAxisLabel } from '../charts/chart-utils';
-import { BlockMedal, RefineryMedal } from './BadgeMedals';
+import { BadgeMedal } from './BadgeMedals';
 import { formatDifficulty, formatHashrate, truncateAddress } from '@/utils/formatting';
 import { colors } from '@/constants/colors';
 import { useTranslation } from '@/i18n';
+import { buildBadgeMedals, extractBadgeCounts } from '@/types';
 import type {
   UserStats,
   UserDifficultyHit,
   UserHistoricalPoint,
-  UserRoundHistoryEntry,
-  UserRoundsResponse,
+  BadgesPayload,
   HistoricalPeriod,
 } from '@/types';
 
 const CHART_HEIGHT = 96;
 const EMPTY_HISTORY: UserHistoricalPoint[] = [];
 const EMPTY_DIFFICULTY_HITS: UserDifficultyHit[] = [];
-const EMPTY_ROUND_HISTORY: UserRoundHistoryEntry[] = [];
 
 export interface UserStatsCardProps {
   stats: UserStats | null;
@@ -46,8 +45,7 @@ export interface UserStatsCardProps {
   onPeriodChange: (period: HistoricalPeriod) => void;
   isLoadingHistorical?: boolean;
   onChartPress?: () => void;
-  rounds?: UserRoundsResponse | null;
-  hasRefineryBadge?: boolean;
+  badges?: BadgesPayload | null;
   onBadgesPress?: () => void;
   isLoading?: boolean;
   className?: string;
@@ -82,8 +80,7 @@ export function UserStatsCard({
   onPeriodChange,
   isLoadingHistorical = false,
   onChartPress,
-  rounds,
-  hasRefineryBadge = false,
+  badges = null,
   onBadgesPress,
   isLoading = false,
   className = '',
@@ -115,18 +112,15 @@ export function UserStatsCard({
     return position === null ? null : { hit, position };
   }, [difficultyHits, historical, period]);
 
-  // Badge avatars (real medals) + total count for the footer.
-  const history = rounds?.history ?? EMPTY_ROUND_HISTORY;
-  const totalBadges = history.length + (hasRefineryBadge ? 1 : 0);
-  const avatarMedals = useMemo(() => {
-    const medals: ReactNode[] = history
+  // Badge avatars (real medals) + total count for the footer. Total = number
+  // of rendered medals in the achievements sheet (stacked kinds count once).
+  const { totalBadges, avatarMedals } = useMemo(() => {
+    const descriptors = buildBadgeMedals(extractBadgeCounts(badges));
+    const medals: ReactNode[] = descriptors
       .slice(0, 3)
-      .map((h) => <BlockMedal key={h.block_height} size={20} blockHeight={h.block_height} />);
-    if (medals.length < 3 && hasRefineryBadge) {
-      medals.push(<RefineryMedal key="refinery" size={20} />);
-    }
-    return medals;
-  }, [history, hasRefineryBadge]);
+      .map((d) => <BadgeMedal key={d.key} descriptor={d} size={20} />);
+    return { totalBadges: descriptors.length, avatarMedals: medals };
+  }, [badges]);
   const overflow = totalBadges - avatarMedals.length;
 
   return (

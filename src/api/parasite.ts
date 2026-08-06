@@ -21,6 +21,7 @@ import type {
   UserDifficultyHit,
   UserDifficultyHitApiResponse,
   UserRoundsResponse,
+  BadgesPayload,
   Account,
   AccountApiResponse,
   HistoricalPeriod,
@@ -331,18 +332,20 @@ export async function getUserRounds(
 }
 
 /**
- * Whether the user has earned the Refinery Operator badge.
- * Awarded when the user has at least one fulfilled order in Parasite's
- * router/refinery system. The endpoint returns `false` gracefully for
- * unknown/private/invalid addresses, so a non-success result maps to false.
+ * Get the user's canonical badge payload (server-computed, ~60s server cache).
+ * 404 (no badges) and 403 (private profile) are well-defined "nothing to show"
+ * states, mapped to success with `null` so callers can hide badge UI cleanly.
  * @param address - Bitcoin address
  */
-export async function getRefineryOperatorBadge(address: string): Promise<ApiResult<boolean>> {
-  const result = await fetchWithTimeout<{ hasRefineryOperatorBadge?: boolean }>(
-    `${BASE_URL}/api/router/refinery-operator?address=${encodeURIComponent(address)}`
+export async function getUserBadges(address: string): Promise<ApiResult<BadgesPayload | null>> {
+  const result = await fetchWithTimeout<BadgesPayload>(
+    `${BASE_URL}/api/user/${encodeURIComponent(address)}/badges`
   );
   if (result.success) {
-    return { success: true, data: result.data.hasRefineryOperatorBadge === true };
+    return result;
+  }
+  if (result.error.status === 404 || result.error.status === 403) {
+    return { success: true, data: null };
   }
   return result;
 }

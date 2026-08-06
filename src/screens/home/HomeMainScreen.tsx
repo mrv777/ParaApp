@@ -31,7 +31,7 @@ import {
   selectUserHistorical,
   selectUserDifficultyHits,
   selectUserRounds,
-  selectRefineryBadge,
+  selectUserBadges,
   selectIsUserLoading,
   selectUserError,
 } from '@/store/userStore';
@@ -91,7 +91,7 @@ export function HomeMainScreen({ navigation }: Props) {
   const historical = useUserStore(selectUserHistorical);
   const difficultyHits = useUserStore(selectUserDifficultyHits);
   const userRounds = useUserStore(selectUserRounds);
-  const hasRefineryBadge = useUserStore(selectRefineryBadge);
+  const userBadges = useUserStore(selectUserBadges);
   const historicalPeriod = useUserStore((s) => s.historicalPeriod);
   const isUserLoading = useUserStore(selectIsUserLoading);
   const isLoadingHistorical = useUserStore((s) => s.isLoadingHistorical);
@@ -114,7 +114,7 @@ export function HomeMainScreen({ navigation }: Props) {
   // Fetch leaderboards on mount; handle address changes for user data
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const fetchRounds = useUserStore((s) => s.fetchRounds);
-  const fetchRefineryBadge = useUserStore((s) => s.fetchRefineryBadge);
+  const fetchBadges = useUserStore((s) => s.fetchBadges);
   const fetchRefineryOrders = useUserStore((s) => s.fetchRefineryOrders);
   const fetchDifficultyHits = useUserStore((s) => s.fetchDifficultyHits);
   const clearUserData = useUserStore((s) => s.clearUserData);
@@ -127,10 +127,10 @@ export function HomeMainScreen({ navigation }: Props) {
         clearUserData();
         refreshUser();
       } else {
-        // Mount or first address set — fetch rounds and the (static) refinery
-        // badge once; stats come from polling.
+        // Mount or first address set — fetch rounds and badges once; stats
+        // come from polling.
         fetchRounds();
-        fetchRefineryBadge();
+        fetchBadges();
         fetchRefineryOrders();
         fetchDifficultyHits();
       }
@@ -143,7 +143,7 @@ export function HomeMainScreen({ navigation }: Props) {
     fetchLeaderboards,
     refreshUser,
     fetchRounds,
-    fetchRefineryBadge,
+    fetchBadges,
     fetchRefineryOrders,
     fetchDifficultyHits,
     clearUserData,
@@ -276,8 +276,7 @@ export function HomeMainScreen({ navigation }: Props) {
               onPeriodChange={handlePeriodChange}
               isLoadingHistorical={isLoadingHistorical}
               onChartPress={openFullScreen}
-              rounds={userRounds ?? null}
-              hasRefineryBadge={hasRefineryBadge}
+              badges={userBadges}
               onBadgesPress={() => setAchievementsVisible(true)}
               isLoading={isUserLoading}
               onShare={captureAndShare}
@@ -325,8 +324,8 @@ export function HomeMainScreen({ navigation }: Props) {
       <AchievementsSheet
         visible={achievementsVisible}
         onClose={() => setAchievementsVisible(false)}
+        badges={userBadges}
         rounds={userRounds ?? null}
-        hasRefineryBadge={hasRefineryBadge}
         onBadgePress={handleAchievementBadgePress}
       />
 

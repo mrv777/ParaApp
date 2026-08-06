@@ -16,21 +16,22 @@ export function useUserPolling(): UsePollingReturn {
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const fetchUserStats = useUserStore((s) => s.fetchUserStats);
   const fetchRounds = useUserStore((s) => s.fetchRounds);
+  const fetchBadges = useUserStore((s) => s.fetchBadges);
   const fetchRefineryOrders = useUserStore((s) => s.fetchRefineryOrders);
   const fetchDifficultyHits = useUserStore((s) => s.fetchDifficultyHits);
 
-  // Note: the Refinery Operator badge is effectively static, so it is fetched
-  // on initial load / address change / pull-to-refresh (see HomeMainScreen and
-  // refreshAll) rather than on every poll interval. Refinery orders DO poll:
-  // progress/hashrate/best-share change while an order is active.
+  // Badges and difficulty hits change rarely, so their fetchers self-throttle
+  // to a few minutes and these calls are usually no-ops. Refinery orders DO
+  // poll: progress/hashrate/best-share change while an order is active.
   const onPoll = useCallback(async () => {
     await Promise.all([
       fetchUserStats({ silent: true }),
       fetchRounds(),
+      fetchBadges(),
       fetchRefineryOrders(),
       fetchDifficultyHits(),
     ]);
-  }, [fetchUserStats, fetchRounds, fetchRefineryOrders, fetchDifficultyHits]);
+  }, [fetchUserStats, fetchRounds, fetchBadges, fetchRefineryOrders, fetchDifficultyHits]);
 
   return usePolling({
     onPoll,

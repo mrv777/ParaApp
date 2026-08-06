@@ -71,6 +71,46 @@ export function buildRewardCatalog(
   return rewards.sort((a, b) => a.threshold - b.threshold);
 }
 
+/**
+ * A live (open/extended) auction from /api/dispenser/auctions — a slot that
+ * appears here is currently biddable on the Parabid auction house.
+ */
+export interface LiveAuction {
+  id: string;
+  inscription_id: string;
+  outpoint: string;
+  /** Unix seconds */
+  end_time: number;
+  /** Highest bid in sats; null = no bids yet */
+  current_high: number | null;
+  min_next_bid: number;
+}
+
+/**
+ * Index auctions by both inscription id and outpoint so a slot resolves via
+ * either identifier. Ported from parastats DispenserClaim.tsx.
+ */
+export function buildAuctionIndex(auctions: LiveAuction[]): Map<string, LiveAuction> {
+  const index = new Map<string, LiveAuction>();
+  for (const auction of auctions) {
+    if (auction.inscription_id) index.set(auction.inscription_id, auction);
+    if (auction.outpoint) index.set(auction.outpoint, auction);
+  }
+  return index;
+}
+
+/** Resolve the live auction (if any) for a slot. */
+export function findSlotAuction(
+  index: Map<string, LiveAuction>,
+  slot: DispenserSlot
+): LiveAuction | null {
+  return (
+    (slot.inscriptionId ? index.get(slot.inscriptionId) : undefined) ??
+    (slot.utxo ? index.get(slot.utxo) : undefined) ??
+    null
+  );
+}
+
 export interface DispenserSlot {
   tier: string;
   utxo: string | null;

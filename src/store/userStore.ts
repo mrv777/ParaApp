@@ -10,6 +10,7 @@ import type {
   UserHistoricalPoint,
   UserDifficultyHit,
   UserRoundsResponse,
+  BadgesPayload,
   RefineryOrderSummary,
   Account,
   HistoricalPeriod,
@@ -30,7 +31,8 @@ interface UserState {
   difficultyHits: CachedData<UserDifficultyHit[]> | null;
   difficultyHitsAddress: string | null;
   rounds: CachedData<UserRoundsResponse> | null;
-  refineryBadge: CachedData<boolean> | null;
+  // `data: null` = no badges / private profile (badge UI hidden, not an error)
+  badges: CachedData<BadgesPayload | null> | null;
   refineryOrders: CachedData<RefineryOrderSummary[]> | null;
 
   // Current historical period
@@ -50,7 +52,7 @@ interface UserActions {
   fetchUserStats: (options?: { silent?: boolean }) => Promise<void>;
   fetchAccount: () => Promise<void>;
   fetchRounds: () => Promise<void>;
-  fetchRefineryBadge: () => Promise<void>;
+  fetchBadges: (options?: { force?: boolean }) => Promise<void>;
   fetchRefineryOrders: () => Promise<void>;
   fetchDifficultyHits: (options?: { force?: boolean }) => Promise<void>;
   fetchHistorical: (period: HistoricalPeriod, interval?: HistoricalInterval) => Promise<void>;
@@ -68,7 +70,7 @@ const initialState: UserState = {
   difficultyHits: null,
   difficultyHitsAddress: null,
   rounds: null,
-  refineryBadge: null,
+  badges: null,
   refineryOrders: null,
   historicalPeriod: '24h',
   isLoading: false,
@@ -104,6 +106,9 @@ function calculateAverageHashrate(
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const DIFFICULTY_HITS_MAX_AGE_MS = 5 * 60 * 1000;
+// Badges change only on new blocks / claims and the server caches them ~60s,
+// so polling refetches are throttled well below the poll interval.
+const BADGES_MAX_AGE_MS = 5 * 60 * 1000;
 
 function historicalSeriesEqual(
   a: UserHistoricalPoint[] | undefined,
@@ -220,22 +225,32 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
     }
   },
 
-  fetchRefineryBadge: async () => {
+  fetchBadges: async (options) => {
     const address = useSettingsStore.getState().bitcoinAddress;
     if (!address) return;
 
-    const result = await parasite.getRefineryOperatorBadge(address);
+    // Skip while cached data is fresh (address changes clear the cache via
+    // clearUserData, so freshness implies the current address).
+    const { badges } = get();
+    if (
+      !options?.force &&
+      badges != null &&
+      Date.now() - badges.timestamp < BADGES_MAX_AGE_MS
+    ) {
+      return;
+    }
+
+    const result = await parasite.getUserBadges(address);
 
     // Skip if address changed during fetch
     if (useSettingsStore.getState().bitcoinAddress !== address) return;
 
     // Only update on success, preserving the last known value through transient
-    // failures. The endpoint returns success+false for users without the badge,
-    // so this still clears it for non-holders; address changes are handled by
-    // clearUserData().
+    // failures. `data: null` (no badges / private profile) IS a success and
+    // clears any previous payload.
     if (isSuccess(result)) {
       set({
-        refineryBadge: { data: result.data, timestamp: Date.now() },
+        badges: { data: result.data, timestamp: Date.now() },
       });
     }
   },
@@ -351,7 +366,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       difficultyHits: null,
       difficultyHitsAddress: null,
       rounds: null,
-      refineryBadge: null,
+      badges: null,
       refineryOrders: null,
       isLoading: false,
       isLoadingHistorical: false,
@@ -368,7 +383,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       fetchUserStats,
       fetchAccount,
       fetchRounds,
-      fetchRefineryBadge,
+      fetchBadges,
       fetchRefineryOrders,
       fetchDifficultyHits,
     } = get();
@@ -376,7 +391,7 @@ export const useUserStore = create<UserState & UserActions>()((set, get) => ({
       fetchUserStats(),
       fetchAccount(),
       fetchRounds(),
-      fetchRefineryBadge(),
+      fetchBadges({ force: true }),
       fetchRefineryOrders(),
       fetchDifficultyHits({ force: true }),
     ]);
@@ -395,7 +410,7 @@ export const selectUserHistorical = (state: UserState) => state.historical?.data
 export const selectUserDifficultyHits = (state: UserState) =>
   state.difficultyHits?.data ?? EMPTY_DIFFICULTY_HITS;
 export const selectUserRounds = (state: UserState) => state.rounds?.data;
-export const selectRefineryBadge = (state: UserState) => state.refineryBadge?.data ?? false;
+export const selectUserBadges = (state: UserState) => state.badges?.data ?? null;
 export const selectRefineryOrders = (state: UserState) => state.refineryOrders?.data;
 export const selectIsUserLoading = (state: UserState) => state.isLoading;
 export const selectUserError = (state: UserState) => state.error;

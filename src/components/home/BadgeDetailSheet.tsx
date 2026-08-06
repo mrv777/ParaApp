@@ -10,26 +10,33 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Sheet } from '../Sheet';
 import { Text } from '../Text';
-import { BlockMedal, RefineryMedal } from './BadgeMedals';
+import { BlockMedal, BlockWinnerMedal, StackedMedal } from './BadgeMedals';
 import { usePoolStore, selectRounds, isCacheStale } from '@/store';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { formatDifficulty } from '@/utils/formatting';
 import { formatWorkShare } from '@/utils/poolStats';
 import { useTranslation } from '@/i18n';
+import { LOYALTY_BLOCKS_PER_INSTANCE, type StackedBadgeKind } from '@/types';
+
+/** Per-round stats from the user's rounds history (missing for blocks older
+ *  than the fetched history window or collapsed into the stacked medal). */
+export interface BadgeRoundStats {
+  rank: number;
+  workRank: number;
+  totalParticipants: number;
+  topDiff: number;
+  totalWork: number;
+}
 
 export type BadgeDetail =
   | {
       type: 'block';
       blockHeight: number;
-      rank: number;
-      workRank: number;
-      totalParticipants: number;
-      topDiff: number;
-      totalWork: number;
       isWinner: boolean;
+      round?: BadgeRoundStats;
     }
-  | { type: 'refinery' };
+  | { type: 'stacked'; kind: StackedBadgeKind; count: number };
 
 export interface BadgeDetailSheetProps {
   visible: boolean;
@@ -103,11 +110,13 @@ export function BadgeDetailSheet({
   // One lookup feeds both the winning diff and the miner's share of the block's
   // pool-wide work; the round is missing until /api/rounds resolves.
   const { winnerDiff, workShare } = useMemo(() => {
-    if (displayBadge?.type !== 'block') return { winnerDiff: null, workShare: null };
+    if (displayBadge?.type !== 'block' || !displayBadge.round) {
+      return { winnerDiff: null, workShare: null };
+    }
     const round = rounds?.find((r) => r.block_height === displayBadge.blockHeight);
     return {
       winnerDiff: round?.winner_diff ?? null,
-      workShare: formatWorkShare(displayBadge.totalWork, round?.total_work),
+      workShare: formatWorkShare(displayBadge.round.totalWork, round?.total_work),
     };
   }, [rounds, displayBadge]);
 
@@ -147,12 +156,24 @@ export function BadgeDetailSheet({
     Linking.openURL('https://parasite.space');
   }, []);
 
+  const stacked = displayBadge?.type === 'stacked' ? displayBadge : null;
+
   const title =
-    displayBadge?.type === 'refinery'
-      ? t('home.refineryOperator')
-      : displayBadge?.type === 'block'
-        ? t('home.blockBadgeTitle', { height: displayBadge.blockHeight })
+    displayBadge?.type === 'block'
+      ? displayBadge.isWinner
+        ? t('home.badgeBlockWinnerTitle', { height: displayBadge.blockHeight })
+        : t('home.blockBadgeTitle', { height: displayBadge.blockHeight })
+      : stacked
+        ? t(STACKED_TITLE_KEYS[stacked.kind])
         : '';
+
+  const stackedDescription = stacked
+    ? stacked.kind === 'loyalty'
+      ? t('home.badgeLoyaltyDesc', {
+          blocks: (stacked.count * LOYALTY_BLOCKS_PER_INSTANCE) / 1000,
+        })
+      : t(STACKED_DESC_KEYS[stacked.kind], { count: stacked.count })
+    : null;
 
   return (
     <Sheet visible={visible} onClose={onClose}>
@@ -184,41 +205,43 @@ export function BadgeDetailSheet({
             paddingVertical: 20,
           }}
         >
-          {displayBadge?.type === 'refinery' ? (
-            <RefineryMedal size={140} />
+          {stacked ? (
+            <StackedMedal size={140} kind={stacked.kind} count={stacked.count} />
+          ) : displayBadge?.type === 'block' && displayBadge.isWinner ? (
+            <BlockWinnerMedal size={140} blockHeight={displayBadge.blockHeight} />
           ) : (
             <BlockMedal
               size={140}
-              blockHeight={displayBadge?.blockHeight ?? 0}
+              blockHeight={displayBadge?.type === 'block' ? displayBadge.blockHeight : 0}
             />
           )}
         </View>
 
-        {/* Block round stats */}
-        {displayBadge?.type === 'block' && (
+        {/* Block round stats (only when this block is in the fetched history) */}
+        {displayBadge?.type === 'block' && displayBadge.round && (
           <>
             <View className="flex-row mt-4">
               <Stat
                 label={t('home.badgeRank')}
-                value={`#${displayBadge.rank}`}
+                value={`#${displayBadge.round.rank}`}
               />
               <Stat
                 label={t('home.workRank')}
-                value={`#${displayBadge.workRank}`}
+                value={`#${displayBadge.round.workRank}`}
               />
               <Stat
                 label={t('home.badgeParticipants')}
-                value={`${displayBadge.totalParticipants}`}
+                value={`${displayBadge.round.totalParticipants}`}
               />
             </View>
             <View className="flex-row mt-3">
               <Stat
                 label={t('home.badgeTopDiff')}
-                value={formatDifficulty(displayBadge.topDiff)}
+                value={formatDifficulty(displayBadge.round.topDiff)}
               />
               <Stat
                 label={t('home.colWork')}
-                value={formatDifficulty(displayBadge.totalWork)}
+                value={formatDifficulty(displayBadge.round.totalWork)}
               />
               <Stat
                 label={t('home.badgeWinnerDiff')}
@@ -230,24 +253,26 @@ export function BadgeDetailSheet({
                 {t('home.badgeWorkShare', { share: workShare })}
               </Text>
             )}
-            <Text
-              variant="caption"
-              align="center"
-              color={displayBadge.isWinner ? 'success' : 'muted'}
-              className="mt-3"
-            >
-              {displayBadge.isWinner
-                ? t('home.badgeWon')
-                : t('home.badgeParticipated')}
-            </Text>
           </>
+        )}
+        {displayBadge?.type === 'block' && (
+          <Text
+            variant="caption"
+            align="center"
+            color={displayBadge.isWinner ? 'success' : 'muted'}
+            className="mt-3"
+          >
+            {displayBadge.isWinner
+              ? t('home.badgeWon')
+              : t('home.badgeParticipated')}
+          </Text>
         )}
       </View>
 
-      {/* Refinery description */}
-      {displayBadge?.type === 'refinery' && (
+      {/* Stacked badge description */}
+      {stackedDescription && (
         <Text variant="body" color="muted" align="center" className="mt-4 px-2">
-          {t('home.refineryOperatorDesc')}
+          {stackedDescription}
         </Text>
       )}
 
@@ -260,7 +285,7 @@ export function BadgeDetailSheet({
             label={t('home.viewOnMempool')}
           />
         )}
-        {displayBadge?.type === 'refinery' && (
+        {stacked && (
           <ActionButton
             onPress={handleLearnMore}
             icon="open-outline"
@@ -277,3 +302,23 @@ export function BadgeDetailSheet({
     </Sheet>
   );
 }
+
+const STACKED_TITLE_KEYS: Record<StackedBadgeKind, string> = {
+  block_stack: 'home.badgeBlockStackTitle',
+  loyalty: 'home.badgeLoyaltyTitle',
+  auction_winner: 'home.badgeAuctionTitle',
+  bravocado: 'home.badgeBravocadoTitle',
+  miner: 'home.badgeMinerTitle',
+  dispenser: 'home.badgeDispenserTitle',
+  refinery: 'home.refineryOperator',
+};
+
+const STACKED_DESC_KEYS: Record<StackedBadgeKind, string> = {
+  block_stack: 'home.badgeBlockStackDesc',
+  loyalty: 'home.badgeLoyaltyDesc',
+  auction_winner: 'home.badgeAuctionDesc',
+  bravocado: 'home.badgeBravocadoDesc',
+  miner: 'home.badgeMinerDesc',
+  dispenser: 'home.badgeDispenserDesc',
+  refinery: 'home.badgeRefineryDesc',
+};

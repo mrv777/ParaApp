@@ -19,9 +19,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { RewardsCatalogSheet } from './RewardsCatalogSheet';
-import { getDispenserEligibility, getDispenserTiers } from '@/api/dispenser';
-import { buildSlots, type DispenserSlot, type Eligibility, type TierInfo } from '@/types';
-import { formatDifficulty } from '@/utils/formatting';
+import {
+  auctionUrl,
+  getDispenserAuctions,
+  getDispenserEligibility,
+  getDispenserTiers,
+} from '@/api/dispenser';
+import {
+  buildAuctionIndex,
+  buildSlots,
+  findSlotAuction,
+  type DispenserSlot,
+  type Eligibility,
+  type LiveAuction,
+  type TierInfo,
+} from '@/types';
+import { formatDifficulty, formatNumber } from '@/utils/formatting';
 import { useSettingsStore } from '@/store/settingsStore';
 import { usePolling } from '@/hooks/usePolling';
 import { colors } from '@/constants/colors';
@@ -48,6 +61,7 @@ export function MiningRewardCard({ className = '' }: MiningRewardCardProps) {
   const bitcoinAddress = useSettingsStore((s) => s.bitcoinAddress);
   const [tagged, setTagged] = useState<TaggedEligibility | null>(null);
   const [tiers, setTiers] = useState<TierInfo[] | null>(null);
+  const [auctions, setAuctions] = useState<LiveAuction[]>([]);
   const [catalogVisible, setCatalogVisible] = useState(false);
 
   // Tier thresholds change rarely — fetch once per mount for the slot captions.
@@ -64,9 +78,17 @@ export function MiningRewardCard({ className = '' }: MiningRewardCardProps) {
   const onPoll = useCallback(async () => {
     if (!bitcoinAddress) return;
     const addr = bitcoinAddress;
-    const result = await getDispenserEligibility(addr);
+    // Auctions are address-independent decoration on the slot grid; a failure
+    // keeps the last known list rather than clearing chips.
+    const [result, auctionsResult] = await Promise.all([
+      getDispenserEligibility(addr),
+      getDispenserAuctions(),
+    ]);
     if (result.success) {
       setTagged({ address: addr, data: result.data });
+    }
+    if (auctionsResult.success) {
+      setAuctions(auctionsResult.data);
     }
   }, [bitcoinAddress]);
 
@@ -91,6 +113,8 @@ export function MiningRewardCard({ className = '' }: MiningRewardCardProps) {
       whitelistSlots: all.filter((s) => s.tier === 'override'),
     };
   }, [eligibility]);
+
+  const auctionIndex = useMemo(() => buildAuctionIndex(auctions), [auctions]);
 
   // Lowest threshold per tier name, for the per-slot target caption.
   const tierThresholds = useMemo(() => {
@@ -147,6 +171,7 @@ export function MiningRewardCard({ className = '' }: MiningRewardCardProps) {
           slots={miningSlots}
           address={bitcoinAddress}
           tierThresholds={tierThresholds}
+          auctionIndex={auctionIndex}
         />
       )}
 
@@ -159,6 +184,7 @@ export function MiningRewardCard({ className = '' }: MiningRewardCardProps) {
             slots={whitelistSlots}
             address={bitcoinAddress}
             tierThresholds={tierThresholds}
+            auctionIndex={auctionIndex}
           />
         </View>
       )}
@@ -175,10 +201,12 @@ function SlotGrid({
   slots,
   address,
   tierThresholds,
+  auctionIndex,
 }: {
   slots: DispenserSlot[];
   address: string;
   tierThresholds: Record<string, number>;
+  auctionIndex: Map<string, LiveAuction>;
 }) {
   return (
     <View className="flex-row flex-wrap -mx-1">
@@ -188,6 +216,7 @@ function SlotGrid({
             slot={slot}
             address={address}
             threshold={tierThresholds[slot.tier]}
+            auction={findSlotAuction(auctionIndex, slot)}
           />
         </View>
       ))}
@@ -199,10 +228,12 @@ function SlotTile({
   slot,
   address,
   threshold,
+  auction,
 }: {
   slot: DispenserSlot;
   address: string;
   threshold?: number;
+  auction: LiveAuction | null;
 }) {
   const { t } = useTranslation();
   // Code-redemption slots have no inscription: the site shows fixed artwork
@@ -211,7 +242,11 @@ function SlotTile({
   const [imageFailed, setImageFailed] = useState(false);
 
   const handlePress = () => {
-    if (slot.claimed && !isCode) {
+    // Slots reserved into a live auction read as "Claimed" from eligibility,
+    // so the auction link takes precedence (matches the website).
+    if (auction) {
+      Linking.openURL(auctionUrl(auction.id));
+    } else if (slot.claimed && !isCode) {
       Linking.openURL(`${PARASITE_BASE}/dispenser/share/${slot.inscriptionId}`);
     } else {
       Linking.openURL(`${PARASITE_BASE}/user/${address}`);
@@ -221,9 +256,11 @@ function SlotTile({
   // The whole tile is a single Pressable: the footer carries the status label
   // and an action icon (link / open-in-browser). The text button was dropped
   // because translated labels overflow the ~90pt tile inner width on phones.
-  const accessibilityLabel = slot.claimed
-    ? `${t('home.miningRewardClaimed')}. ${t('home.miningRewardLink')}`
-    : `${t('home.miningRewardEligible')}. ${t('home.miningRewardClaimOnWeb')}`;
+  const accessibilityLabel = auction
+    ? `${t('home.miningRewardAtAuction')}. ${t('home.auctionBid')}`
+    : slot.claimed
+      ? `${t('home.miningRewardClaimed')}. ${t('home.miningRewardLink')}`
+      : `${t('home.miningRewardEligible')}. ${t('home.miningRewardClaimOnWeb')}`;
 
   return (
     <Pressable
@@ -234,24 +271,61 @@ function SlotTile({
       className="bg-background border border-border rounded-md p-2"
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
     >
-      {isCode && imageFailed ? (
-        <View
-          style={{ width: '100%', aspectRatio: 1 }}
-          className="items-center justify-center"
+      <View>
+        {isCode && imageFailed ? (
+          <View
+            style={{ width: '100%', aspectRatio: 1 }}
+            className="items-center justify-center"
+          >
+            <Ionicons name="pricetag-outline" size={28} color={colors.textMuted} />
+          </View>
+        ) : (
+          <Image
+            source={{
+              uri: isCode
+                ? CODE_ASSET_IMAGE
+                : `https://ordinals.com/content/${slot.inscriptionId}`,
+            }}
+            style={{ width: '100%', aspectRatio: 1, backgroundColor: 'transparent' }}
+            resizeMode="contain"
+            onError={isCode ? () => setImageFailed(true) : undefined}
+          />
+        )}
+        {auction && (
+          <View
+            style={{
+              position: 'absolute',
+              top: 2,
+              left: 2,
+              backgroundColor: colors.warning,
+              paddingHorizontal: 4,
+              paddingVertical: 1,
+              borderRadius: 2,
+            }}
+          >
+            <Text
+              variant="mono"
+              className="uppercase"
+              style={{ fontSize: 8, fontWeight: '700', color: '#000' }}
+              numberOfLines={1}
+            >
+              {t('home.miningRewardAtAuction')}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {auction && (
+        <Text
+          variant="mono"
+          color="warning"
+          style={{ fontSize: 9, marginTop: 4 }}
+          numberOfLines={1}
         >
-          <Ionicons name="pricetag-outline" size={28} color={colors.textMuted} />
-        </View>
-      ) : (
-        <Image
-          source={{
-            uri: isCode
-              ? CODE_ASSET_IMAGE
-              : `https://ordinals.com/content/${slot.inscriptionId}`,
-          }}
-          style={{ width: '100%', aspectRatio: 1, backgroundColor: 'transparent' }}
-          resizeMode="contain"
-          onError={isCode ? () => setImageFailed(true) : undefined}
-        />
+          {auction.current_high != null
+            ? t('home.auctionCurrentBid', { sats: formatNumber(auction.current_high) })
+            : t('home.auctionNoBids', { sats: formatNumber(auction.min_next_bid) })}
+        </Text>
       )}
 
       {isCode && (
@@ -277,15 +351,18 @@ function SlotTile({
       <View className="mt-2 flex-row items-center justify-between">
         <Text
           variant="caption"
-          color={slot.claimed ? 'success' : 'default'}
+          color={auction ? 'warning' : slot.claimed ? 'success' : 'default'}
           className="text-xs font-semibold"
+          numberOfLines={1}
         >
-          {slot.claimed
-            ? t('home.miningRewardClaimed')
-            : t('home.miningRewardEligible')}
+          {auction
+            ? t('home.miningRewardAtAuction')
+            : slot.claimed
+              ? t('home.miningRewardClaimed')
+              : t('home.miningRewardEligible')}
         </Text>
         <Ionicons
-          name={slot.claimed && !isCode ? 'link-outline' : 'open-outline'}
+          name={!auction && slot.claimed && !isCode ? 'link-outline' : 'open-outline'}
           size={14}
           color={colors.textMuted}
         />

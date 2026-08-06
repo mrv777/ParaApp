@@ -2,9 +2,6 @@
  * Home component exports
  */
 
-export { AchievementsCard } from './AchievementsCard';
-export type { AchievementsCardProps } from './AchievementsCard';
-
 export { AddAddressPrompt } from './AddAddressPrompt';
 export type { AddAddressPromptProps } from './AddAddressPrompt';
 
