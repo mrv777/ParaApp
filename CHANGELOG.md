@@ -2,6 +2,15 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.6.4] - 2026-08-06
+
+### Added
+- All-new achievement badges matching parasite.space: badges are now served by the pool's canonical badges endpoint and cover all eight kinds — gold trophy medals for blocks you've won, individual block medals, a stacked medal for blocks beyond those, plus Loyalty, Auction Winner, Bravocado, Miner, and Dispenser Collector badges, each with its own detail sheet
+- Mining rewards currently up for auction show an "At auction" chip with live bid info (current high bid, or the minimum next bid when there are none) and link straight to the Parabid auction house
+
+### Fixed
+- Restored the Refinery Operator badge, which disappeared when the pool website's Badge Reform removed the endpoint the app relied on
+
 ## [0.6.3] - 2026-07-27
 
 ### Added
