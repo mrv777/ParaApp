@@ -2,6 +2,12 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.6.5] - 2026-08-14
+
+### Fixed
+- Restored the 30-day hashrate charts, which broke when the pool website tightened its historical API to a fixed set of intervals; the 30d view now requests hourly data points
+- Badge refreshes no longer retry against the pool's new rate limit; if a refresh is rate-limited, the app quietly keeps showing your last known badges
+
 ## [0.6.4] - 2026-08-06
 
 ### Added

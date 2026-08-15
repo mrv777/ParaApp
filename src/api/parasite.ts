@@ -151,7 +151,7 @@ export async function getPoolStats(): Promise<ApiResult<PoolStats>> {
 /**
  * Get historical pool statistics
  * @param period - Time period (1h, 24h, 7d, 30d)
- * @param interval - Data granularity (5m, 15m, 1h, 4h, 1d)
+ * @param interval - Data granularity (1m, 5m, 15m, 30m, 1h)
  */
 export async function getPoolHistorical(
   period: HistoricalPeriod,
@@ -191,7 +191,7 @@ export async function getUser(address: string): Promise<ApiResult<UserStats>> {
  * Get historical user statistics
  * @param address - Bitcoin address
  * @param period - Time period (1h, 24h, 7d, 30d)
- * @param interval - Data granularity (5m, 15m, 1h, 4h, 1d)
+ * @param interval - Data granularity (1m, 5m, 15m, 30m, 1h)
  */
 export async function getUserHistorical(
   address: string,
@@ -335,11 +335,15 @@ export async function getUserRounds(
  * Get the user's canonical badge payload (server-computed, ~60s server cache).
  * 404 (no badges) and 403 (private profile) are well-defined "nothing to show"
  * states, mapped to success with `null` so callers can hide badge UI cleanly.
+ * The endpoint is rate-limited (429) since the Aug 2026 hardening; retries are
+ * disabled so backoff attempts don't count against the per-IP limit, and a 429
+ * surfaces as a failure so the store keeps the last known payload.
  * @param address - Bitcoin address
  */
 export async function getUserBadges(address: string): Promise<ApiResult<BadgesPayload | null>> {
   const result = await fetchWithTimeout<BadgesPayload>(
-    `${BASE_URL}/api/user/${encodeURIComponent(address)}/badges`
+    `${BASE_URL}/api/user/${encodeURIComponent(address)}/badges`,
+    { retries: 0 }
   );
   if (result.success) {
     return result;
