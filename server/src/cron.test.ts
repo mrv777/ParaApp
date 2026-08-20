@@ -6,7 +6,9 @@ import {
   diffDispenserRewards,
   getUserRotationOffset,
   shouldCheckDispenser,
+  stepWorkerStatus,
 } from './cron';
+import type { WorkerStatusEntry } from './types';
 
 describe('getUserRotationOffset', () => {
   it.each([2, 37, 74, 302, 335])(
@@ -205,3 +207,125 @@ describe('diffDispenserRewards', () => {
     expect(earned.newSlots).toEqual([{ tier: 'gold', count: 1 }]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Flap cooldown state machine
+// ---------------------------------------------------------------------------
+
+const NOW = 1_787_000_000;
+const HOUR = 3600;
+
+/** Run consecutive ticks (1/min) through stepWorkerStatus, returning notifications. */
+function runTicks(
+  start: WorkerStatusEntry | undefined,
+  ticks: { stale: boolean; minutes?: number }[],
+  startAt = NOW
+): { entry: WorkerStatusEntry; events: string[] } {
+  let entry = start;
+  let at = startAt;
+  const events: string[] = [];
+  for (const tick of ticks) {
+    at += (tick.minutes ?? 1) * 60;
+    const step = stepWorkerStatus(entry, tick.stale, at);
+    entry = step.next;
+    if (step.notify) events.push(`${step.notify}@${(at - startAt) / 60}m`);
+  }
+  return { entry: entry!, events };
+}
+
+const staleTicks = (n: number) =>
+  Array.from({ length: n }, () => ({ stale: true }));
+
+describe('stepWorkerStatus', () => {
+  it('notifies a plain offline→online pair exactly once', () => {
+    const { entry, events } = runTicks(undefined, [
+      ...staleTicks(7),
+      { stale: false },
+    ]);
+    expect(events).toEqual(['offline@5m', 'online@8m']);
+    expect(entry.notifiedOffline).toBe(false);
+    expect(entry.cooldownUntil).toBeGreaterThan(NOW);
+  });
+
+  it('handles legacy entries without the new fields', () => {
+    const legacy = { offlineChecks: 4, notifiedOffline: false };
+    const step = stepWorkerStatus(legacy, true, NOW);
+    expect(step.notify).toBe('offline');
+    expect(step.next).toEqual({ offlineChecks: 5, notifiedOffline: true });
+  });
+
+  it('absorbs a full flap pair inside the cooldown', () => {
+    // Pair 1 notifies, then a second outage 10 min later recovers again.
+    const { events } = runTicks(undefined, [
+      ...staleTicks(5),
+      { stale: false },
+      { stale: false, minutes: 10 },
+      ...staleTicks(5),
+      { stale: false },
+    ]);
+    expect(events).toEqual(['offline@5m', 'online@6m']);
+  });
+
+  it('sends a late offline alert when a suppressed outage outlives the cooldown', () => {
+    const { events } = runTicks(undefined, [
+      ...staleTicks(5),
+      { stale: false }, // online@6m starts the 90m cooldown
+      ...staleTicks(5), // crossing at 11m suppressed
+      { stale: true, minutes: 90 }, // past expiry
+    ]);
+    expect(events).toEqual(['offline@5m', 'online@6m', 'offline@101m']);
+  });
+
+  it('slides the cooldown so sustained flapping stays silent until stable', () => {
+    // Flap every ~30 min for 4 cycles after the first pair: only pair 1 notifies.
+    const cycle = [...staleTicks(5), { stale: false, minutes: 25 }];
+    const { entry, events } = runTicks(undefined, [
+      ...cycle,
+      ...cycle,
+      ...cycle,
+      ...cycle,
+    ]);
+    expect(events).toEqual(['offline@5m', 'online@30m']);
+    // Still armed: cooldown extends past the last recovery.
+    expect(entry.cooldownUntil).toBeGreaterThan(NOW + 90 * 60);
+  });
+
+  it('keeps the cooldown while online and drops it after expiry', () => {
+    const armed = stepWorkerStatus(
+      { offlineChecks: 0, notifiedOffline: true },
+      false,
+      NOW
+    ).next;
+    const during = stepWorkerStatus(armed, false, NOW + HOUR).next;
+    expect(during.cooldownUntil).toBe(armed.cooldownUntil);
+    const after = stepWorkerStatus(armed, false, NOW + 2 * HOUR).next;
+    expect(after.cooldownUntil).toBeUndefined();
+  });
+
+  it('a fresh outage after a stable cooldown expiry notifies normally', () => {
+    const { events } = runTicks(undefined, [
+      ...staleTicks(5),
+      { stale: false },
+      { stale: false, minutes: 95 }, // stable past cooldown
+      ...staleTicks(5),
+    ]);
+    expect(events).toEqual(['offline@5m', 'online@6m', 'offline@106m']);
+  });
+
+  it('reports flap suppression for observability', () => {
+    const crossing = { offlineChecks: 4, notifiedOffline: false };
+    expect(stepWorkerStatus(crossing, true, NOW).suppressed).toBeNull();
+    const inCooldown = {
+      ...crossing,
+      cooldownUntil: NOW + HOUR,
+    };
+    expect(stepWorkerStatus(inCooldown, true, NOW).suppressed).toBe('flap');
+  });
+
+  it('surfaces flapSuppressed in the cron summary', () => {
+    const summary = buildCronSummary({ ...healthySummary, flapSuppressed: 3 });
+    expect(summary.flapSuppressed).toBe(3);
+    expect(summary.warningReasons).toEqual([]);
+  });
+});
+

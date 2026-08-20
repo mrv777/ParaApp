@@ -75,6 +75,9 @@ const CRON_USER_TIMEOUT_MS = 5000;
 const DISPENSER_CHECK_INTERVAL_TICKS = 5;
 const CRON_USER_DEADLINE_MS = 45_000;
 const CRON_DURATION_WARNING_MS = 52_000;
+// After a recovery, a repeat offline crossing within this window is withheld
+// (absorbed entirely if it recovers again; sent late if it stays down).
+const FLAP_COOLDOWN_SECONDS = 90 * 60;
 
 interface CronSummaryInput {
   scheduledTime: number;
@@ -91,6 +94,7 @@ interface CronSummaryInput {
   maintenanceFailures: number;
   duplicateTick?: boolean;
   topLevelError?: boolean;
+  flapSuppressed?: number; // crossings/pairs absorbed by the flap cooldown
 }
 
 export interface CronSummary extends CronSummaryInput {
@@ -298,6 +302,120 @@ function isWorkerStale(lastSubmissionSeconds: number): boolean {
   return now - lastSubmissionSeconds > STALE_THRESHOLD_SECONDS;
 }
 
+export type WorkerNotifyAction = 'offline' | 'online' | null;
+export type WorkerSuppression = 'flap' | null;
+
+export interface WorkerStatusStep {
+  next: WorkerStatusEntry;
+  notify: WorkerNotifyAction;
+  suppressed: WorkerSuppression;
+}
+
+/**
+ * One worker's offline/online transition for a single cron check. On top of
+ * the 5-check threshold, a flap cooldown: a crossing within
+ * FLAP_COOLDOWN_SECONDS of the last recovery is withheld; recovery absorbs the
+ * pair and refreshes the cooldown (sliding), while outliving it sends the
+ * offline alert late.
+ */
+export function stepWorkerStatus(
+  stored: WorkerStatusEntry | undefined,
+  isStale: boolean,
+  nowSeconds: number
+): WorkerStatusStep {
+  const prev: WorkerStatusEntry = stored ?? {
+    offlineChecks: 0,
+    notifiedOffline: false,
+  };
+  const inCooldown =
+    typeof prev.cooldownUntil === 'number' && nowSeconds < prev.cooldownUntil;
+  const carryCooldown = inCooldown ? { cooldownUntil: prev.cooldownUntil } : {};
+
+  if (isStale) {
+    const offlineChecks = prev.offlineChecks + 1;
+
+    if (!prev.notifiedOffline) {
+      if (offlineChecks < OFFLINE_CHECK_THRESHOLD) {
+        return {
+          next: { offlineChecks, notifiedOffline: false, ...carryCooldown },
+          notify: null,
+          suppressed: null,
+        };
+      }
+      if (inCooldown) {
+        return {
+          next: {
+            offlineChecks,
+            notifiedOffline: true,
+            suppressedOffline: true,
+            ...carryCooldown,
+          },
+          notify: null,
+          suppressed: 'flap',
+        };
+      }
+      return {
+        next: { offlineChecks, notifiedOffline: true },
+        notify: 'offline',
+        suppressed: null,
+      };
+    }
+
+    if (prev.suppressedOffline) {
+      if (!inCooldown) {
+        // Outlived the flap window while still down: a real outage, send late.
+        return {
+          next: { offlineChecks, notifiedOffline: true },
+          notify: 'offline',
+          suppressed: null,
+        };
+      }
+      return {
+        next: {
+          offlineChecks,
+          notifiedOffline: true,
+          suppressedOffline: true,
+          ...carryCooldown,
+        },
+        notify: null,
+        suppressed: 'flap',
+      };
+    }
+
+    // Already notified offline; nothing more to say until it recovers.
+    return {
+      next: { offlineChecks, notifiedOffline: true },
+      notify: null,
+      suppressed: null,
+    };
+  }
+
+  // Worker is online.
+  if (prev.notifiedOffline) {
+    const cooldownUntil = nowSeconds + FLAP_COOLDOWN_SECONDS;
+    if (prev.suppressedOffline) {
+      // Absorbed flap: the offline alert was never sent, so recovery sends
+      // nothing either — just refresh the cooldown.
+      return {
+        next: { offlineChecks: 0, notifiedOffline: false, cooldownUntil },
+        notify: null,
+        suppressed: 'flap',
+      };
+    }
+    return {
+      next: { offlineChecks: 0, notifiedOffline: false, cooldownUntil },
+      notify: 'online',
+      suppressed: null,
+    };
+  }
+
+  return {
+    next: { offlineChecks: 0, notifiedOffline: false, ...carryCooldown },
+    notify: null,
+    suppressed: null,
+  };
+}
+
 /**
  * True only when `current` is a strictly newer block than `stored`.
  *
@@ -334,6 +452,7 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
   let claimFailed = false;
   let maintenanceFailures = 0;
   let topLevelError = false;
+  let flapSuppressed = 0;
   console.log('Cron job started');
 
   // Single-flight: a duplicate dispatch of this same scheduled tick shares
@@ -461,6 +580,7 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
         }
         if (result.value.stateUpdated) updatedAddresses++;
         else userFailures++;
+        flapSuppressed += result.value.flapSuppressed;
         allMessages.push(...result.value.messages);
         for (const token of result.value.widgetTokens) {
           eventWidgetTokens.add(token);
@@ -529,6 +649,7 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
       claimFailed,
       maintenanceFailures,
       topLevelError,
+      flapSuppressed,
     });
     console.log(`Cron job completed in ${durationMs}ms`);
   }
@@ -637,7 +758,7 @@ async function processUser(
   env: Env,
   address: string,
   tokens: PushSubscription[],
-  dispenser: {
+  options: {
     checkDispenser: boolean;
     tierAssets: Map<string, string> | null;
   }
@@ -645,25 +766,28 @@ async function processUser(
   messages: ExpoPushMessage[];
   widgetTokens: string[];
   stateUpdated: boolean;
+  flapSuppressed: number;
 }> {
   const messages: ExpoPushMessage[] = [];
   const widgetTokens: string[] = [];
+  let flapSuppressed = 0;
+  const fail = { messages, widgetTokens, stateUpdated: false, flapSuppressed };
 
   if (tokens.length === 0) {
-    return { messages, widgetTokens, stateUpdated: false }; // Defensive only
+    return fail; // Defensive only
   }
 
   // Fetch user data from Parasite Pool (and, on this address's dispenser tick,
   // its eligibility in parallel so the 45s deadline budget barely moves)
   const [userResult, eligibilityResult] = await Promise.all([
     getUser(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS),
-    dispenser.checkDispenser
+    options.checkDispenser
       ? getDispenserEligibility(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS)
       : Promise.resolve(null),
   ]);
   if (!userResult.success || !userResult.data) {
     console.log(`Failed to fetch user ${address}, skipping`);
-    return { messages, widgetTokens, stateUpdated: false };
+    return fail;
   }
 
   const userData = userResult.data;
@@ -674,7 +798,7 @@ async function processUser(
     (userData.workers > 0 && userData.workerData.length === 0)
   ) {
     console.warn(`Partial user payload for ${address}, preserving stored state`);
-    return { messages, widgetTokens, stateUpdated: false };
+    return fail;
   }
   const fetchedAt = Date.now();
   await upsertWidgetUserSnapshot(
@@ -721,7 +845,7 @@ async function processUser(
         const assetNames = [
           ...new Set(
             newSlots
-              .map((slot) => dispenser.tierAssets?.get(slot.tier))
+              .map((slot) => options.tierAssets?.get(slot.tier))
               .filter((name): name is string => Boolean(name))
           ),
         ];
@@ -759,49 +883,19 @@ async function processUser(
   const newStatuses: WorkerStatusMap = {};
   const offlineWorkers: string[] = [];
   const onlineWorkers: string[] = [];
+  const nowSecondsForWorkers = Math.floor(Date.now() / 1000);
 
-  // Process each worker
   for (const worker of userData.workerData || []) {
-    const workerName = worker.name;
     const lastSubmission = parseInt(worker.lastSubmission, 10) || 0;
-    const isStale = isWorkerStale(lastSubmission);
-
-    const stored = storedStatuses[workerName] || {
-      offlineChecks: 0,
-      notifiedOffline: false,
-    };
-
-    if (isStale) {
-      // Worker is offline
-      const newOfflineChecks = stored.offlineChecks + 1;
-
-      if (
-        newOfflineChecks >= OFFLINE_CHECK_THRESHOLD &&
-        !stored.notifiedOffline
-      ) {
-        // Time to notify - worker has been stale for 5 consecutive checks
-        offlineWorkers.push(workerName);
-        newStatuses[workerName] = {
-          offlineChecks: newOfflineChecks,
-          notifiedOffline: true,
-        };
-      } else {
-        newStatuses[workerName] = {
-          offlineChecks: newOfflineChecks,
-          notifiedOffline: stored.notifiedOffline,
-        };
-      }
-    } else {
-      // Worker is online
-      if (stored.notifiedOffline) {
-        // Worker came back online after we notified it was offline
-        onlineWorkers.push(workerName);
-      }
-      newStatuses[workerName] = {
-        offlineChecks: 0,
-        notifiedOffline: false,
-      };
-    }
+    const step = stepWorkerStatus(
+      storedStatuses[worker.name],
+      isWorkerStale(lastSubmission),
+      nowSecondsForWorkers
+    );
+    newStatuses[worker.name] = step.next;
+    if (step.notify === 'offline') offlineWorkers.push(worker.name);
+    else if (step.notify === 'online') onlineWorkers.push(worker.name);
+    if (step.suppressed === 'flap') flapSuppressed++;
   }
 
   // Create worker status notifications (batched)
@@ -896,7 +990,7 @@ async function processUser(
     dispenserState
   );
 
-  return { messages, widgetTokens, stateUpdated: true };
+  return { messages, widgetTokens, stateUpdated: true, flapSuppressed };
 }
 
 async function buildWidgetRefreshMessages(env: Env): Promise<ExpoPushMessage[]> {

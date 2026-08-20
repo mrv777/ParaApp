@@ -47,6 +47,12 @@ export interface PoolState {
 export interface WorkerStatusEntry {
   offlineChecks: number; // Consecutive offline checks (0-5)
   notifiedOffline: boolean; // Whether we already sent offline notification
+  // Offline crossing withheld by the flap cooldown (absorbed if it recovers,
+  // sent late if it outlives the cooldown)
+  suppressedOffline?: boolean;
+  // No new offline/online pair until this epoch second; refreshed on recovery.
+  // Absent on entries written before flap damping shipped.
+  cooldownUntil?: number;
 }
 
 export type WorkerStatusMap = Record<string, WorkerStatusEntry>;
