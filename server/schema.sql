@@ -10,12 +10,18 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   active INTEGER DEFAULT 1,
   widget_updates_enabled INTEGER DEFAULT 0,
   notifications_enabled INTEGER DEFAULT 1,
+  notify_blocks INTEGER NOT NULL DEFAULT 1,
+  notify_workers INTEGER NOT NULL DEFAULT 1,
+  notify_best_diff INTEGER NOT NULL DEFAULT 1,
+  notify_rewards INTEGER NOT NULL DEFAULT 1,
   last_widget_push_at INTEGER,
   created_at INTEGER DEFAULT (unixepoch()),
   updated_at INTEGER DEFAULT (unixepoch())
 );
 
--- Per-user notification preferences
+-- Legacy per-address preferences. Existing deployments retain this table for
+-- rollback compatibility; active code stores category preferences per device
+-- in push_subscriptions so one device cannot change another device's alerts.
 CREATE TABLE IF NOT EXISTS notification_preferences (
   btc_address TEXT PRIMARY KEY,
   notify_blocks INTEGER DEFAULT 1,
@@ -106,7 +112,8 @@ CREATE TABLE IF NOT EXISTS chat_profiles (
   nickname TEXT,
   updated_at INTEGER DEFAULT (unixepoch()),
   norm TEXT,
-  official INTEGER DEFAULT 0
+  official INTEGER DEFAULT 0,
+  badges TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_profiles_norm
   ON chat_profiles(norm) WHERE norm IS NOT NULL;

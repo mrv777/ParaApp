@@ -207,6 +207,20 @@ describe('getSnapshot — multi-command unwrap', () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('LUXOS_PARSE');
   });
+
+  it('caps oversized optional telemetry while preserving required sections', async () => {
+    const manyFans = Array.from({ length: 5000 }, (_, ID) => ({ ID, RPM: 5000 }));
+    stubFetchJson({
+      ...FULL_MULTI_RESPONSE,
+      fans: wrap({ FANS: manyFans }),
+    });
+    const result = await getSnapshot('10.0.0.9');
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fans).toHaveLength(4096);
+      expect(result.data.summary['GHS av']).toBe(200123.4);
+    }
+  });
 });
 
 describe('adaptToLocalMiner', () => {

@@ -41,10 +41,15 @@ ParaApp handles:
 
 - Bitcoin addresses (public, for pool lookups)
 - Push notification tokens (device-specific, stored server-side)
-- Local network miner discovery (IP addresses stay on-device)
+- Local miner IP addresses and settings (stored on-device)
+- Miner passwords and API keys when a supported device requires them. These are
+  kept in the platform's secure credential storage and sent only to the local
+  miner selected by the user; they are never sent to ParaApp servers.
 
-We do not store or transmit:
+ParaApp does not handle or transmit Bitcoin private keys.
 
-- Private keys
-- Passwords
-- Personal identification information
+Many supported miners expose only local HTTP or raw TCP management protocols,
+without TLS. ParaApp retains those protocols for hardware compatibility. Use
+miner management on a trusted private LAN or VLAN, do not expose miner ports to
+the public Internet, and be aware that an untrusted device on the same network
+may be able to observe, modify, or replay cleartext miner traffic.

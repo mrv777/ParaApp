@@ -6,9 +6,44 @@ import {
   diffDispenserRewards,
   getUserRotationOffset,
   shouldCheckDispenser,
+  shouldSendNotification,
   stepWorkerStatus,
 } from './cron';
-import type { WorkerStatusEntry } from './types';
+import type { PushSubscription, WorkerStatusEntry } from './types';
+
+const subscription = (overrides: Partial<PushSubscription> = {}): PushSubscription => ({
+  id: 1,
+  push_token: 'ExponentPushToken[test]',
+  btc_address: 'bc1qtest',
+  active: 1,
+  widget_updates_enabled: 0,
+  notifications_enabled: 1,
+  notify_blocks: 1,
+  notify_workers: 1,
+  notify_best_diff: 1,
+  notify_rewards: 1,
+  last_widget_push_at: null,
+  created_at: 0,
+  updated_at: 0,
+  ...overrides,
+});
+
+describe('shouldSendNotification', () => {
+  it('applies categories per token without affecting another device', () => {
+    const deviceA = subscription({ notify_workers: 0 });
+    const deviceB = subscription({ id: 2, push_token: 'ExponentPushToken[other]' });
+
+    expect(shouldSendNotification(deviceA, 'notify_workers')).toBe(false);
+    expect(shouldSendNotification(deviceA, 'notify_blocks')).toBe(true);
+    expect(shouldSendNotification(deviceB, 'notify_workers')).toBe(true);
+  });
+
+  it('honors the per-device master toggle', () => {
+    const disabled = subscription({ notifications_enabled: 0 });
+    expect(shouldSendNotification(disabled, 'notify_blocks')).toBe(false);
+    expect(shouldSendNotification(disabled, 'notify_rewards')).toBe(false);
+  });
+});
 
 describe('getUserRotationOffset', () => {
   it.each([2, 37, 74, 302, 335])(
@@ -328,4 +363,3 @@ describe('stepWorkerStatus', () => {
     expect(summary.warningReasons).toEqual([]);
   });
 });
-

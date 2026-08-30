@@ -18,8 +18,6 @@ import {
   getPoolState,
   updatePoolState,
   getAllActiveSubscriptions,
-  getPreferences,
-  getAllPreferences,
   markTokenInactive,
   getSubscriptionsDueForWidgetPush,
   markWidgetPushSent,
@@ -78,6 +76,22 @@ const CRON_DURATION_WARNING_MS = 52_000;
 // After a recovery, a repeat offline crossing within this window is withheld
 // (absorbed entirely if it recovers again; sent late if it stays down).
 const FLAP_COOLDOWN_SECONDS = 90 * 60;
+
+type NotificationCategory =
+  | 'notify_blocks'
+  | 'notify_workers'
+  | 'notify_best_diff'
+  | 'notify_rewards';
+
+/** Per-token master + category gate; missing legacy values default enabled. */
+export function shouldSendNotification(
+  subscription: PushSubscription,
+  category: NotificationCategory
+): boolean {
+  return (
+    subscription.notifications_enabled === 1 && subscription[category] !== 0
+  );
+}
 
 interface CronSummaryInput {
   scheduledTime: number;
@@ -705,37 +719,14 @@ async function checkPoolBlock(
     // Get all active subscriptions with block notifications enabled
     const allSubscriptions = await getAllActiveSubscriptions(env.DB);
 
-    // Group by address to check per-address block preference. Keep the full
-    // subscription rows so we can also honor each device's per-token master
-    // notifications flag below.
-    const addressSubs = new Map<string, PushSubscription[]>();
     for (const sub of allSubscriptions) {
-      const subs = addressSubs.get(sub.btc_address) || [];
-      subs.push(sub);
-      addressSubs.set(sub.btc_address, subs);
-    }
-
-    // Check preferences and create messages. Load the small table once instead
-    // of issuing one D1 query per address on the relatively rare block tick.
-    const prefsByAddress = new Map(
-      (await getAllPreferences(env.DB)).map((prefs) => [prefs.btc_address, prefs])
-    );
-    for (const [address, subs] of addressSubs) {
-      const prefs = prefsByAddress.get(address);
-      // Default to enabled if no preferences set
-      const blocksEnabled = prefs ? prefs.notify_blocks === 1 : true;
-
-      if (blocksEnabled) {
-        for (const sub of subs) {
-          if (sub.notifications_enabled !== 1) continue;
-          messages.push(
-            createPushMessage(sub.push_token, 'Block Found!', 'Parasite Pool found a block!', {
-              type: 'pool_block',
-              blockTime: currentBlockTime,
-            })
-          );
-        }
-      }
+      if (!shouldSendNotification(sub, 'notify_blocks')) continue;
+      messages.push(
+        createPushMessage(sub.push_token, 'Block Found!', 'Parasite Pool found a block!', {
+          type: 'pool_block',
+          blockTime: currentBlockTime,
+        })
+      );
     }
 
     // Nudge widget-enabled devices to refresh (independent of the block-alert
@@ -808,18 +799,9 @@ async function processUser(
     fetchedAt
   );
 
-  // Get stored state and preferences (tokens were grouped from the single
-  // active-subscription scan in runCronJob, so no per-address token query here).
-  const [userState, prefs] = await Promise.all([
-    getUserState(env.DB, address),
-    getPreferences(env.DB, address),
-  ]);
-
-  const workersEnabled = prefs ? prefs.notify_workers === 1 : true;
-  const bestDiffEnabled = prefs ? prefs.notify_best_diff === 1 : true;
-  // Rows predating migration 0012 have notify_rewards NULL — treat as enabled,
-  // matching the column default.
-  const rewardsEnabled = prefs ? prefs.notify_rewards !== 0 : true;
+  // Tokens were grouped from the single active-subscription scan in
+  // runCronJob; category choices now live on each token.
+  const userState = await getUserState(env.DB, address);
 
   // Dispenser reward diff. 404 = known zero-slot state (valid baseline); any
   // other failure preserves the stored watermark (dispenserState stays null so
@@ -838,7 +820,7 @@ async function processUser(
       );
       dispenserState = nextState;
 
-      if (rewardsEnabled && newSlots.length > 0) {
+      if (newSlots.length > 0) {
         const total = newSlots.reduce((sum, slot) => sum + slot.count, 0);
         // Tiers without a catalog entry (e.g. the "override" whitelist tier)
         // simply fall back to the generic body below.
@@ -858,7 +840,9 @@ async function processUser(
               : 'You earned a mining reward! Claim it on parasite.space'
             : `You earned ${total} mining rewards! Claim them on parasite.space`;
         for (const sub of tokens) {
-          if (sub.notifications_enabled !== 1) continue;
+          if (!shouldSendNotification(sub, 'notify_rewards')) {
+            continue;
+          }
           messages.push(
             createPushMessage(sub.push_token, title, body, {
               type: 'dispenser_reward',
@@ -899,43 +883,45 @@ async function processUser(
   }
 
   // Create worker status notifications (batched)
-  if (workersEnabled) {
-    if (offlineWorkers.length > 0) {
-      const title =
-        offlineWorkers.length === 1 ? 'Worker Offline' : 'Workers Offline';
-      const body =
-        offlineWorkers.length === 1
-          ? `${offlineWorkers[0]} went offline`
-          : `${offlineWorkers.length} workers went offline: ${offlineWorkers.join(', ')}`;
+  if (offlineWorkers.length > 0) {
+    const title =
+      offlineWorkers.length === 1 ? 'Worker Offline' : 'Workers Offline';
+    const body =
+      offlineWorkers.length === 1
+        ? `${offlineWorkers[0]} went offline`
+        : `${offlineWorkers.length} workers went offline: ${offlineWorkers.join(', ')}`;
 
-      for (const sub of tokens) {
-        if (sub.notifications_enabled !== 1) continue;
-        messages.push(
-          createPushMessage(sub.push_token, title, body, {
-            type: 'worker_offline',
-            workers: offlineWorkers,
-          })
-        );
+    for (const sub of tokens) {
+      if (!shouldSendNotification(sub, 'notify_workers')) {
+        continue;
       }
+      messages.push(
+        createPushMessage(sub.push_token, title, body, {
+          type: 'worker_offline',
+          workers: offlineWorkers,
+        })
+      );
     }
+  }
 
-    if (onlineWorkers.length > 0) {
-      const title =
-        onlineWorkers.length === 1 ? 'Worker Online' : 'Workers Online';
-      const body =
-        onlineWorkers.length === 1
-          ? `${onlineWorkers[0]} is back online`
-          : `${onlineWorkers.length} workers are back online: ${onlineWorkers.join(', ')}`;
+  if (onlineWorkers.length > 0) {
+    const title =
+      onlineWorkers.length === 1 ? 'Worker Online' : 'Workers Online';
+    const body =
+      onlineWorkers.length === 1
+        ? `${onlineWorkers[0]} is back online`
+        : `${onlineWorkers.length} workers are back online: ${onlineWorkers.join(', ')}`;
 
-      for (const sub of tokens) {
-        if (sub.notifications_enabled !== 1) continue;
-        messages.push(
-          createPushMessage(sub.push_token, title, body, {
-            type: 'worker_online',
-            workers: onlineWorkers,
-          })
-        );
+    for (const sub of tokens) {
+      if (!shouldSendNotification(sub, 'notify_workers')) {
+        continue;
       }
+      messages.push(
+        createPushMessage(sub.push_token, title, body, {
+          type: 'worker_online',
+          workers: onlineWorkers,
+        })
+      );
     }
   }
 
@@ -952,9 +938,11 @@ async function processUser(
     newBestDiff = currentValue > storedValue && storedValue > 0;
   }
 
-  if (bestDiffEnabled && newBestDiff) {
+  if (newBestDiff) {
     for (const sub of tokens) {
-      if (sub.notifications_enabled !== 1) continue;
+      if (!shouldSendNotification(sub, 'notify_best_diff')) {
+        continue;
+      }
       messages.push(
         createPushMessage(
           sub.push_token,

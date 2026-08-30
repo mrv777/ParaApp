@@ -34,6 +34,9 @@ export function aggregateMinerStats(miners: LocalMiner[]): AggregatedMinerStats 
     totalHashrate: onlineMiners.reduce((sum, m) => sum + m.hashRate, 0),
     minerCount: miners.length,
     onlineCount: onlineMiners.length,
-    highestBestDiff: Math.max(...miners.map((m) => m.bestDiff), 0),
+    highestBestDiff: miners.reduce(
+      (highest, miner) => Math.max(highest, miner.bestDiff),
+      0
+    ),
   };
 }

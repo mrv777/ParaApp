@@ -1,4 +1,10 @@
-import type { NotificationPreferences, UserState, PoolState, PushSubscription } from './types';
+import type {
+  NotificationPreferences,
+  SubscriptionPreferences,
+  UserState,
+  PoolState,
+  PushSubscription,
+} from './types';
 
 const MAX_DEVICES_PER_ADDRESS = 10;
 
@@ -13,42 +19,81 @@ export async function upsertSubscription(
   db: D1Database,
   pushToken: string,
   btcAddress: string,
-  options?: { widgetUpdatesEnabled?: boolean; notificationsEnabled?: boolean }
-): Promise<void> {
-  // Check if this token already exists (update case - no limit needed)
-  const existing = await db
-    .prepare('SELECT id FROM push_subscriptions WHERE push_token = ?')
-    .bind(pushToken)
-    .first();
-
-  if (!existing) {
-    // New token - check device limit
-    const count = await db
-      .prepare(
-        'SELECT COUNT(*) as count FROM push_subscriptions WHERE btc_address = ? AND active = 1'
-      )
-      .bind(btcAddress)
-      .first<{ count: number }>();
-
-    if (count && count.count >= MAX_DEVICES_PER_ADDRESS) {
-      throw new MaxDevicesExceededError();
-    }
+  options?: {
+    widgetUpdatesEnabled?: boolean;
+    notificationsEnabled?: boolean;
+    preferences?: {
+      blocks?: boolean;
+      workers?: boolean;
+      bestDiff?: boolean;
+      rewards?: boolean;
+    };
   }
-
+): Promise<void> {
   // notifications_enabled defaults to 1 (enabled) when the caller doesn't
   // specify it, matching the column default; only an explicit `false` disables.
   const notificationsEnabled = options?.notificationsEnabled === false ? 0 : 1;
+  const prefs = options?.preferences;
+  const blocks = prefs?.blocks === false ? 0 : 1;
+  const workers = prefs?.workers === false ? 0 : 1;
+  const bestDiff = prefs?.bestDiff === false ? 0 : 1;
+  const rewards = prefs?.rewards === false ? 0 : 1;
 
-  await db
+  // The cap check and write are one SQLite statement, so concurrent requests
+  // cannot both observe the last free slot. An already-active token at this
+  // address may refresh at the cap; reactivation and address moves still need
+  // a free slot. Same-address refreshes retain that device's category choices,
+  // while a new token or address rebind seeds them from the requesting device.
+  const result = await db
     .prepare(
       `
-      INSERT INTO push_subscriptions (push_token, btc_address, active, widget_updates_enabled, notifications_enabled, updated_at)
-      VALUES (?, ?, 1, ?, ?, unixepoch())
+      INSERT INTO push_subscriptions (
+        push_token,
+        btc_address,
+        active,
+        widget_updates_enabled,
+        notifications_enabled,
+        notify_blocks,
+        notify_workers,
+        notify_best_diff,
+        notify_rewards,
+        updated_at
+      )
+      SELECT ?, ?, 1, ?, ?, ?, ?, ?, ?, unixepoch()
+      WHERE
+        EXISTS (
+          SELECT 1 FROM push_subscriptions
+          WHERE push_token = ? AND btc_address = ? AND active = 1
+        )
+        OR (
+          SELECT COUNT(*) FROM push_subscriptions
+          WHERE btc_address = ? AND active = 1
+        ) < ?
       ON CONFLICT(push_token) DO UPDATE SET
         btc_address = excluded.btc_address,
         active = 1,
         widget_updates_enabled = excluded.widget_updates_enabled,
         notifications_enabled = excluded.notifications_enabled,
+        notify_blocks = CASE
+          WHEN push_subscriptions.btc_address = excluded.btc_address
+            THEN push_subscriptions.notify_blocks
+          ELSE excluded.notify_blocks
+        END,
+        notify_workers = CASE
+          WHEN push_subscriptions.btc_address = excluded.btc_address
+            THEN push_subscriptions.notify_workers
+          ELSE excluded.notify_workers
+        END,
+        notify_best_diff = CASE
+          WHEN push_subscriptions.btc_address = excluded.btc_address
+            THEN push_subscriptions.notify_best_diff
+          ELSE excluded.notify_best_diff
+        END,
+        notify_rewards = CASE
+          WHEN push_subscriptions.btc_address = excluded.btc_address
+            THEN push_subscriptions.notify_rewards
+          ELSE excluded.notify_rewards
+        END,
         updated_at = unixepoch()
     `
     )
@@ -56,9 +101,76 @@ export async function upsertSubscription(
       pushToken,
       btcAddress,
       options?.widgetUpdatesEnabled ? 1 : 0,
-      notificationsEnabled
+      notificationsEnabled,
+      blocks,
+      workers,
+      bestDiff,
+      rewards,
+      pushToken,
+      btcAddress,
+      btcAddress,
+      MAX_DEVICES_PER_ADDRESS
     )
     .run();
+
+  if (result.meta.changes === 0) throw new MaxDevicesExceededError();
+}
+
+export async function getSubscriptionPreferences(
+  db: D1Database,
+  pushToken: string,
+  btcAddress: string
+): Promise<SubscriptionPreferences | null> {
+  return db
+    .prepare(
+      `SELECT notify_blocks, notify_workers, notify_best_diff, notify_rewards
+       FROM push_subscriptions
+       WHERE push_token = ? AND btc_address = ? AND active = 1`
+    )
+    .bind(pushToken, btcAddress)
+    .first<SubscriptionPreferences>();
+}
+
+export async function updateSubscriptionPreferences(
+  db: D1Database,
+  pushToken: string,
+  btcAddress: string,
+  prefs: {
+    blocks?: boolean;
+    workers?: boolean;
+    bestDiff?: boolean;
+    rewards?: boolean;
+    widgetUpdatesEnabled?: boolean;
+    notificationsEnabled?: boolean;
+  }
+): Promise<boolean> {
+  const value = (input: boolean | undefined) =>
+    input === undefined ? null : input ? 1 : 0;
+  const result = await db
+    .prepare(
+      `UPDATE push_subscriptions
+       SET
+         notify_blocks = COALESCE(?, notify_blocks),
+         notify_workers = COALESCE(?, notify_workers),
+         notify_best_diff = COALESCE(?, notify_best_diff),
+         notify_rewards = COALESCE(?, notify_rewards),
+         widget_updates_enabled = COALESCE(?, widget_updates_enabled),
+         notifications_enabled = COALESCE(?, notifications_enabled),
+         updated_at = unixepoch()
+       WHERE push_token = ? AND btc_address = ? AND active = 1`
+    )
+    .bind(
+      value(prefs.blocks),
+      value(prefs.workers),
+      value(prefs.bestDiff),
+      value(prefs.rewards),
+      value(prefs.widgetUpdatesEnabled),
+      value(prefs.notificationsEnabled),
+      pushToken,
+      btcAddress
+    )
+    .run();
+  return result.meta.changes > 0;
 }
 
 export async function deleteSubscription(

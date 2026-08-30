@@ -20,6 +20,7 @@ import type {
   LocalMiner,
   MinerType,
 } from '@/types';
+import { MAX_REMOTE_ITEMS, finiteNumberRange } from '@/utils/finiteNumbers';
 
 /** Standard CGMiner API port */
 export const AVALON_PORT = 4028;
@@ -27,12 +28,30 @@ export const AVALON_PORT = 4028;
 /** Per-command timeout. Local LAN; matches MINER_TIMEOUT for AxeOS. */
 export const AVALON_TIMEOUT = 5000;
 
+/** Generous ceiling for one CGMiner reply, including large estats payloads. */
+export const AVALON_MAX_RESPONSE_BYTES = 1024 * 1024;
+
 /**
  * Discovery probe timeout — kept tight so a full /24 scan doesn't drag.
  * One TCP RTT to a non-Avalon host is sub-millisecond; one to a real
  * miner takes a few ms. 2.5s gives ~2× headroom for slow/loaded boxes.
  */
 export const AVALON_DISCOVERY_TIMEOUT = 2500;
+
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) i++;
+      bytes += 4;
+    } else bytes += 3;
+  }
+  return bytes;
+}
 
 // ---------------------------------------------------------------------------
 // Wire-format types
@@ -236,6 +255,7 @@ export function sendCommand(
     );
 
     let buffer = '';
+    let bufferBytes = 0;
     let settled = false;
     const settle = (result: ApiResult<CgminerEnvelope>) => {
       if (settled) return;
@@ -273,11 +293,26 @@ export function sendCommand(
     }, timeoutMs);
 
     socket.on('data', (chunk: string | { toString(encoding?: string): string }) => {
-      buffer +=
+      const decoded =
         typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+      const nul = decoded.indexOf('\0');
+      const accepted = nul >= 0 ? decoded.slice(0, nul + 1) : decoded;
+      const acceptedBytes = utf8ByteLength(accepted);
+      if (bufferBytes + acceptedBytes > AVALON_MAX_RESPONSE_BYTES) {
+        settle({
+          success: false,
+          error: {
+            message: 'Miner response exceeded 1 MiB',
+            code: 'RESPONSE_TOO_LARGE',
+          },
+        });
+        return;
+      }
+      bufferBytes += acceptedBytes;
+      buffer += accepted;
       // Cgminer terminates the JSON object with a NUL byte. As soon as
       // we see one, we have the full reply.
-      if (buffer.includes('\0')) {
+      if (nul >= 0) {
         finish();
       }
     });
@@ -482,9 +517,11 @@ export function parseMmSummary(blob: string): AvalonMmStats {
   // unbalanced ']'. The stats blob doesn't nest brackets.
   const re = /(\w+)\[([^\]]*)\]/g;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(blob)) !== null) {
+  let fields = 0;
+  while ((match = re.exec(blob)) !== null && fields < MAX_REMOTE_ITEMS) {
     const [, key, raw] = match;
     out[key] = coerceMmValue(raw);
+    fields++;
   }
   return out;
 }
@@ -515,7 +552,7 @@ function coerceMmValue(raw: string): unknown {
   }
   // Whitespace-separated number list?
   if (/^[-\d\s.]+$/.test(trimmed) && /\s/.test(trimmed)) {
-    const parts = trimmed.split(/\s+/);
+    const parts = trimmed.split(/\s+/, MAX_REMOTE_ITEMS);
     if (parts.every((p) => /^-?\d+(\.\d+)?$/.test(p))) {
       return parts.map(Number);
     }
@@ -802,12 +839,11 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
   // temperature (outlet → inlet → ambient → hottest ASIC) so the UI never
   // shows a bogus 0°C. Applied whenever TMax is not a usable positive
   // reading; actively-hashing miners report TMax > 0 and are unchanged.
-  const asicTempMax = Array.isArray(stats.hb?.PVT_T0)
-    ? Math.max(
-        0,
-        ...stats.hb.PVT_T0.filter((v) => typeof v === 'number' && v > 0)
-      )
-    : 0;
+  const asicTemps = Array.isArray(stats.hb?.PVT_T0)
+    ? stats.hb.PVT_T0.slice(0, MAX_REMOTE_ITEMS)
+    : undefined;
+  const positiveAsicTemps = asicTemps?.filter((value) => value > 0) ?? [];
+  const asicTempMax = finiteNumberRange(positiveAsicTemps)?.max ?? 0;
   const tempFallback =
     (typeof mm.HBOTemp === 'number' && mm.HBOTemp > 0 ? mm.HBOTemp : 0) ||
     (typeof mm.HBITemp === 'number' && mm.HBITemp > 0 ? mm.HBITemp : 0) ||
@@ -848,8 +884,8 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     hashboardInletTemp: typeof mm.HBITemp === 'number' ? mm.HBITemp : undefined,
     hashboardOutletTemp: typeof mm.HBOTemp === 'number' ? mm.HBOTemp : undefined,
     fanRpms: fanRpms.length > 0 ? fanRpms : undefined,
-    asicTemps: stats.hb?.PVT_T0,
-    asicVoltages: stats.hb?.PVT_V0,
+    asicTemps,
+    asicVoltages: stats.hb?.PVT_V0?.slice(0, MAX_REMOTE_ITEMS),
     asicCount: typeof mm.TA === 'number' ? mm.TA : undefined,
     macAddress: formatMac(version.MAC),
     poolPing: typeof mm.PING === 'number' ? mm.PING : undefined,

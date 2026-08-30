@@ -1,8 +1,16 @@
 import { z } from 'zod';
 import { MAX_NICKNAME_LENGTH } from './chat/protocol';
 
+// Expo currently issues both legacy ExponentPushToken[...] and
+// ExpoPushToken[...] values. Keep both for compatibility while bounding the
+// token before it reaches D1 or the Expo push service.
+const expoPushToken = z
+  .string()
+  .max(256)
+  .regex(/^(?:Exponent|Expo)PushToken\[[A-Za-z0-9_-]{1,200}\]$/);
+
 export const registerSchema = z.object({
-  pushToken: z.string().min(1).startsWith('ExponentPushToken['),
+  pushToken: expoPushToken,
   btcAddress: z.string().min(26).max(62),
   preferences: z
     .object({
@@ -17,11 +25,11 @@ export const registerSchema = z.object({
 });
 
 export const unregisterSchema = z.object({
-  pushToken: z.string().min(1),
+  pushToken: expoPushToken,
 });
 
 export const preferencesSchema = z.object({
-  pushToken: z.string().min(1).startsWith('ExponentPushToken['),
+  pushToken: expoPushToken,
   btcAddress: z.string().min(26).max(62),
   blocks: z.boolean().optional(),
   workers: z.boolean().optional(),

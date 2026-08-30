@@ -60,10 +60,14 @@ export function buildRewardCatalog(
     if (asset.assigned >= asset.total_utxos) continue;
     const assetTiers = tiers.filter((tier) => tier.asset === asset.name);
     if (assetTiers.length === 0) continue;
+    let threshold = Infinity;
+    for (const tier of assetTiers) {
+      if (tier.threshold < threshold) threshold = tier.threshold;
+    }
     rewards.push({
       name: asset.name,
       description: asset.description,
-      threshold: Math.min(...assetTiers.map((tier) => tier.threshold)),
+      threshold,
       remaining: asset.total_utxos - asset.assigned,
       total: asset.total_utxos,
     });

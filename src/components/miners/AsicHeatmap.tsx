@@ -24,6 +24,7 @@ import { useTranslation } from '@/i18n';
 import { haptics } from '@/utils/haptics';
 import { avalon } from '@/api';
 import { isSuccess } from '@/api/client';
+import { MAX_REMOTE_ITEMS, finiteNumberRange } from '@/utils/finiteNumbers';
 
 /** Poll cadence while the heatmap is expanded. Long enough to keep
  * the device's single-threaded cgminer happy alongside the regular
@@ -93,7 +94,13 @@ export function AsicHeatmap({
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Static mode renders the parent-supplied temps; otherwise use fetched.
-  const temps = isStatic ? providedTemps : fetchedTemps;
+  const temps = useMemo(
+    () =>
+      (isStatic ? providedTemps : fetchedTemps)
+        ?.slice(0, MAX_REMOTE_ITEMS)
+        .filter(Number.isFinite),
+    [isStatic, providedTemps, fetchedTemps]
+  );
 
   const fetchTemps = useCallback(async () => {
     setLoading(true);
@@ -128,12 +135,14 @@ export function AsicHeatmap({
     if (!temps || temps.length === 0) {
       return null;
     }
-    const valid = temps.filter((v) => v > 0);
-    if (valid.length === 0) return null;
-    const min = Math.min(...valid);
-    const max = Math.max(...valid);
-    const avg = valid.reduce((a, b) => a + b, 0) / valid.length;
-    return { min, max, avg, count: temps.length };
+    const range = finiteNumberRange(temps.filter((value) => value > 0));
+    if (!range) return null;
+    return {
+      min: range.min,
+      max: range.max,
+      avg: range.sum / range.count,
+      count: temps.length,
+    };
   }, [temps]);
 
   const handleToggle = useCallback(() => {

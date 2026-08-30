@@ -1422,7 +1422,10 @@ export const selectFleetStats = (state: MinerState): FleetStats | null => {
 
   const onlineMiners = miners.filter((m) => m.isOnline);
   const totalHashrate = onlineMiners.reduce((sum, m) => sum + m.hashRate, 0);
-  const highestDiff = Math.max(0, ...miners.map((m) => m.bestDiff));
+  const highestDiff = miners.reduce(
+    (highest, miner) => Math.max(highest, miner.bestDiff),
+    0
+  );
 
   // Count miners with warnings
   const warningCount = miners.filter(hasMinerWarnings).length;

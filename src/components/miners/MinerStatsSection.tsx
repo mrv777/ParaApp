@@ -20,6 +20,7 @@ import {
 } from '@/utils/formatting';
 import { getTempThresholdsFor } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
+import { finiteNumberRange } from '@/utils/finiteNumbers';
 
 export interface MinerStatsSectionProps {
   miner: LocalMiner;
@@ -77,6 +78,12 @@ export function MinerStatsSection({
     isLuxOS && (miner.luxosChipTemps ?? miner.luxosBoardTemps)?.length
       ? (miner.luxosChipTemps ?? miner.luxosBoardTemps)!
       : null;
+  const luxosTempRange = luxosBoardRange
+    ? finiteNumberRange(luxosBoardRange)
+    : null;
+  const fanRpmRange = miner.fanRpms
+    ? finiteNumberRange(miner.fanRpms)
+    : null;
 
   const entries: (StatEntry | null)[] = [
     {
@@ -103,8 +110,8 @@ export function MinerStatsSection({
               in: formatTemperature(miner.hashboardInletTemp, temperatureUnit),
               out: formatTemperature(miner.hashboardOutletTemp, temperatureUnit),
             })
-          : luxosBoardRange && luxosBoardRange.length > 1
-            ? `${luxosBoardRange.length} × ${formatTemperature(Math.min(...luxosBoardRange), temperatureUnit)}–${formatTemperature(Math.max(...luxosBoardRange), temperatureUnit)}`
+          : luxosBoardRange && luxosBoardRange.length > 1 && luxosTempRange
+            ? `${luxosBoardRange.length} × ${formatTemperature(luxosTempRange.min, temperatureUnit)}–${formatTemperature(luxosTempRange.max, temperatureUnit)}`
             : undefined,
     },
     // KBox doesn't report power draw — "0.0 W" would be wrong
@@ -154,7 +161,7 @@ export function MinerStatsSection({
       ? {
           label: t('miners.fanSpeed'),
           value: formatPercent(miner.fanSpeed),
-          subValue: `${miner.fanRpms.length} fans · ${Math.min(...miner.fanRpms)}–${Math.max(...miner.fanRpms)} RPM`,
+          subValue: `${miner.fanRpms.length} fans · ${fanRpmRange?.min ?? 0}–${fanRpmRange?.max ?? 0} RPM`,
         }
       : { label: t('miners.fanSpeed'), value: formatPercent(miner.fanSpeed) },
   ];

@@ -163,7 +163,7 @@ export function useNotifications() {
         return;
       }
 
-      // Register with backend - returns existing preferences for cross-device sync
+      // Register with backend - returns this device's stored preferences.
       // Read prefs from store directly to avoid dependency cycle
       const currentPrefs = beforeRegister.notificationPrefs;
       if (
@@ -181,7 +181,7 @@ export function useNotifications() {
         beforeRegister.notificationsEnabled
       );
 
-      // Sync preferences from backend if they exist (cross-device sync)
+      // Hydrate this device's stored preferences if they exist.
       if (result.success && result.data?.preferences) {
         applyFetchedPrefs(
           targetAddress,
@@ -244,7 +244,7 @@ export function useNotifications() {
             if (retryResult.success) {
               console.log('[Notifications] Registration succeeded with fresh token');
               tokenRefreshAttempted.current = false; // Reset for next time
-              // Sync preferences from backend if they exist
+              // Hydrate this device's stored preferences if they exist.
               if (retryResult.data?.preferences) {
                 applyFetchedPrefs(
                   targetAddress,
@@ -296,9 +296,8 @@ export function useNotifications() {
         });
       }
 
-      // Registration responses are account-wide snapshots. If the user edited
-      // prefs during the request, push the newer local values before allowing a
-      // queued registration to consume another backend snapshot.
+      // If the user edited prefs during registration, push the newer local
+      // values before allowing a queued registration to hydrate again.
       if (pendingPrefsSyncRef.current) {
         pendingPrefsSyncRef.current = false;
         const latest = useSettingsStore.getState();
@@ -457,9 +456,7 @@ export function useNotifications() {
 
     // Skip sync while a device registration is in flight. registerDevice sets
     // the push token mid-flight, which retriggers this effect (pushToken dep)
-    // before the backend prefs have been fetched — syncing local defaults now
-    // would clobber account-wide prefs (the same class of bug e0921b2 fixed on
-    // /register, re-entering via the /preferences PATCH). Don't consume the
+    // before this device's backend prefs have been fetched. Don't consume the
     // flag. A genuine local pref change is detected against the exact submitted
     // snapshot and flushed by performRegistration's finally block.
     if (isRegistering.current) {

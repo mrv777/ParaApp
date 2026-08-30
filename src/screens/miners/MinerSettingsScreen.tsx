@@ -30,6 +30,7 @@ import { axeOS } from '@/api';
 import { haptics } from '@/utils/haptics';
 import { colors } from '@/constants/colors';
 import { formatTemperature } from '@/utils/formatting';
+import { finiteNumberRange } from '@/utils/finiteNumbers';
 import { isValidPort, isValidStratumUrl } from '@/utils/validation';
 import { useTranslation } from '@/i18n';
 import type { MinersStackScreenProps } from '@/types/navigation';
@@ -558,7 +559,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
   // Check for extreme values
   const frequencyWarning = useMemo(() => {
     if (!asicConfig) return null;
-    const maxOption = Math.max(...asicConfig.frequencyOptions);
+    const maxOption = finiteNumberRange(asicConfig.frequencyOptions)?.max ?? 0;
     if (effectiveFrequency > maxOption) {
       return effectiveFrequency > asicConfig.absMaxFrequency
         ? t('miners.exceedsMaximum')
@@ -569,7 +570,7 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
   const voltageWarning = useMemo(() => {
     if (!asicConfig) return null;
-    const maxOption = Math.max(...asicConfig.voltageOptions);
+    const maxOption = finiteNumberRange(asicConfig.voltageOptions)?.max ?? 0;
     if (effectiveVoltage > maxOption) {
       return effectiveVoltage > asicConfig.absMaxVoltage
         ? t('miners.exceedsMaximum')
@@ -617,7 +618,9 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     }
     // Bound to a safe range so an order-of-magnitude typo can't reach the ASIC.
     if (asicConfig && asicConfig.frequencyOptions.length > 0 && asicConfig.absMaxFrequency > 0) {
-      const min = Math.floor(Math.min(...asicConfig.frequencyOptions) / 2);
+      const min = Math.floor(
+        (finiteNumberRange(asicConfig.frequencyOptions)?.min ?? 0) / 2
+      );
       const max = asicConfig.absMaxFrequency;
       if (value < min || value > max) {
         setCustomFrequencyError(t('miners.valueOutOfRange', { min, max }));
@@ -641,7 +644,9 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
     }
     // Bound to a safe range so e.g. "12" (meaning 1.2 V) can't PATCH 12 mV.
     if (asicConfig && asicConfig.voltageOptions.length > 0 && asicConfig.absMaxVoltage > 0) {
-      const min = Math.floor(Math.min(...asicConfig.voltageOptions) / 2);
+      const min = Math.floor(
+        (finiteNumberRange(asicConfig.voltageOptions)?.min ?? 0) / 2
+      );
       const max = asicConfig.absMaxVoltage;
       if (value < min || value > max) {
         setCustomVoltageError(t('miners.valueOutOfRange', { min, max }));

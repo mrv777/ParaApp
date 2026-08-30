@@ -77,6 +77,25 @@ const PRESENCE_DEBOUNCE_MS = 750;
 // Coalesce reaction-count fan-out per (message, emoji) to one broadcast/window:
 // a pile-on collapses to a single COUNT query + a single fan-out.
 const REACTION_FLUSH_MS = 150;
+/** Generous envelope cap around the protocol's 500-character message body. */
+export const MAX_CHAT_CLIENT_FRAME_BYTES = 8 * 1024;
+
+/** Check UTF-8 length without allocating another copy of a potentially huge frame. */
+function exceedsUtf8Limit(value: string, limit: number): boolean {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) i++;
+      bytes += 4;
+    } else bytes += 3;
+    if (bytes > limit) return true;
+  }
+  return false;
+}
 
 /** pendingReactions map key — NUL separator can't collide with id/emoji content. */
 function reactionKey(messageId: string, emoji: string): string {
@@ -176,9 +195,26 @@ export class ChatRoom {
       blocked: [],
     }) as SocketAttachment;
 
+    if (typeof raw !== 'string') {
+      ws.close(1003, 'Text frames only');
+      return;
+    }
+    if (exceedsUtf8Limit(raw, MAX_CHAT_CLIENT_FRAME_BYTES)) {
+      ws.close(1009, 'Message too large');
+      return;
+    }
+    // Anonymous viewers are intentionally read-only. Close on their first
+    // application frame so repeated sends cannot keep waking the global room.
+    // Automatic ping/pong is handled by the runtime and never enters here.
+    if (!address) {
+      this.sendError(ws, 'not_authenticated');
+      ws.close(1008, 'Read-only connection');
+      return;
+    }
+
     let event: ClientEvent;
     try {
-      event = JSON.parse(typeof raw === 'string' ? raw : '') as ClientEvent;
+      event = JSON.parse(raw) as ClientEvent;
     } catch {
       return this.sendError(ws, 'bad_json');
     }

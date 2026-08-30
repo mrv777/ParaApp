@@ -64,13 +64,9 @@ import { sanitizeBadges } from './chat/badges';
 import {
   upsertSubscription,
   deleteSubscription,
-  upsertPreferences,
-  ensurePreferences,
-  getPreferences,
-  verifyTokenOwnership,
+  getSubscriptionPreferences,
+  updateSubscriptionPreferences,
   MaxDevicesExceededError,
-  updateSubscriptionWidgetUpdates,
-  updateSubscriptionNotificationsEnabled,
   getWidgetPoolSnapshot,
   upsertWidgetPoolSnapshot,
   getWidgetUserSnapshot,
@@ -154,23 +150,17 @@ app.post('/register', async (c) => {
       // upsertSubscription — otherwise a re-register within 60s of
       // markTokenInactive would report success but stay dark to cron.
       if (existing && existing.btc_address === btcAddress && existing.active === 1) {
-        if (widgetUpdatesEnabled !== undefined) {
-          await updateSubscriptionWidgetUpdates(
-            c.env.DB,
-            pushToken,
-            btcAddress,
-            widgetUpdatesEnabled
-          );
-        }
-        if (notificationsEnabled !== undefined) {
-          await updateSubscriptionNotificationsEnabled(
-            c.env.DB,
-            pushToken,
-            btcAddress,
-            notificationsEnabled
-          );
-        }
-        const prefs = await getPreferences(c.env.DB, btcAddress);
+        // A routine refresh must not replace this device's stored categories
+        // with client defaults. Master/widget flags are current device state.
+        await updateSubscriptionPreferences(c.env.DB, pushToken, btcAddress, {
+          widgetUpdatesEnabled,
+          notificationsEnabled,
+        });
+        const prefs = await getSubscriptionPreferences(
+          c.env.DB,
+          pushToken,
+          btcAddress
+        );
         return c.json({
           success: true,
           preferences: prefs
@@ -196,17 +186,16 @@ app.post('/register', async (c) => {
     await upsertSubscription(c.env.DB, pushToken, btcAddress, {
       widgetUpdatesEnabled,
       notificationsEnabled,
+      preferences,
     });
 
-    if (preferences) {
-      // Registration must not overwrite a user's prefs (they're account-wide and
-      // may have been set OFF on another device). Seed a row only if missing;
-      // explicit changes go through PATCH /preferences.
-      await ensurePreferences(c.env.DB, btcAddress, preferences);
-    }
-
-    // Return current preferences for cross-device sync
-    const prefs = await getPreferences(c.env.DB, btcAddress);
+    // Return this token's categories. Existing same-address registrations keep
+    // their stored values; new tokens and address rebinds use submitted values.
+    const prefs = await getSubscriptionPreferences(
+      c.env.DB,
+      pushToken,
+      btcAddress
+    );
     return c.json({
       success: true,
       preferences: prefs
@@ -259,28 +248,16 @@ app.patch('/preferences', async (c) => {
     const { pushToken, btcAddress, widgetUpdatesEnabled, notificationsEnabled, ...prefs } =
       result.data;
 
-    // Verify ownership: pushToken must be registered to this address
-    const isOwner = await verifyTokenOwnership(c.env.DB, pushToken, btcAddress);
-    if (!isOwner) {
+    // One conditional update both verifies the active token/address pair and
+    // changes only this device's categories and master/widget flags.
+    const updated = await updateSubscriptionPreferences(
+      c.env.DB,
+      pushToken,
+      btcAddress,
+      { ...prefs, widgetUpdatesEnabled, notificationsEnabled }
+    );
+    if (!updated) {
       return c.json({ success: false, error: 'Unauthorized' }, 403);
-    }
-
-    await upsertPreferences(c.env.DB, btcAddress, prefs);
-    if (widgetUpdatesEnabled !== undefined) {
-      await updateSubscriptionWidgetUpdates(
-        c.env.DB,
-        pushToken,
-        btcAddress,
-        widgetUpdatesEnabled
-      );
-    }
-    if (notificationsEnabled !== undefined) {
-      await updateSubscriptionNotificationsEnabled(
-        c.env.DB,
-        pushToken,
-        btcAddress,
-        notificationsEnabled
-      );
     }
 
     return c.json({ success: true });
@@ -810,7 +787,11 @@ async function assignNickname(
 
 // The admin PAGE is public HTML; it prompts for the secret and calls the guarded
 // API below with it. The API (/chat/admin/*) requires the ADMIN_SECRET header.
-app.get('/chat/admin', (c) => c.html(adminPageHtml()));
+app.get('/chat/admin', (c) => {
+  c.header('Content-Security-Policy', "frame-ancestors 'none'");
+  c.header('X-Frame-Options', 'DENY');
+  return c.html(adminPageHtml());
+});
 
 app.use('/chat/admin/*', async (c, next) => {
   const secret = c.req.header('X-Admin-Secret');

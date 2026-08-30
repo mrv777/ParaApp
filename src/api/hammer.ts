@@ -25,6 +25,7 @@ import {
   postJson,
   MINER_TIMEOUT,
 } from './client';
+import { MAX_REMOTE_ITEMS } from '@/utils/finiteNumbers';
 
 function minerUrl(ip: string): string {
   return `http://${ip}`;
@@ -143,11 +144,17 @@ export function adaptToLocalMiner(input: {
   const net = snapshot.networkConfig;
 
   const asicModel = info?.chip_type ?? '';
-  const chipTemps = s.chips?.map((c) => c.temperature);
+  const chipTemps = Array.isArray(s.chips)
+    ? s.chips
+        .slice(0, MAX_REMOTE_ITEMS)
+        .map((c) => c.temperature)
+        .filter(Number.isFinite)
+    : undefined;
   // miner/status remains required even when device/info temporarily fails,
   // so preserve an accurate chip count from its chips array before falling
   // back to the single-chip minimum.
-  const chipCount = info?.detected_chips_count ?? s.chips?.length ?? 1;
+  const chipCount =
+    info?.detected_chips_count ?? (Array.isArray(s.chips) ? s.chips.length : 1);
 
   return {
     ip,

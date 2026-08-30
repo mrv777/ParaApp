@@ -14,9 +14,75 @@
  */
 
 import { sha256 } from 'js-sha256';
+import { fetch as expoFetch } from 'expo/fetch';
 import type { ApiResult } from '@/types';
 
 export const AVALON_WEB_TIMEOUT = 8000;
+export const AVALON_WEB_MAX_RESPONSE_BYTES = 1024 * 1024;
+
+interface TimedTextResponse {
+  ok: boolean;
+  status: number;
+  text: string;
+}
+
+class ResponseTooLargeError extends Error {
+  constructor() {
+    super('Miner response exceeded 1 MiB');
+    this.name = 'ResponseTooLargeError';
+  }
+}
+
+function exceedsUtf8Limit(value: string, limit: number): boolean {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) i++;
+      bytes += 4;
+    } else bytes += 3;
+    if (bytes > limit) return true;
+  }
+  return false;
+}
+
+async function readBoundedText(
+  response: Response,
+  controller: AbortController
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    // Web/test fallback. Native builds use expo/fetch's streaming body.
+    const text = await response.text();
+    if (exceedsUtf8Limit(text, AVALON_WEB_MAX_RESPONSE_BYTES)) {
+      throw new ResponseTooLargeError();
+    }
+    return text;
+  }
+
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > AVALON_WEB_MAX_RESPONSE_BYTES) {
+        controller.abort();
+        await reader.cancel('Response too large').catch(() => undefined);
+        throw new ResponseTooLargeError();
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 interface AuthSession {
   /** The full `salt + hashed-password` blob used as the auth cookie value */
@@ -38,7 +104,7 @@ function buildAuthCookie(salt: string, password: string): string {
  */
 async function fetchAuthSalt(ip: string): Promise<ApiResult<string>> {
   try {
-    const res = await fetchWithTimeout(
+    const res = await fetchTextWithTimeout(
       `http://${ip}/get_auth.cgi?num=${Math.random()}`,
       { method: 'GET' }
     );
@@ -48,7 +114,7 @@ async function fetchAuthSalt(ip: string): Promise<ApiResult<string>> {
         error: { message: `HTTP ${res.status}`, status: res.status },
       };
     }
-    const text = await res.text();
+    const text = res.text;
     const match = text.match(/"auth":"([0-9a-f]+)"/);
     if (!match) {
       return {
@@ -91,7 +157,7 @@ export async function login(
 
   const cookie = buildAuthCookie(salt.data, password);
   try {
-    const res = await fetchWithTimeout(`http://${ip}/login.cgi`, {
+    const res = await fetchTextWithTimeout(`http://${ip}/login.cgi`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -107,7 +173,7 @@ export async function login(
         error: { message: `HTTP ${res.status}`, status: res.status },
       };
     }
-    const html = await res.text();
+    const html = res.text;
     // Successful login lands on the dashboard; the failure path
     // re-renders the login page (which contains a `loginform`).
     if (/<form[^>]+name="loginform"/i.test(html)) {
@@ -190,7 +256,7 @@ async function postCgi(
   body: string
 ): Promise<ApiResult<void>> {
   try {
-    const res = await fetchWithTimeout(`http://${ip}${path}`, {
+    const res = await fetchTextWithTimeout(`http://${ip}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -206,7 +272,7 @@ async function postCgi(
         error: { message: `HTTP ${res.status}`, status: res.status },
       };
     }
-    const html = await res.text();
+    const html = res.text;
     // If the CGI rejected our session it returns the login page.
     if (/<form[^>]+name="loginform"/i.test(html)) {
       return {
@@ -235,18 +301,31 @@ async function postCgi(
  * timed-out CGI write can't land late and interleave with a retry. Mirrors
  * the AbortController pattern in `client.ts` (proven on this RN stack).
  */
-async function fetchWithTimeout(
+async function fetchTextWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs: number = AVALON_WEB_TIMEOUT
-): Promise<Response> {
+): Promise<TimedTextResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    const response = await expoFetch(url, { ...init, signal: controller.signal });
+    const contentLength = Number(response.headers?.get?.('content-length'));
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > AVALON_WEB_MAX_RESPONSE_BYTES
+    ) {
+      controller.abort();
+      throw new ResponseTooLargeError();
+    }
+    // Keep the abort timer alive through body consumption. Some miner CGI
+    // endpoints send headers and then stall indefinitely.
+    const text = await readBoundedText(response, controller);
+    return { ok: response.ok, status: response.status, text };
   } catch (err) {
+    if (err instanceof ResponseTooLargeError) throw err;
     // Normalize an abort into the same "Timeout" error the old race threw.
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (controller.signal.aborted) {
       throw new Error('Timeout');
     }
     throw err;

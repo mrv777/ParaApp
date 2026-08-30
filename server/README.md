@@ -5,7 +5,7 @@ Cloudflare Worker that handles push notifications for the ParaApp mobile app.
 ## Features
 
 - Device registration with Expo Push Tokens
-- Per-user notification preferences (blocks, workers, best difficulty)
+- Per-device notification preferences (blocks, workers, best difficulty, rewards)
 - Cron job (every minute) that:
   - Detects pool-wide blocks
   - Monitors worker online/offline status

@@ -19,6 +19,11 @@
  */
 
 import type { ApiResult, LocalMiner, LuxOSProfile, LuxOSTempLimits } from '@/types';
+import {
+  MAX_REMOTE_ITEMS,
+  boundedRemoteItems,
+  finiteNumberRange,
+} from '@/utils/finiteNumbers';
 import { postJson, MINER_TIMEOUT } from './client';
 
 /** Probe timeout for discovery (ms) — matches discovery.ts fast-fail */
@@ -282,12 +287,14 @@ export async function getSnapshot(
       version,
       summary,
       config: unwrap<LuxOSConfig>(body, 'config', 'CONFIG')?.[0],
-      pools: unwrap<LuxOSPool>(body, 'pools', 'POOLS'),
-      fans: unwrap<LuxOSFan>(body, 'fans', 'FANS'),
-      temps: unwrap<LuxOSTempEntry>(body, 'temps', 'TEMPS'),
+      pools: boundedRemoteItems(unwrap<LuxOSPool>(body, 'pools', 'POOLS')),
+      fans: boundedRemoteItems(unwrap<LuxOSFan>(body, 'fans', 'FANS')),
+      temps: boundedRemoteItems(unwrap<LuxOSTempEntry>(body, 'temps', 'TEMPS')),
       tempctrl: unwrap<LuxOSTempCtrl>(body, 'tempctrl', 'TEMPCTRL')?.[0],
       power: unwrap<LuxOSPower>(body, 'power', 'POWER')?.[0],
-      profiles: unwrap<LuxOSProfileWire>(body, 'profiles', 'PROFILES'),
+      profiles: boundedRemoteItems(
+        unwrap<LuxOSProfileWire>(body, 'profiles', 'PROFILES')
+      ),
     },
   };
 }
@@ -307,7 +314,10 @@ export async function getPools(
     signal
   );
   if (!result.success) return result;
-  return { success: true, data: result.data.POOLS ?? [] };
+  return {
+    success: true,
+    data: boundedRemoteItems(result.data.POOLS) ?? [],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -513,7 +523,7 @@ export function getActivePool(pools?: LuxOSPool[]): LuxOSPool | undefined {
 
 /** Max finite value or undefined when nothing numeric is present */
 function maxOrUndefined(values: number[]): number | undefined {
-  return values.length > 0 ? Math.max(...values) : undefined;
+  return finiteNumberRange(values)?.max;
 }
 
 /**
@@ -527,7 +537,12 @@ function boardAndChipMax(entry: LuxOSTempEntry): {
 } {
   const boardVals: number[] = [];
   const chipVals: number[] = [];
-  for (const [key, value] of Object.entries(entry)) {
+  const maxSensorFields = 256;
+  let fields = 0;
+  for (const key in entry) {
+    if (!Object.prototype.hasOwnProperty.call(entry, key)) continue;
+    if (fields++ >= maxSensorFields) break;
+    const value = entry[key];
     if (key === 'ID' || key === 'TEMP') continue;
     if (typeof value !== 'number' || !Number.isFinite(value)) continue;
     if (key.includes('Chip')) chipVals.push(value);
@@ -568,7 +583,7 @@ export function adaptToLocalMiner(input: LuxOSAdapterInput): LocalMiner {
 
   // Per-board temperatures, ordered by board ID
   const sortedTemps = temps
-    ? [...temps].sort((a, b) => (a.ID ?? 0) - (b.ID ?? 0))
+    ? temps.slice(0, MAX_REMOTE_ITEMS).sort((a, b) => (a.ID ?? 0) - (b.ID ?? 0))
     : [];
   const perBoard = sortedTemps.map(boardAndChipMax);
   const boardTemps = perBoard
@@ -582,6 +597,7 @@ export function adaptToLocalMiner(input: LuxOSAdapterInput): LocalMiner {
   const temp = maxOrUndefined(chipTemps) ?? maxOrUndefined(boardTemps) ?? 0;
 
   const profileList: LuxOSProfile[] = (profiles ?? [])
+    .slice(0, MAX_REMOTE_ITEMS)
     .filter(
       (p): p is LuxOSProfileWire & { 'Profile Name': string } =>
         typeof p['Profile Name'] === 'string' && p['Profile Name'].length > 0
@@ -606,6 +622,7 @@ export function adaptToLocalMiner(input: LuxOSAdapterInput): LocalMiner {
     hashRate;
 
   const fanRpms = (fans ?? [])
+    .slice(0, MAX_REMOTE_ITEMS)
     .map((f) => f.RPM)
     .filter((rpm): rpm is number => typeof rpm === 'number');
 

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('react-native-tcp-socket', () => ({ default: {} }));
 
 import {
+  AVALON_MAX_RESPONSE_BYTES,
   parseMmSummary,
   parseHbInfo,
   isAvalonStandby,
@@ -103,6 +104,13 @@ describe('parseHbInfo', () => {
   it('parses per-ASIC PVT_T0 into a number array', () => {
     const hb = parseHbInfo("'HB0':{PVT_T0[59 60 71 62] PVT_V0[282 282 276 278]}");
     expect(hb.PVT_T0).toEqual([59, 60, 71, 62]);
+  });
+
+  it('caps oversized telemetry arrays without affecting logical miner counts', () => {
+    const values = Array.from({ length: 5000 }, (_, i) => i).join(' ');
+    const hb = parseHbInfo(`'HB0':{PVT_T0[${values}]}`);
+    expect(hb.PVT_T0).toHaveLength(4096);
+    expect(AVALON_MAX_RESPONSE_BYTES).toBeGreaterThan(values.length);
   });
 });
 

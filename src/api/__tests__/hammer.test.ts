@@ -134,6 +134,26 @@ describe('hammer adaptToLocalMiner', () => {
     expect(m.minerType).toBe('hammer');
     expect(m.hammerApiVersion).toBe(2);
   });
+
+  it('caps optional chip telemetry but keeps the logical chip count', () => {
+    const chips = Array.from({ length: 5000 }, (_, chip_id) => ({
+      chip_id,
+      domain_id: chip_id,
+      temperature: 55,
+      hashrate: 1,
+      hardware_errors: 0,
+      status: 'active' as const,
+    }));
+    const m = adaptToLocalMiner({
+      ip: '10.0.0.6',
+      snapshot: {
+        minerStatus: { ...MINER_STATUS, chips },
+        deviceInfo: { ...DEVICE_INFO, detected_chips_count: 5000 },
+      },
+    });
+    expect(m.asicCount).toBe(5000);
+    expect(m.asicTemps).toHaveLength(4096);
+  });
 });
 
 describe('hammer updateConfig', () => {

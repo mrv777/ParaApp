@@ -5,6 +5,7 @@
 
 import type { ApiResult, AsicConfig, AxeOSSystemInfo, LocalMiner, MinerSettings } from '@/types';
 import { fetchWithTimeout, postJson, postText, patchJson, MINER_TIMEOUT } from './client';
+import { MAX_REMOTE_ITEMS } from '@/utils/finiteNumbers';
 
 /**
  * Build base URL for a miner
@@ -33,10 +34,27 @@ export async function getSystemInfo(
 export async function getAsicSettings(
   ip: string
 ): Promise<ApiResult<AsicConfig>> {
-  return fetchWithTimeout<AsicConfig>(
+  const result = await fetchWithTimeout<AsicConfig>(
     `${minerUrl(ip)}/api/system/asic`,
     { timeout: MINER_TIMEOUT, retries: 0 }
   );
+  if (!result.success) return result;
+  return {
+    success: true,
+    data: {
+      ...result.data,
+      frequencyOptions: Array.isArray(result.data.frequencyOptions)
+        ? result.data.frequencyOptions
+            .slice(0, MAX_REMOTE_ITEMS)
+            .filter(Number.isFinite)
+        : [],
+      voltageOptions: Array.isArray(result.data.voltageOptions)
+        ? result.data.voltageOptions
+            .slice(0, MAX_REMOTE_ITEMS)
+            .filter(Number.isFinite)
+        : [],
+    },
+  };
 }
 
 /**

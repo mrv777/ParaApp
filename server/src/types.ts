@@ -15,9 +15,20 @@ export interface PushSubscription {
   active: number; // 1 or 0
   widget_updates_enabled: number;
   notifications_enabled: number; // 1 or 0 — per-device master toggle
+  notify_blocks: number; // 1 or 0 — per-device category toggles
+  notify_workers: number;
+  notify_best_diff: number;
+  notify_rewards: number;
   last_widget_push_at: number | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface SubscriptionPreferences {
+  notify_blocks: number;
+  notify_workers: number;
+  notify_best_diff: number;
+  notify_rewards: number;
 }
 
 export interface NotificationPreferences {
