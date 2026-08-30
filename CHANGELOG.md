@@ -2,6 +2,13 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## [0.6.6] - 2026-08-30
+
+### Fixed
+- Kept malformed or unexpectedly large local-miner responses from stalling the app or overwhelming miner detail views, while preserving compatibility with normal AxeOS, Avalon, Hammer, and LuxOS devices
+- Made notification category choices apply independently to each registered device, so changing alerts on one phone no longer changes them on another
+- Kept unusually large miner fleets and invalid temperature readings from disrupting fleet totals and temperature displays
+
 ## [0.6.5] - 2026-08-14
 
 ### Fixed
