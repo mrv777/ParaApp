@@ -778,9 +778,21 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
   const { ip, alias, version, summary, pools, stats } = input;
   const mm = stats.mm;
   const activePool = pools.find((p) => p['Stratum Active']) ?? pools[0];
+  const standby = isAvalonStandby(mm);
 
-  // Avalon reports hashrate in MH/s; LocalMiner stores GH/s.
-  const hashRateGh = (summary['MHS av'] ?? 0) / 1000;
+  // Match Avalon's dashboard: while actively hashing its headline
+  // "realtime" value comes from GHSspd. The summary's MHS av is a
+  // long-running average that can lag far behind after startup or standby.
+  // Keep the average as a fallback when real-time telemetry is unavailable.
+  const averageHashRateGh = (summary['MHS av'] ?? 0) / 1000;
+  const realtimeHashRateGh =
+    typeof mm.GHSspd === 'number' && Number.isFinite(mm.GHSspd) && mm.GHSspd > 0
+      ? mm.GHSspd
+      : undefined;
+  const hashRateGh =
+    !standby && realtimeHashRateGh !== undefined
+      ? realtimeHashRateGh
+      : averageHashRateGh;
 
   // Expected hashrate: GHSmm is the MM-reported target for the current
   // workmode (what the Avalon dashboard labels "Configured"). Falls back
@@ -877,7 +889,7 @@ export function adaptToLocalMiner(input: AvalonAdapterInput): LocalMiner {
     uptimeSeconds: summary.Elapsed ?? 0,
     lastSeen: Date.now(),
     isOnline: true,
-    isStandby: isAvalonStandby(mm) || undefined,
+    isStandby: standby || undefined,
     realtimeHashrate: typeof mm.GHSspd === 'number' ? mm.GHSspd : undefined,
     workMode: typeof mm.WORKMODE === 'number' ? mm.WORKMODE : undefined,
     workLevel: typeof mm.WORKLEVEL === 'number' ? mm.WORKLEVEL : undefined,

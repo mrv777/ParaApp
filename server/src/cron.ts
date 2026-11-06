@@ -27,6 +27,8 @@ import {
   pruneCronRuns,
 } from './db';
 import { pruneChatMessages, pruneExpiredBans, pruneAuditLog } from './chat/db';
+import { pruneChatTranslations } from './chat/translation';
+import { pruneEnrollmentLimits } from './enrollment';
 import {
   getUser,
   getPoolStats,
@@ -503,12 +505,19 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     console.error('Cron tick claim error, proceeding anyway:', error);
   }
 
-  // Community-chat retention: prune messages (+ their reactions) older than 30
-  // days. Cheap when nothing is due (created_at indexed); isolated so a failure
-  // never blocks notifications.
+  // Keep source enrollment counters bounded without blocking notification work.
+  try {
+    await pruneEnrollmentLimits(env.DB, Math.floor(Date.now() / 1000));
+  } catch (error) {
+    maintenanceFailures++;
+    console.error('Push enrollment retention error:', error);
+  }
+
+  // Community-chat retention is independent of enrollment-counter cleanup.
   try {
     const pruned = await pruneChatMessages(env.DB, Date.now() - CHAT_RETENTION_MS);
     if (pruned > 0) console.log(`Pruned ${pruned} chat messages (30d retention)`);
+    await pruneChatTranslations(env.DB, Date.now() - CHAT_RETENTION_MS);
     const bans = await pruneExpiredBans(env.DB);
     if (bans > 0) console.log(`Reaped ${bans} expired chat bans`);
     const audit = await pruneAuditLog(

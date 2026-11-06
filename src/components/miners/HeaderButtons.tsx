@@ -66,6 +66,8 @@ export function HeaderButtons({
       {/* Add button */}
       <Pressable
         onPress={handleAdd}
+        accessibilityRole="button"
+        accessibilityLabel={t('miners.addMiner')}
         className="w-11 h-11 items-center justify-center rounded-full"
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
         hitSlop={4}
@@ -76,6 +78,8 @@ export function HeaderButtons({
       {/* Sort/Filter button */}
       <Pressable
         onPress={handleSortFilter}
+        accessibilityRole="button"
+        accessibilityLabel={t('miners.sortAndFilter')}
         className="w-11 h-11 items-center justify-center rounded-full"
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
         hitSlop={4}

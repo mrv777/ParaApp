@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import packageJson from '../package.json';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
 import {
@@ -61,18 +62,19 @@ import { stripInvisible } from './chat/sanitize';
 import { adminPageHtml } from './chat/admin-page';
 import { truncateChatAddress } from './chat/protocol';
 import { sanitizeBadges } from './chat/badges';
+import { getTranslationStatus } from './chat/translation';
 import {
   upsertSubscription,
   deleteSubscription,
   getSubscriptionPreferences,
   updateSubscriptionPreferences,
-  MaxDevicesExceededError,
   getWidgetPoolSnapshot,
   upsertWidgetPoolSnapshot,
   getWidgetUserSnapshot,
   upsertWidgetUserSnapshot,
 } from './db';
 import { runCronJob } from './cron';
+import { claimEnrollment, enrollmentSourceKey, ENROLLMENT_WINDOW_SECONDS } from './enrollment';
 import { getPoolStats, getUser } from './parasite-api';
 import {
   buildPoolWidgetSnapshot,
@@ -84,7 +86,7 @@ const WIDGET_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const encoder = new TextEncoder();
 
 // Enable CORS for mobile app
-app.use('*', cors());
+app.use('*', cors({ allowHeaders: ['Content-Type', 'X-Admin-Secret'] }));
 
 async function blockIdFor(
   secret: string,
@@ -110,7 +112,7 @@ async function blockIdFor(
 
 // Health check
 app.get('/', (c) =>
-  c.json({ status: 'ok', service: 'paraapp-notifications' })
+  c.json({ status: 'ok', service: 'paraapp-notifications', version: packageJson.version })
 );
 
 // Register push token
@@ -126,68 +128,39 @@ app.post('/register', async (c) => {
     const { pushToken, btcAddress, preferences, widgetUpdatesEnabled, notificationsEnabled } =
       result.data;
 
-    // Rate limit: Atomically check if recently registered and touch timestamp to prevent race conditions
-    // This UPDATE only succeeds if: token exists, same address, AND was updated > 60s ago
-    const touchResult = await c.env.DB.prepare(
-      `UPDATE push_subscriptions
-       SET updated_at = unixepoch()
-       WHERE push_token = ? AND btc_address = ? AND updated_at <= unixepoch() - 60`
-    )
-      .bind(pushToken, btcAddress)
-      .run();
-
-    // If no rows updated, check if it's because the token was recently registered (rate limited)
-    if (touchResult.meta.changes === 0) {
-      const existing = await c.env.DB.prepare(
-        'SELECT btc_address, updated_at, active FROM push_subscriptions WHERE push_token = ?'
-      )
-        .bind(pushToken)
-        .first<{ btc_address: string; updated_at: number; active: number }>();
-
-      // If token exists with same address, is active, and was recently
-      // updated, return cached prefs (rate limited). An inactive row falls
-      // through to full registration below, which reactivates it via
-      // upsertSubscription — otherwise a re-register within 60s of
-      // markTokenInactive would report success but stay dark to cron.
-      if (existing && existing.btc_address === btcAddress && existing.active === 1) {
-        // A routine refresh must not replace this device's stored categories
-        // with client defaults. Master/widget flags are current device state.
-        await updateSubscriptionPreferences(c.env.DB, pushToken, btcAddress, {
-          widgetUpdatesEnabled,
-          notificationsEnabled,
-        });
-        const prefs = await getSubscriptionPreferences(
-          c.env.DB,
-          pushToken,
-          btcAddress
-        );
-        return c.json({
-          success: true,
-          preferences: prefs
-            ? {
-                blocks: prefs.notify_blocks === 1,
-                workers: prefs.notify_workers === 1,
-                bestDiff: prefs.notify_best_diff === 1,
-                rewards: prefs.notify_rewards !== 0,
-              }
-            : null,
-        });
-      }
-      // Otherwise: new token or address change - proceed with full registration
-    }
-    // If rows updated: token existed but was stale, we've touched it - proceed with full registration
-
-    // Validate address exists on Parasite Pool before registering
-    const userResult = await getUser(c.env.PARASITE_API_URL, btcAddress);
-    if (!userResult.success || !userResult.data) {
-      return c.json({ success: false, error: 'Address not found on Parasite Pool' }, 404);
-    }
-
-    await upsertSubscription(c.env.DB, pushToken, btcAddress, {
+    // UPDATE-only refresh cannot create an unbudgeted installation if an
+    // unregister races this request. Retain this device's category choices.
+    const refreshed = await updateSubscriptionPreferences(c.env.DB, pushToken, btcAddress, {
       widgetUpdatesEnabled,
       notificationsEnabled,
-      preferences,
     });
+    if (!refreshed) {
+      // Cloudflare sets this header at ingress. Never accept a body field or
+      // X-Forwarded-For as a substitute; fail closed when ingress is absent.
+      const connectingIp = c.req.header('CF-Connecting-IP');
+      if (!connectingIp || !c.env.SESSION_SECRET) {
+        return c.json({ success: false, error: 'Registration temporarily unavailable' }, 503);
+      }
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const sourceKey = await enrollmentSourceKey(c.env.SESSION_SECRET, connectingIp);
+      if (!(await claimEnrollment(c.env.DB, sourceKey, nowSeconds))) {
+        c.header('Retry-After', String(
+          ENROLLMENT_WINDOW_SECONDS - (nowSeconds % ENROLLMENT_WINDOW_SECONDS)
+        ));
+        return c.json({ success: false, error: 'Too many registration attempts. Try again later.' }, 429);
+      }
+
+      const userResult = await getUser(c.env.PARASITE_API_URL, btcAddress);
+      if (!userResult.success || !userResult.data) {
+        return c.json({ success: false, error: 'Address not found on Parasite Pool' }, 404);
+      }
+
+      await upsertSubscription(c.env.DB, pushToken, btcAddress, {
+        widgetUpdatesEnabled,
+        notificationsEnabled,
+        preferences,
+      });
+    }
 
     // Return this token's categories. Existing same-address registrations keep
     // their stored values; new tokens and address rebinds use submitted values.
@@ -208,9 +181,6 @@ app.post('/register', async (c) => {
         : null,
     });
   } catch (error) {
-    if (error instanceof MaxDevicesExceededError) {
-      return c.json({ success: false, error: 'Maximum of 10 devices per address' }, 400);
-    }
     console.error('Register error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);
   }
@@ -394,7 +364,8 @@ app.get('/chat/history', async (c) => {
     });
     // Only send the announcement on the first page (no `before` cursor).
     const announcement = hasBefore ? undefined : await getAnnouncement(c.env.DB);
-    return c.json({ success: true, data: { messages, announcement } });
+    const translationStatus = hasBefore ? undefined : await getTranslationStatus(c.env);
+    return c.json({ success: true, data: { messages, announcement, translationStatus } });
   } catch (error) {
     console.error('chat/history error:', error);
     return c.json({ success: false, error: 'Internal server error' }, 500);

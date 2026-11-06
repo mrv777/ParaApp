@@ -6,6 +6,9 @@ export interface Env {
   SESSION_SECRET: string; // HMAC key for chat session tokens
   ADMIN_SECRET: string; // guards /chat/admin/* routes + web admin page
   CHAT_MODERATION_AI: string; // "off" | "on" — AI moderation toggle (v1: off)
+  CHAT_TRANSLATION_ENABLED?: string; // "on" enables shared English translations
+  CHAT_TRANSLATION_MONTHLY_LIMIT?: string; // defaults to 500; cannot exceed 500
+  GOOGLE_TRANSLATE_API_KEY?: string; // Worker secret; never sent to the app
 }
 
 export interface PushSubscription {

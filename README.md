@@ -10,10 +10,11 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 - **Fleet Overview** - Aggregate stats across all connected miners with smart alerts for overheating and offline devices
 - **Push Notifications** - Block found, worker status changes, and new difficulty records (Android)
 - **Multi-language** - English, Spanish, French, German, and Portuguese
+- **Community Chat Translation** - Optional shared English translations, with original/English viewing controls and a server-wide 500-attempt monthly limit (requires backend provider setup)
 
 ## Tech Stack
 
-- React Native + Expo SDK 54 (TypeScript)
+- React Native 0.86 + Expo SDK 57 (TypeScript)
 - NativeWind + Tailwind CSS v3 (styling)
 - Zustand (state management)
 - React Navigation v7 (bottom tabs + stacks)
@@ -24,8 +25,9 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.23.4 (see `.nvmrc`)
 - pnpm
+- Use the pinned pnpm version through Corepack (`corepack pnpm`) if your global pnpm is a different version
 - iOS Simulator (macOS) or Android Emulator
 
 ### Installation

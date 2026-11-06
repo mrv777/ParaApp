@@ -6,15 +6,6 @@ import type {
   PushSubscription,
 } from './types';
 
-const MAX_DEVICES_PER_ADDRESS = 10;
-
-export class MaxDevicesExceededError extends Error {
-  constructor() {
-    super('Maximum of 10 devices per address');
-    this.name = 'MaxDevicesExceededError';
-  }
-}
-
 export async function upsertSubscription(
   db: D1Database,
   pushToken: string,
@@ -39,12 +30,10 @@ export async function upsertSubscription(
   const bestDiff = prefs?.bestDiff === false ? 0 : 1;
   const rewards = prefs?.rewards === false ? 0 : 1;
 
-  // The cap check and write are one SQLite statement, so concurrent requests
-  // cannot both observe the last free slot. An already-active token at this
-  // address may refresh at the cap; reactivation and address moves still need
-  // a free slot. Same-address refreshes retain that device's category choices,
-  // while a new token or address rebind seeds them from the requesting device.
-  const result = await db
+  // Admission is source-limited by /register. A public Bitcoin address must
+  // not have a shared quota that a stranger can fill with invented tokens.
+  // Same-address refreshes retain categories; address rebinds seed new choices.
+  await db
     .prepare(
       `
       INSERT INTO push_subscriptions (
@@ -59,16 +48,7 @@ export async function upsertSubscription(
         notify_rewards,
         updated_at
       )
-      SELECT ?, ?, 1, ?, ?, ?, ?, ?, ?, unixepoch()
-      WHERE
-        EXISTS (
-          SELECT 1 FROM push_subscriptions
-          WHERE push_token = ? AND btc_address = ? AND active = 1
-        )
-        OR (
-          SELECT COUNT(*) FROM push_subscriptions
-          WHERE btc_address = ? AND active = 1
-        ) < ?
+      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, unixepoch())
       ON CONFLICT(push_token) DO UPDATE SET
         btc_address = excluded.btc_address,
         active = 1,
@@ -105,15 +85,9 @@ export async function upsertSubscription(
       blocks,
       workers,
       bestDiff,
-      rewards,
-      pushToken,
-      btcAddress,
-      btcAddress,
-      MAX_DEVICES_PER_ADDRESS
+      rewards
     )
     .run();
-
-  if (result.meta.changes === 0) throw new MaxDevicesExceededError();
 }
 
 export async function getSubscriptionPreferences(

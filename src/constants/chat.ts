@@ -75,6 +75,20 @@ export interface ReactionSummary {
   mine?: boolean;
 }
 
+export interface ChatEnglishTranslation {
+  text: string;
+  sourceLanguage: string;
+}
+
+export interface ChatTranslationStatus {
+  enabled: boolean;
+  monthlyLimit: number;
+  used: number;
+  /** Also covers the provider character budget, independently of message count. */
+  limitReached?: boolean;
+  resetsAt: number; // ms epoch
+}
+
 /**
  * Quoted parent shown above a reply's body. Hydrated by the server at
  * read/broadcast time from the live parent row, so it is absent (while
@@ -106,6 +120,7 @@ export interface ChatMessage {
   /** Admin-assigned cosmetic badges (e.g. bozo 🤡). Omitted when empty. */
   badges?: ChatBadge[];
   body: string;
+  englishTranslation?: ChatEnglishTranslation;
   reactions?: ReactionSummary[];
   /** Parent message id when this is a reply (present even if the quote isn't). */
   replyToId?: string;
@@ -132,6 +147,7 @@ export type ServerEvent =
       official?: boolean;
       badges?: ChatBadge[];
       body: string;
+      englishTranslation?: ChatEnglishTranslation;
       replyToId?: string;
       replyTo?: ChatReplyQuote;
     }
@@ -149,6 +165,8 @@ export type ServerEvent =
   | { type: 'announcement'; body: string | null }
   | { type: 'delete'; id: string }
   | { type: 'history'; messages: ChatMessage[] }
+  | { type: 'translation'; id: string; englishTranslation: ChatEnglishTranslation }
+  | { type: 'translation_status'; status: ChatTranslationStatus }
   | { type: 'error'; code: ChatErrorCode };
 
 export type ChatErrorCode =

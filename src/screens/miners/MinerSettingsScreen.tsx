@@ -587,8 +587,8 @@ export function MinerSettingsScreen({ route, navigation }: Props) {
 
   const handleSetParasite = useCallback(() => {
     haptics.selection();
-    setStratumUrl(PARASITE_STRATUM_PRESET.stratumUrl ?? 'stratum.parasite.space');
-    const port = PARASITE_STRATUM_PRESET.stratumPort ?? 3333;
+    setStratumUrl(PARASITE_STRATUM_PRESET.stratumUrl ?? 'parasite.wtf');
+    const port = PARASITE_STRATUM_PRESET.stratumPort ?? 42069;
     setStratumPort(port);
     setStratumPortInput(String(port));
     // Use bitcoin address for worker if available

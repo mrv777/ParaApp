@@ -4,6 +4,7 @@
  */
 
 import { useCallback } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { usePoolStore } from '@/store/poolStore';
 import { usePolling, type UsePollingReturn } from './usePolling';
 
@@ -12,6 +13,7 @@ import { usePolling, type UsePollingReturn } from './usePolling';
  * Automatically pauses when app is backgrounded
  */
 export function usePoolPolling(): UsePollingReturn {
+  const isFocused = useIsFocused();
   const fetchPoolStats = usePoolStore((s) => s.fetchPoolStats);
   const fetchBitcoinPrice = usePoolStore((s) => s.fetchBitcoinPrice);
   const fetchNetworkDifficulty = usePoolStore((s) => s.fetchNetworkDifficulty);
@@ -24,5 +26,6 @@ export function usePoolPolling(): UsePollingReturn {
     ]);
   }, [fetchPoolStats, fetchBitcoinPrice, fetchNetworkDifficulty]);
 
-  return usePolling({ onPoll });
+  // Tabs remain mounted when hidden; only the visible pool consumer should poll.
+  return usePolling({ onPoll, enabled: isFocused });
 }

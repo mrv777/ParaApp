@@ -142,6 +142,17 @@ function GavelIcon() {
   );
 }
 
+/** Auction bidder: a raised paddle, distinct from the winner's gavel. */
+function BidPaddleIcon() {
+  return (
+    <G transform="translate(24 22) rotate(-20)">
+      <Rect x={-1.4} y={1} width={2.8} height={11} rx={1.2} fill="#b0b0b0" />
+      <Rect x={-7.5} y={-10} width={15} height={13} rx={3} fill="#7fd1e8" />
+      <Path d="M-3-5h6M-3-1h6" stroke="#1a1a1a" strokeWidth={1.2} />
+    </G>
+  );
+}
+
 function RefineryIcon() {
   return (
     <G transform="translate(24 20) scale(1.15) translate(-10 -10)">
@@ -159,6 +170,7 @@ const STACKED_ICONS: Record<StackedBadgeKind, () => ReactNode> = {
   block_stack: PickaxeIcon,
   loyalty: LoyaltyIcon,
   auction_winner: GavelIcon,
+  auction_bidder: BidPaddleIcon,
   bravocado: MushroomIcon,
   miner: MinerRigIcon,
   dispenser: DispenserIcon,

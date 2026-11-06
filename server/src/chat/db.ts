@@ -25,6 +25,8 @@ interface HistoryRow {
   official: number | null;
   badges: string | null;
   reply_to: string | null;
+  translation_text: string | null;
+  source_language: string | null;
 }
 
 export async function insertChatMessage(
@@ -86,9 +88,11 @@ export async function getRecentMessages(
 
   const { results } = await db
     .prepare(
-      `SELECT m.id, m.address, m.body, m.created_at, m.reply_to, p.nickname, p.official, p.badges
+      `SELECT m.id, m.address, m.body, m.created_at, m.reply_to, p.nickname, p.official, p.badges,
+              t.text AS translation_text, t.source_language
        FROM chat_messages m
        LEFT JOIN chat_profiles p ON p.address = m.address
+       LEFT JOIN chat_translations t ON t.message_id = m.id AND t.status = 'translated'
        WHERE ${conditions.join(' AND ')}
        ORDER BY m.created_at DESC, m.id DESC
        LIMIT ?`
@@ -107,6 +111,9 @@ export async function getRecentMessages(
       official: row.official === 1,
       ...(badges.length ? { badges } : {}),
       body: row.body,
+      ...(row.translation_text && row.source_language
+        ? { englishTranslation: { text: row.translation_text, sourceLanguage: row.source_language } }
+        : {}),
       ...(row.reply_to ? { replyToId: row.reply_to } : {}),
     };
   });
@@ -320,6 +327,12 @@ export async function pruneChatMessages(
   db: D1Database,
   olderThanMs: number
 ): Promise<number> {
+  await db
+    .prepare(
+      'DELETE FROM chat_translations WHERE message_id IN (SELECT id FROM chat_messages WHERE created_at < ?)'
+    )
+    .bind(olderThanMs)
+    .run();
   await db
     .prepare(
       'DELETE FROM chat_reactions WHERE message_id IN (SELECT id FROM chat_messages WHERE created_at < ?)'
@@ -704,6 +717,10 @@ export async function softDeleteMessage(
   // so this is purely housekeeping — but keeps chat_reactions free of orphans.
   if (deleted) {
     await db
+      .prepare('DELETE FROM chat_translations WHERE message_id = ?')
+      .bind(messageId)
+      .run();
+    await db
       .prepare('DELETE FROM chat_reactions WHERE message_id = ?')
       .bind(messageId)
       .run();
@@ -934,6 +951,12 @@ export async function deleteAllFromAddress(
   if (!ids.length) return [];
   await db
     .prepare('UPDATE chat_messages SET deleted = 1 WHERE address = ? AND deleted = 0')
+    .bind(address)
+    .run();
+  await db
+    .prepare(
+      'DELETE FROM chat_translations WHERE message_id IN (SELECT id FROM chat_messages WHERE address = ?)'
+    )
     .bind(address)
     .run();
   await db

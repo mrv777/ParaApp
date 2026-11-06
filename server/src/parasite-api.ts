@@ -37,8 +37,6 @@ async function fetchWithTimeout<T>(
       },
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
       return {
         success: false,
@@ -50,8 +48,6 @@ async function fetchWithTimeout<T>(
     const data = (await response.json()) as T;
     return { success: true, data };
   } catch (error) {
-    clearTimeout(timeoutId);
-
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
         return { success: false, error: 'Request timeout' };
@@ -60,6 +56,10 @@ async function fetchWithTimeout<T>(
     }
 
     return { success: false, error: 'Unknown error' };
+  } finally {
+    // Headers can arrive before a stalled body. Keep cancellation active until
+    // the response has been consumed, including JSON parsing failures.
+    clearTimeout(timeoutId);
   }
 }
 

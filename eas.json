@@ -6,25 +6,41 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "22.23.4",
+      "pnpm": "10.34.9",
+      "ios": {
+        "image": "sdk-57"
+      },
+      "android": {
+        "image": "sdk-57"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "sdk-57"
       },
       "ios": {
-        "simulator": false
-      }
+        "simulator": false,
+        "image": "sdk-57"
+      },
+      "node": "22.23.4",
+      "pnpm": "10.34.9"
     },
     "production": {
       "autoIncrement": true,
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "image": "sdk-57"
       },
       "ios": {
-        "distribution": "store"
-      }
+        "distribution": "store",
+        "image": "sdk-57"
+      },
+      "node": "22.23.4",
+      "pnpm": "10.34.9"
     }
   },
   "submit": {

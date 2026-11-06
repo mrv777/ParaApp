@@ -151,7 +151,20 @@ describe('adaptToLocalMiner — standby handling', () => {
   it('leaves actively-hashing miners unchanged', () => {
     const miner = adaptToLocalMiner(makeInput(RUNNING_MM, 70100000));
     expect(miner.isStandby).toBeUndefined();
+    expect(miner.hashRate).toBe(70200); // dashboard realtime GHSspd, not MHS av
     expect(miner.temp).toBe(65); // TMax used directly
     expect(miner.realtimeHashrate).toBe(70200);
+  });
+
+  it('uses the dashboard realtime rate when the cgminer average is lagging', () => {
+    const miner = adaptToLocalMiner(makeInput(RUNNING_MM, 6270000));
+    expect(miner.hashRate).toBe(70200);
+    expect(miner.realtimeHashrate).toBe(70200);
+  });
+
+  it('falls back to the cgminer average when realtime telemetry is unavailable', () => {
+    const input = makeInput(RUNNING_MM, 6270000);
+    delete input.stats.mm.GHSspd;
+    expect(adaptToLocalMiner(input).hashRate).toBe(6270);
   });
 });

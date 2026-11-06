@@ -19,6 +19,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   updated_at INTEGER DEFAULT (unixepoch())
 );
 
+-- Registration abuse limits are scoped to the request source, not a publicly
+-- claimable mining address. Source keys are domain-separated HMACs, not raw IPs.
+CREATE TABLE IF NOT EXISTS push_enrollment_limits (
+  source_key TEXT NOT NULL,
+  window_start INTEGER NOT NULL,
+  attempts INTEGER NOT NULL,
+  PRIMARY KEY (source_key, window_start)
+);
+CREATE INDEX IF NOT EXISTS idx_push_enrollment_window
+  ON push_enrollment_limits(window_start);
+
 -- Legacy per-address preferences. Existing deployments retain this table for
 -- rollback compatibility; active code stores category preferences per device
 -- in push_subscriptions so one device cannot change another device's alerts.
@@ -167,3 +178,20 @@ CREATE TABLE IF NOT EXISTS chat_admin_audit (
   created_at INTEGER DEFAULT (unixepoch())
 );
 CREATE INDEX IF NOT EXISTS idx_chat_admin_audit_created ON chat_admin_audit(created_at);
+
+-- Shared English translations and provider reservations (migration 0015).
+CREATE TABLE IF NOT EXISTS chat_translations (
+  message_id TEXT PRIMARY KEY NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'english', 'translated', 'failed', 'skipped')),
+  source_language TEXT,
+  text TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chat_translation_usage (
+  month TEXT PRIMARY KEY NOT NULL,
+  translation_attempts INTEGER NOT NULL DEFAULT 0 CHECK (translation_attempts BETWEEN 0 AND 500),
+  detection_characters INTEGER NOT NULL DEFAULT 0 CHECK (detection_characters BETWEEN 0 AND 250000),
+  translation_characters INTEGER NOT NULL DEFAULT 0 CHECK (translation_characters BETWEEN 0 AND 250000)
+);

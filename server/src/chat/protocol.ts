@@ -70,6 +70,22 @@ export interface ChatReplyQuote {
 }
 
 /** A message as returned by history/broadcast (reactions present once Phase 3 lands). */
+export interface ChatEnglishTranslation {
+  text: string;
+  sourceLanguage: string;
+}
+
+export interface ChatTranslationStatus {
+  enabled: boolean;
+  monthlyLimit: number;
+  /** Reserved non-English translation attempts, including failed calls. */
+  used: number;
+  /** Also true when the separate monthly language-detection budget is exhausted. */
+  limitReached?: boolean;
+  /** Milliseconds since epoch; allowance resets at the next UTC month. */
+  resetsAt: number;
+}
+
 export interface ChatMessage {
   id: string;
   ts: number; // ms epoch
@@ -84,6 +100,8 @@ export interface ChatMessage {
    */
   badges?: ChatBadge[];
   body: string;
+  /** Optional shared derivative. The original body remains authoritative. */
+  englishTranslation?: ChatEnglishTranslation;
   reactions?: ReactionSummary[];
   /** Parent message id when this is a reply (present even if the quote isn't). */
   replyToId?: string;
@@ -112,6 +130,7 @@ export type ServerEvent =
       official?: boolean;
       badges?: ChatBadge[];
       body: string;
+      englishTranslation?: ChatEnglishTranslation;
       replyToId?: string;
       replyTo?: ChatReplyQuote;
     }
@@ -126,6 +145,8 @@ export type ServerEvent =
       op?: 'add' | 'remove';
     }
   | { type: 'presence'; online: number }
+  | { type: 'translation'; id: string; englishTranslation: ChatEnglishTranslation }
+  | { type: 'translation_status'; status: ChatTranslationStatus }
   | { type: 'announcement'; body: string | null }
   | { type: 'delete'; id: string } // a message was removed (admin moderation)
   | { type: 'history'; messages: ChatMessage[] }

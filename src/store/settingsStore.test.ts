@@ -11,8 +11,20 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 beforeEach(() => {
   useSettingsStore.setState({
+    chatDisplayLanguage: 'original',
     bitcoinAddress: null,
     notificationPrefs: { blocks: true, workers: true, bestDiff: true, rewards: true },
+  });
+});
+
+describe('chat reading preference', () => {
+  it('defaults to originals and persists the selected English view', () => {
+    expect(useSettingsStore.getInitialState().chatDisplayLanguage).toBe('original');
+    useSettingsStore.getState().setChatDisplayLanguage('en');
+    const partialize = useSettingsStore.persist.getOptions().partialize!;
+    expect(partialize(useSettingsStore.getState())).toMatchObject({ chatDisplayLanguage: 'en' });
+    useSettingsStore.getState().setChatDisplayLanguage('original');
+    expect(useSettingsStore.getState().chatDisplayLanguage).toBe('original');
   });
 });
 

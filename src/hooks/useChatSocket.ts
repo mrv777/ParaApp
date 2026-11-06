@@ -106,6 +106,8 @@ export function useChatSocket(): UseChatSocketReturn {
   const addMessages = useChatStore((s) => s.addMessages);
   const applyReaction = useChatStore((s) => s.applyReaction);
   const removeMessage = useChatStore((s) => s.removeMessage);
+  const applyTranslation = useChatStore((s) => s.applyTranslation);
+  const setTranslationStatus = useChatStore((s) => s.setTranslationStatus);
   const setOnline = useChatStore((s) => s.setOnline);
   const setConnectionState = useChatStore((s) => s.setConnectionState);
   const setAnnouncement = useChatStore((s) => s.setAnnouncement);
@@ -184,12 +186,15 @@ export function useChatSocket(): UseChatSocketReturn {
   }, []);
 
   const backfillHistory = useCallback(async () => {
+    const generation = generationRef.current;
     try {
       const result = await fetchChatHistory({
         limit: 50,
         token: tokenRef.current ?? undefined,
       });
+      if (generation !== generationRef.current || !shouldConnectRef.current) return;
       if (!isError(result) && result.data.data) {
+        setTranslationStatus(result.data.data.translationStatus ?? null);
         if (result.data.data.messages) {
           const fetched = result.data.data.messages;
           // Gap guard: if more than a page arrived while away, the newest-50
@@ -222,9 +227,11 @@ export function useChatSocket(): UseChatSocketReturn {
     } finally {
       // Resolved (success or failure) — swap the feed's initial skeleton for the
       // real content/empty state. A failed fetch must not leave a stuck skeleton.
-      setHistoryLoaded(true);
+      if (generation === generationRef.current && shouldConnectRef.current) {
+        setHistoryLoaded(true);
+      }
     }
-  }, [addMessages, clearFeed, setAnnouncement, setHistoryLoaded]);
+  }, [addMessages, clearFeed, setAnnouncement, setHistoryLoaded, setTranslationStatus]);
 
   /**
    * Page one screen further back on scroll-to-top. Guarded against concurrent
@@ -238,6 +245,7 @@ export function useChatSocket(): UseChatSocketReturn {
     if (!oldest) return; // nothing loaded yet
     if (state.messages.length >= MAX_MESSAGES) return; // buffer full = max depth
     loadingOlderRef.current = true;
+    const generation = generationRef.current;
     setLoadingOlder(true);
     try {
       const result = await fetchChatHistory({
@@ -246,6 +254,7 @@ export function useChatSocket(): UseChatSocketReturn {
         limit: 50,
         token: tokenRef.current ?? undefined,
       });
+      if (generation !== generationRef.current || !shouldConnectRef.current) return;
       if (!isError(result) && result.data.data?.messages) {
         const older = result.data.data.messages;
         addMessages(older);
@@ -315,6 +324,7 @@ export function useChatSocket(): UseChatSocketReturn {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (gen !== generationRef.current || wsRef.current !== ws || !shouldConnectRef.current) return;
       attemptsRef.current = 0;
       setConnectionState('connected');
       startHeartbeat();
@@ -322,6 +332,7 @@ export function useChatSocket(): UseChatSocketReturn {
     };
 
     ws.onmessage = (event) => {
+      if (gen !== generationRef.current || wsRef.current !== ws || !shouldConnectRef.current) return;
       const data = event.data;
       // Heartbeat auto-response (or any traffic) clears the liveness timer.
       if (pongTimer.current) {
@@ -347,6 +358,7 @@ export function useChatSocket(): UseChatSocketReturn {
               official: msg.official,
               ...(msg.badges ? { badges: msg.badges } : {}),
               body: msg.body,
+              ...(msg.englishTranslation ? { englishTranslation: msg.englishTranslation } : {}),
               ...(msg.replyToId ? { replyToId: msg.replyToId } : {}),
               ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
             },
@@ -354,6 +366,12 @@ export function useChatSocket(): UseChatSocketReturn {
           break;
         case 'history':
           addMessages(msg.messages);
+          break;
+        case 'translation':
+          applyTranslation(msg.id, msg.englishTranslation);
+          break;
+        case 'translation_status':
+          setTranslationStatus(msg.status);
           break;
         case 'presence':
           setOnline(msg.online);
@@ -406,6 +424,8 @@ export function useChatSocket(): UseChatSocketReturn {
     addMessages,
     applyReaction,
     removeMessage,
+    applyTranslation,
+    setTranslationStatus,
     setOnline,
     setConnectionState,
     setAnnouncement,

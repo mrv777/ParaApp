@@ -2,7 +2,7 @@
   "expo": {
     "name": "ParaApp",
     "slug": "paraapp",
-    "version": "0.6.6",
+    "version": "0.7.0",
     "scheme": "paraapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

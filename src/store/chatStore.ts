@@ -11,7 +11,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { ChatMessage, ReactionEmoji } from '@/constants/chat';
+import type {
+  ChatMessage,
+  ReactionEmoji,
+  ChatEnglishTranslation,
+  ChatTranslationStatus,
+} from '@/constants/chat';
 
 export type ChatConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -26,6 +31,9 @@ export const MAX_MESSAGES = 1000;
 
 interface ChatState {
   messages: ChatMessage[]; // oldest-first (index 0 = oldest), matches LegendList alignItemsAtEnd
+  /** Derived text stays separate so history refreshes cannot replace it or the original body. */
+  translations: Record<string, ChatEnglishTranslation>;
+  translationStatus: ChatTranslationStatus | null;
   online: number;
   connectionState: ChatConnectionState;
   /**
@@ -59,6 +67,8 @@ interface ChatState {
 }
 
 interface ChatActions {
+  applyTranslation: (id: string, translation: ChatEnglishTranslation) => void;
+  setTranslationStatus: (status: ChatTranslationStatus | null) => void;
   /** Merge messages (live, history, or older page) by id, keeping newest-first. */
   addMessages: (incoming: ChatMessage[]) => void;
   /**
@@ -102,6 +112,8 @@ const MAX_DELETED_IDS = 500;
 
 const initialState: ChatState = {
   messages: EMPTY_MESSAGES,
+  translations: {},
+  translationStatus: null,
   online: 0,
   connectionState: 'disconnected',
   historyLoaded: false,
@@ -116,12 +128,38 @@ export const useChatStore = create<ChatState & ChatActions>()(
     (set) => ({
       ...initialState,
 
+      applyTranslation: (id, translation) =>
+        set((state) => {
+          // Removed/blocked/unloaded messages cannot be resurrected by late work.
+          if (deletedIds.has(id) || !state.messages.some((m) => m.id === id)) return state;
+          return { translations: { ...state.translations, [id]: translation } };
+        }),
+
+      setTranslationStatus: (translationStatus) => set((state) => {
+        const current = state.translationStatus;
+        // A slower history response must not roll back a newer live quota.
+        if (current && translationStatus) {
+          if (translationStatus.resetsAt < current.resetsAt) return state;
+          if (translationStatus.resetsAt === current.resetsAt) {
+            return { translationStatus: {
+              ...translationStatus,
+              used: Math.max(current.used, translationStatus.used),
+              limitReached: current.limitReached || translationStatus.limitReached,
+            } };
+          }
+        }
+        return { translationStatus };
+      }),
+
       addMessages: (incoming) =>
         set((state) => {
           if (incoming.length === 0) return state;
           const byId = new Map(state.messages.map((m) => [m.id, m]));
-          for (const message of incoming) {
+          const translations = { ...state.translations };
+          for (const incomingMessage of incoming) {
+            const { englishTranslation, ...message } = incomingMessage;
             if (deletedIds.has(message.id)) continue; // deleted mid-fetch
+            if (englishTranslation) translations[message.id] = englishTranslation;
             const existing = byId.get(message.id);
             // A copy without reaction data (live redelivery, or a backfill racing
             // a just-applied react event) must not wipe reactions we already have.
@@ -134,7 +172,11 @@ export const useChatStore = create<ChatState & ChatActions>()(
           const merged = Array.from(byId.values())
             .sort((a, b) => a.ts - b.ts)
             .slice(-MAX_MESSAGES); // oldest-first, keep the most recent N
-          return { messages: merged };
+          const retained = new Set(merged.map((m) => m.id));
+          for (const id of Object.keys(translations)) {
+            if (!retained.has(id)) delete translations[id];
+          }
+          return { messages: merged, translations };
         }),
 
       applyReaction: (messageId, emoji, count, mine) =>
@@ -188,7 +230,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
               next.push(m);
             }
           }
-          return { messages: next };
+          const translations = { ...state.translations };
+          for (const id of removedIds) delete translations[id];
+          return { messages: next, translations };
         }),
 
       removeMessage: (id) =>
@@ -214,7 +258,10 @@ export const useChatStore = create<ChatState & ChatActions>()(
               next.push(m);
             }
           }
-          return changed ? { messages: next } : state;
+          if (!changed && !state.translations[id]) return state;
+          const translations = { ...state.translations };
+          delete translations[id];
+          return { messages: next, translations };
         }),
 
       setOnline: (online) => set({ online }),
@@ -241,7 +288,7 @@ export const useChatStore = create<ChatState & ChatActions>()(
           return newest > state.lastSeenTs ? { lastSeenTs: newest } : state;
         }),
 
-      clearFeed: () => set({ messages: EMPTY_MESSAGES, historyLoaded: false }),
+      clearFeed: () => set({ messages: EMPTY_MESSAGES, translations: {}, historyLoaded: false }),
 
       reset: () => {
         deletedIds.clear();
