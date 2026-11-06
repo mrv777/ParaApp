@@ -133,7 +133,7 @@ pnpm typecheck
 
 ## Deployment
 
-The current backend release is 1.1.0; `GET /` reports its version so a deployed
+The current backend release is 1.1.1; `GET /` reports its version so a deployed
 Worker can be matched to a release. Apply the required database migrations,
 run the root test suite and both type checks, and verify `wrangler deploy
 --dry-run` before deploying. Migration 0013 adds device preference columns; do
@@ -212,8 +212,8 @@ curl -X POST https://exp.host/--/api/v2/push/send \
 
 ### Worker Offline Detection
 - Cron checks `lastSubmission` timestamp for each worker
-- Worker is "stale" if no submission in 5 minutes
-- After 5 consecutive stale checks (5 minutes), notification sent
+- A worker is "stale" after 10 minutes without a submission
+- An offline notification follows 5 consecutive successful stale checks; fleet coverage rotates, so this can span multiple one-minute cron ticks
 - When worker comes back online, "back online" notification sent
 
 ### Best Difficulty

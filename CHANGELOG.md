@@ -10,6 +10,7 @@ All notable changes to ParaApp will be documented in this file.
 - Restored the Parasite Pool miner preset using the published `parasite.wtf:42069` endpoint
 - Restored refinery order monitoring after the pool moved its public endpoints, including complete paginated history and bounded failure handling
 - Recognize every reward item in a bundled auction
+- Keep notification polling within Cloudflare's connection limit and refill available slots without waiting for the slowest user in a batch
 
 ### Added
 - Auction Bidder achievement medals and descriptions in all five app languages
