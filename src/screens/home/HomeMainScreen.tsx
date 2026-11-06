@@ -80,7 +80,6 @@ export function HomeMainScreen({ navigation }: Props) {
 
   // Pool store
   const poolError = usePoolStore(selectPoolError);
-  const isPoolLoading = usePoolStore((s) => s.isLoading);
   const refreshPool = usePoolStore((s) => s.refreshAll);
   const clearPoolError = usePoolStore((s) => s.clearError);
   const fetchLeaderboards = usePoolStore((s) => s.fetchLeaderboards);
@@ -167,10 +166,6 @@ export function HomeMainScreen({ navigation }: Props) {
   // Determine which error to show
   const error = hasAddress ? userError : poolError;
   const clearError = hasAddress ? clearUserError : clearPoolError;
-
-  // Determine connection status
-  const isLoading = hasAddress ? isUserLoading : isPoolLoading;
-  const connectionStatus = isLoading ? 'connecting' : error ? 'offline' : 'connected';
 
   // Pull-to-refresh handler (refreshPool covers leaderboards, refreshUser covers rounds)
   const handleRefresh = useCallback(async () => {

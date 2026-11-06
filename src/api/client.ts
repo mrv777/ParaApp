@@ -51,7 +51,10 @@ function createApiError(
  */
 export async function fetchWithTimeout<T>(
   url: string,
-  options: FetchOptions & RequestInit = {}
+  options: FetchOptions & RequestInit & {
+    /** Inspect successful response metadata without changing the data payload. */
+    onResponseHeaders?: (headers: Headers) => void;
+  } = {}
 ): Promise<ApiResult<T>> {
   const {
     timeout = DEFAULT_TIMEOUT,
@@ -59,6 +62,7 @@ export async function fetchWithTimeout<T>(
     retryDelayMs = DEFAULT_RETRY_DELAY,
     responseType = 'json',
     parseErrorBody = false,
+    onResponseHeaders,
     ...fetchOptions
   } = options;
 
@@ -134,6 +138,7 @@ export async function fetchWithTimeout<T>(
         responseType === 'text'
           ? ((await response.text()) as T)
           : ((await response.json()) as T);
+      onResponseHeaders?.(response.headers);
       return { success: true, data };
     } catch (error) {
       if (error instanceof Error) {

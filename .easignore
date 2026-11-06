@@ -20,6 +20,10 @@ expo-env.d.ts
 *.mobileprovision
 *.apk
 *.aab
+*.ipa
+/builds/
+/crash/
+.pnpm-store/
 
 # Generated native folders
 /ios

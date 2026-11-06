@@ -53,6 +53,17 @@ describe('extractBadgeCounts', () => {
     }
   });
 
+  it('renders the bidder badge even when it is the only achievement', () => {
+    const counts = extractBadgeCounts({ ...payload, types: {
+      auction_bidder: { kind: 'bucket', unique: [], bucket: { count: 3 }, total: 3 },
+    } });
+    expect(counts.auctionBids).toBe(3);
+    expect(hasAnyBadge(counts)).toBe(true);
+    expect(buildBadgeMedals(counts)).toEqual([
+      { key: 'auction_bidder', type: 'stacked', kind: 'auction_bidder', count: 3 },
+    ]);
+  });
+
   it('tolerates missing unique/bucket fields on a type', () => {
     const sparse = {
       version: 2,

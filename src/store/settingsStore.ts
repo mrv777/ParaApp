@@ -30,6 +30,7 @@ interface SettingsState {
   minerFilterBy: MinerFilterOption;
   minerViewMode: MinerViewMode;
   language: Language;
+  chatDisplayLanguage: 'original' | 'en';
 
   // User Bitcoin address (persisted)
   bitcoinAddress: string | null;
@@ -72,6 +73,7 @@ interface SettingsActions {
   setBitcoinAddress: (address: string | null) => void;
   setRoundMode: (mode: RoundMode) => void;
   setLanguage: (lang: Language) => void;
+  setChatDisplayLanguage: (language: 'original' | 'en') => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setNotificationPrefs: (prefs: Partial<NotificationPrefs>) => void;
   setPushToken: (token: string | null) => void;
@@ -92,6 +94,7 @@ const initialState: SettingsState = {
   minerViewMode: 'list',
   roundMode: 'round',
   language: 'auto',
+  chatDisplayLanguage: 'original',
   bitcoinAddress: null,
   notificationsEnabled: false,
   notificationPrefs: { blocks: true, workers: true, bestDiff: true, rewards: true },
@@ -128,6 +131,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
       setRoundMode: (mode) => set({ roundMode: mode }),
 
       setLanguage: (lang) => set({ language: lang }),
+      setChatDisplayLanguage: (chatDisplayLanguage) => set({ chatDisplayLanguage }),
 
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
 
@@ -194,6 +198,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
         minerViewMode: state.minerViewMode,
         roundMode: state.roundMode,
         language: state.language,
+        chatDisplayLanguage: state.chatDisplayLanguage,
         bitcoinAddress: state.bitcoinAddress,
         notificationsEnabled: state.notificationsEnabled,
         notificationPrefs: state.notificationPrefs,

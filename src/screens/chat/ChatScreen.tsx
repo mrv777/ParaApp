@@ -35,6 +35,7 @@ import Toast from 'react-native-toast-message';
 import { NicknameSheet } from '@/components/chat/NicknameSheet';
 import { MessageActionsSheet } from '@/components/chat/MessageActionsSheet';
 import { EulaSheet } from '@/components/chat/EulaSheet';
+import { Sheet } from '@/components/Sheet';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import {
   reportChatMessage,
@@ -141,6 +142,7 @@ const Identicon = memo(function Identicon({ address, self }: { address: string; 
 
 interface RowProps {
   message: ChatMessage;
+  displayLanguage: 'original' | 'en';
   isOwn: boolean;
   youLabel: string;
   canReact: boolean;
@@ -158,6 +160,7 @@ interface RowProps {
 
 const MessageRow = memo(function MessageRow({
   message,
+  displayLanguage,
   isOwn,
   youLabel,
   canReact,
@@ -169,9 +172,32 @@ const MessageRow = memo(function MessageRow({
   onJumpTo,
   onToggleReaction,
 }: RowProps) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const translation = useChatStore((s) => s.translations[message.id]);
+  // LegendList recycles rows: an override belongs to this message and this
+  // global preference, never the next message reusing the same row.
+  const [displayOverride, setDisplayOverride] = useState<{
+    id: string;
+    preference: 'original' | 'en';
+    english: boolean;
+  } | null>(null);
+  if (displayOverride && (
+    displayOverride.id !== message.id || displayOverride.preference !== displayLanguage
+  )) {
+    setDisplayOverride(null);
+  }
+  const showEnglish = !!translation && (
+    displayOverride?.id === message.id && displayOverride.preference === displayLanguage
+      ? displayOverride.english
+      : displayLanguage === 'en'
+  );
   const handle = isOwn ? youLabel : message.nickname || truncateAddress(message.address);
-  const body = useMemo(() => sanitizeDisplayBody(message.body), [message.body]);
+  const displayedBody = showEnglish && translation ? translation.text : message.body;
+  const body = useMemo(() => sanitizeDisplayBody(displayedBody), [displayedBody]);
+  const sourceCode = translation?.sourceLanguage.toLowerCase().split('-')[0] ?? '';
+  const sourceLanguage = t(`chat.translationLanguages.${sourceCode}`, {
+    defaultValue: translation?.sourceLanguage ?? '',
+  });
   const swipeRef = useRef<Swipeable>(null);
 
   // Swiped far enough → set this message as the reply target, then snap back
@@ -281,6 +307,29 @@ const MessageRow = memo(function MessageRow({
 
           {/* Body */}
           <RNText style={styles.body}>{body}</RNText>
+          {translation ? (
+            <View style={styles.translationMeta}>
+              {showEnglish ? (
+                <RNText style={styles.translationLabel}>
+                  {t('chat.translatedFrom', { language: sourceLanguage })}
+                </RNText>
+              ) : null}
+              <Pressable
+                onPress={() => setDisplayOverride({
+                  id: message.id,
+                  preference: displayLanguage,
+                  english: !showEnglish,
+                })}
+                accessibilityRole="button"
+                accessibilityLabel={t(showEnglish ? 'chat.showOriginal' : 'chat.showEnglish')}
+                hitSlop={6}
+              >
+                <RNText style={styles.translationToggle}>
+                  {t(showEnglish ? 'chat.showOriginal' : 'chat.showEnglish')}
+                </RNText>
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* Reaction chips (tap to toggle). */}
           {message.reactions && message.reactions.length > 0 ? (
@@ -416,6 +465,13 @@ export function ChatScreen({ navigation }: Props) {
   const connectionState = useChatStore(selectChatConnectionState);
   const historyLoaded = useChatStore(selectChatHistoryLoaded);
   const announcement = useChatStore(selectChatAnnouncement);
+  const translationStatus = useChatStore((s) => s.translationStatus);
+  const hasTranslations = useChatStore((s) => Object.keys(s.translations).length > 0);
+  const displayLanguage = useSettingsStore((s) => s.chatDisplayLanguage);
+  const setChatDisplayLanguage = useSettingsStore((s) => s.setChatDisplayLanguage);
+  const showLanguageSelector = translationStatus?.enabled || hasTranslations;
+  const translationLimitReached = translationStatus?.enabled &&
+    (translationStatus.limitReached || translationStatus.used >= translationStatus.monthlyLimit);
   const removeMessagesFrom = useChatStore((s) => s.removeMessagesFrom);
   const applyReaction = useChatStore((s) => s.applyReaction);
   const markSeen = useChatStore((s) => s.markSeen);
@@ -478,6 +534,7 @@ export function ChatScreen({ navigation }: Props) {
     return messages.find((m) => m.id === actionMessage.id) ?? actionMessage;
   }, [actionMessage, messages]);
   const [nicknameOpen, setNicknameOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const [eulaOpen, setEulaOpen] = useState(false);
   // Body + reply target held across the first-post EULA gate.
   const [pendingSend, setPendingSend] = useState<{
@@ -694,6 +751,7 @@ export function ChatScreen({ navigation }: Props) {
     ({ item }: LegendListRenderItemProps<ChatMessage>) => (
       <MessageRow
         message={item}
+        displayLanguage={displayLanguage}
         isOwn={!!selfKey && item.address === selfKey}
         youLabel={t('common.you')}
         canReact={canPost}
@@ -708,6 +766,7 @@ export function ChatScreen({ navigation }: Props) {
     ),
     [
       selfKey,
+      displayLanguage,
       t,
       canPost,
       dividerById,
@@ -744,6 +803,16 @@ export function ChatScreen({ navigation }: Props) {
             <View style={[styles.dot, { backgroundColor: CONNECTION_DOT[connectionState] }]} />
             <RNText style={styles.onlineText}>{online_}</RNText>
           </View>
+          {showLanguageSelector ? (
+            <Pressable
+              onPress={() => setLanguageOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.displayLanguage')}
+              hitSlop={8}
+            >
+              <Ionicons name="language-outline" size={22} color={TEXT_MUTED} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={handleAccountPress}
             accessibilityRole="button"
@@ -754,6 +823,18 @@ export function ChatScreen({ navigation }: Props) {
           </Pressable>
         </View>
       </View>
+
+      {translationLimitReached && translationStatus ? (
+        <View style={styles.translationNotice}>
+          <RNText style={styles.translationLabel} accessibilityRole="text">
+            {t('chat.translationLimitReached', {
+              date: new Date(translationStatus.resetsAt).toLocaleDateString(i18n.language, {
+                month: 'short', day: 'numeric',
+              }),
+            })}
+          </RNText>
+        </View>
+      ) : null}
 
       {/* Pinned announcement (admin) — just pin + message; hidden when none. */}
       {announcement ? (
@@ -785,7 +866,7 @@ export function ChatScreen({ navigation }: Props) {
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          extraData={canPost}
+          extraData={`${canPost}:${displayLanguage}`}
           recycleItems
           ItemSeparatorComponent={Separator}
           contentContainerStyle={styles.feedContent}
@@ -920,6 +1001,32 @@ export function ChatScreen({ navigation }: Props) {
         onSaved={setSelfNickname}
       />
 
+      <Sheet visible={languageOpen} onClose={() => setLanguageOpen(false)} scrollable>
+        <View style={styles.languageSheet}>
+          <RNText style={styles.languageTitle}>{t('chat.displayLanguage')}</RNText>
+          <RNText style={styles.languageHint}>{t('chat.displayLanguageHint')}</RNText>
+          {(['original', 'en'] as const).map((language) => (
+            <Pressable
+              key={language}
+              style={styles.languageOption}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: displayLanguage === language }}
+              onPress={() => {
+                setChatDisplayLanguage(language);
+                setLanguageOpen(false);
+              }}
+            >
+              <RNText style={styles.languageOptionLabel}>
+                {t(language === 'en' ? 'chat.english' : 'chat.original')}
+              </RNText>
+              {displayLanguage === language ? (
+                <Ionicons name="checkmark" size={20} color={colors.primary} />
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      </Sheet>
+
       <MessageActionsSheet
         message={liveActionMessage}
         isOwn={!!selfKey && liveActionMessage?.address === selfKey}
@@ -944,6 +1051,15 @@ export function ChatScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  translationMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 6 },
+  translationLabel: { fontFamily: GROTESK, fontSize: 11, lineHeight: 16, color: TEXT_MUTED },
+  translationToggle: { fontFamily: GROTESK, fontSize: 11, lineHeight: 20, color: colors.primary },
+  translationNotice: { marginHorizontal: 20, paddingBottom: 10 },
+  languageSheet: { paddingHorizontal: 20, paddingBottom: 20 },
+  languageTitle: { fontFamily: GROTESK_BOLD, fontSize: 18, color: TEXT_BODY },
+  languageHint: { fontFamily: GROTESK, fontSize: 13, lineHeight: 19, color: TEXT_MUTED, marginVertical: 12 },
+  languageOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48 },
+  languageOptionLabel: { fontFamily: GROTESK, fontSize: 16, color: TEXT_BODY },
   // Header
   header: {
     flexDirection: 'row',

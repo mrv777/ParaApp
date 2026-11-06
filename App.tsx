@@ -1,5 +1,5 @@
 import './global.css';
-import '@/i18n'; // Initialize i18n
+import { changeLanguage } from '@/i18n'; // Initialize i18n
 
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -26,7 +26,6 @@ import { TabBar } from '@/components/navigation/TabBar';
 import { Toast } from '@/components/Toast';
 import { HomeStack, MinersStack, SettingsStack } from '@/navigation';
 import { colors } from '@/constants/colors';
-import { changeLanguage } from '@/i18n';
 import { useSettingsStore, selectIsHydrated, selectLanguage } from '@/store/settingsStore';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useWidgetUpdates } from '@/hooks/useWidgetUpdates';

@@ -13,6 +13,7 @@ export const DISPENSER_BADGE_ID = 'dispenser';
 export const BRAVOCADO_BADGE_ID = 'bravocado';
 export const MINER_BADGE_ID = 'miner';
 export const AUCTION_WINNER_BADGE_ID = 'auction_winner';
+export const AUCTION_BIDDER_BADGE_ID = 'auction_bidder';
 
 /** Blocks of participation per loyalty instance. */
 export const LOYALTY_BLOCKS_PER_INSTANCE = 21_000;
@@ -57,6 +58,7 @@ export interface BadgeCounts {
   blockStacked: number;
   loyalty: number;
   auctionWins: number;
+  auctionBids: number;
   bravocado: number;
   miner: number;
   dispenser: number;
@@ -71,6 +73,7 @@ export function extractBadgeCounts(payload: BadgesPayload | null): BadgeCounts {
     blockStacked: types[BLOCK_BADGE_ID]?.bucket?.count ?? 0,
     loyalty: types[LOYALTY_BADGE_ID]?.bucket?.count ?? 0,
     auctionWins: types[AUCTION_WINNER_BADGE_ID]?.bucket?.count ?? 0,
+    auctionBids: types[AUCTION_BIDDER_BADGE_ID]?.bucket?.count ?? 0,
     bravocado: types[BRAVOCADO_BADGE_ID]?.bucket?.count ?? 0,
     miner: types[MINER_BADGE_ID]?.bucket?.count ?? 0,
     dispenser: types[DISPENSER_BADGE_ID]?.bucket?.count ?? 0,
@@ -85,6 +88,7 @@ export function hasAnyBadge(counts: BadgeCounts): boolean {
     counts.blockStacked > 0 ||
     counts.loyalty > 0 ||
     counts.auctionWins > 0 ||
+    counts.auctionBids > 0 ||
     counts.bravocado > 0 ||
     counts.miner > 0 ||
     counts.dispenser > 0 ||
@@ -97,6 +101,7 @@ export type StackedBadgeKind =
   | 'block_stack'
   | 'loyalty'
   | 'auction_winner'
+  | 'auction_bidder'
   | 'bravocado'
   | 'miner'
   | 'dispenser'
@@ -118,7 +123,7 @@ export type BadgeMedalDescriptor =
  * Ordered medal list for a payload — the single source of truth for what the
  * badge row shows and how many medals exist. Order matches parastats
  * BadgeDisplay: winners → block unique → block stacked → loyalty →
- * auction_winner → bravocado → miner → dispenser → refinery.
+ * auction_bidder → auction_winner → bravocado → miner → dispenser → refinery.
  */
 export function buildBadgeMedals(counts: BadgeCounts): BadgeMedalDescriptor[] {
   const medals: BadgeMedalDescriptor[] = [];
@@ -131,6 +136,7 @@ export function buildBadgeMedals(counts: BadgeCounts): BadgeMedalDescriptor[] {
   const stacked: [StackedBadgeKind, number][] = [
     ['block_stack', counts.blockStacked],
     ['loyalty', counts.loyalty],
+    ['auction_bidder', counts.auctionBids],
     ['auction_winner', counts.auctionWins],
     ['bravocado', counts.bravocado],
     ['miner', counts.miner],

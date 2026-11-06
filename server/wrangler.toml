@@ -5,6 +5,8 @@ compatibility_date = "2025-04-01"  # bumped for SQLite-backed DOs + WS Hibernati
 [vars]
 PARASITE_API_URL = "https://parasite.space"
 CHAT_MODERATION_AI = "off"  # v1: inline filters only; AI layer stubbed/disabled
+CHAT_TRANSLATION_ENABLED = "off" # enable after migration 0015 + Google secret setup
+CHAT_TRANSLATION_MONTHLY_LIMIT = "500" # shared non-English attempts, per UTC month
 
 [[d1_databases]]
 binding = "DB"
@@ -23,6 +25,7 @@ new_sqlite_classes = ["ChatRoom"]
 # Secrets (set via `wrangler secret put` in prod; `.dev.vars` locally):
 #   SESSION_SECRET  — HMAC key for chat session tokens
 #   ADMIN_SECRET    — guards /chat/admin/* + the web admin page
+#   GOOGLE_TRANSLATE_API_KEY — Google Cloud Translation Basic, restricted to that API
 
 [triggers]
 crons = ["* * * * *"]  # Every minute

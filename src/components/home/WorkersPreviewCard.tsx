@@ -18,6 +18,7 @@ import { colors } from '@/constants/colors';
 import type { UserWorker } from '@/types';
 
 const EMPTY_NOTES: Record<string, string> = {};
+const EMPTY_WORKERS: UserWorker[] = [];
 
 export interface WorkersPreviewCardProps {
   workers?: UserWorker[];
@@ -48,7 +49,7 @@ function StatusSummary({ up, down }: { up: number; down: number }) {
 }
 
 export function WorkersPreviewCard({
-  workers = [],
+  workers = EMPTY_WORKERS,
   workerNotes = EMPTY_NOTES,
   maxItems = 5,
   onViewAll,
@@ -56,7 +57,7 @@ export function WorkersPreviewCard({
   className = '',
 }: WorkersPreviewCardProps) {
   const { t } = useTranslation();
-  const safeWorkers = Array.isArray(workers) ? workers : [];
+  const safeWorkers = Array.isArray(workers) ? workers : EMPTY_WORKERS;
   const displayWorkers = safeWorkers.slice(0, maxItems);
   const showSkeleton = isLoading && safeWorkers.length === 0;
   const health = useWorkerHealth(safeWorkers);

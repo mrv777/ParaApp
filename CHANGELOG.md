@@ -2,6 +2,32 @@
 
 All notable changes to ParaApp will be documented in this file.
 
+## Unreleased
+
+## [0.7.0] - 2026-11-06
+
+### Fixed
+- Restored the Parasite Pool miner preset using the published `parasite.wtf:42069` endpoint
+- Restored refinery order monitoring after the pool moved its public endpoints, including complete paginated history and bounded failure handling
+- Recognize every reward item in a bundled auction
+- Keep notification polling within Cloudflare's connection limit and refill available slots without waiting for the slowest user in a batch
+
+### Added
+- Auction Bidder achievement medals and descriptions in all five app languages
+- Optional English translations for non-English community chat messages, with a saved reading preference and per-message original/English toggle
+- Shared server translation storage and monthly limits, while older app versions retain original messages; translation remains disabled until Google Cloud setup is complete
+
+### Changed
+- Upgraded to Expo SDK 57 and React Native 0.86.3, including the Hermes memory regression fix and matching native packages
+- Updated Android widgets to the upstream crash fix and rebased the remaining TCP socket guards onto the latest release
+- Pinned pnpm 10 for reproducible dependency patches and upgraded CI actions
+- Updated backend dependencies, including bounded Zod collection validation, and added a backend release version to health checks
+
+## [0.6.7] - 2026-09-01
+
+### Fixed
+- Made Avalon miner cards and detail views show the same real-time hashrate as the miner's own dashboard instead of a slow-moving average that could be far too low after startup or standby
+
 ## [0.6.6] - 2026-08-30
 
 ### Fixed

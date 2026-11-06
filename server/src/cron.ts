@@ -27,6 +27,8 @@ import {
   pruneCronRuns,
 } from './db';
 import { pruneChatMessages, pruneExpiredBans, pruneAuditLog } from './chat/db';
+import { pruneChatTranslations } from './chat/translation';
+import { pruneEnrollmentLimits } from './enrollment';
 import {
   getUser,
   getPoolStats,
@@ -64,7 +66,7 @@ const CHAT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const CHAT_AUDIT_RETENTION_SEC = 90 * 24 * 60 * 60;
 // Production has 300+ active addresses; sequential processing was observed
 // spanning 61 seconds, long enough to overlap the next one-minute tick.
-const USER_BATCH_SIZE = 6;
+const USER_CONCURRENCY = 6;
 const CRON_USER_TIMEOUT_MS = 5000;
 // Each address's dispenser eligibility is checked every Nth tick (rotating
 // shard), not every minute: reward assignment is rare and a few minutes of
@@ -503,12 +505,19 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     console.error('Cron tick claim error, proceeding anyway:', error);
   }
 
-  // Community-chat retention: prune messages (+ their reactions) older than 30
-  // days. Cheap when nothing is due (created_at indexed); isolated so a failure
-  // never blocks notifications.
+  // Keep source enrollment counters bounded without blocking notification work.
+  try {
+    await pruneEnrollmentLimits(env.DB, Math.floor(Date.now() / 1000));
+  } catch (error) {
+    maintenanceFailures++;
+    console.error('Push enrollment retention error:', error);
+  }
+
+  // Community-chat retention is independent of enrollment-counter cleanup.
   try {
     const pruned = await pruneChatMessages(env.DB, Date.now() - CHAT_RETENTION_MS);
     if (pruned > 0) console.log(`Pruned ${pruned} chat messages (30d retention)`);
+    await pruneChatTranslations(env.DB, Date.now() - CHAT_RETENTION_MS);
     const bans = await pruneExpiredBans(env.DB);
     if (bans > 0) console.log(`Reaped ${bans} expired chat bans`);
     const audit = await pruneAuditLog(
@@ -548,8 +557,8 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
     console.log(`Processing ${subsByAddress.size} unique addresses`);
 
     // Rotate the first address every tick so an upstream outage plus deadline
-    // cannot starve the same stable tail forever. Six concurrent users match
-    // Cloudflare's documented simultaneous outgoing-connection cap.
+    // cannot starve the same stable tail forever. Each user performs outgoing
+    // operations sequentially, so six workers respect the connection cap.
     const entries = [...subsByAddress.entries()];
     totalAddresses = entries.length;
     const offset = getUserRotationOffset(scheduledTime, entries.length);
@@ -568,39 +577,36 @@ export async function runCronJob(env: Env, scheduledTime: number): Promise<void>
       }
     }
 
-    for (let i = 0; i < orderedEntries.length; i += USER_BATCH_SIZE) {
-      if (Date.now() - runStartedAt >= CRON_USER_DEADLINE_MS) {
-        deadlineReached = true;
-        break;
-      }
-
-      const batch = orderedEntries.slice(i, i + USER_BATCH_SIZE);
-      attemptedAddresses += batch.length;
-      const results = await Promise.allSettled(
-        batch.map(([address, tokens]) =>
-          processUser(env, address, tokens, {
-            checkDispenser: shouldCheckDispenser(address, scheduledTime),
-            tierAssets,
-          })
-        )
-      );
-      for (let j = 0; j < results.length; j++) {
-        const result = results[j];
-        const address = batch[j][0];
-        if (result.status === 'rejected') {
-          userFailures++;
-          console.error(`Error processing user ${address}:`, result.reason);
-          continue;
-        }
-        if (result.value.stateUpdated) updatedAddresses++;
-        else userFailures++;
-        flapSuppressed += result.value.flapSuppressed;
-        allMessages.push(...result.value.messages);
-        for (const token of result.value.widgetTokens) {
-          eventWidgetTokens.add(token);
+    // A slow user must not leave five slots idle while a whole batch waits.
+    // Refill each slot immediately, sharing the same admission deadline.
+    let nextEntry = 0;
+    await Promise.all(Array.from(
+      { length: Math.min(USER_CONCURRENCY, orderedEntries.length) },
+      async () => {
+        while (nextEntry < orderedEntries.length) {
+          if (Date.now() - runStartedAt >= CRON_USER_DEADLINE_MS) {
+            deadlineReached = true;
+            return;
+          }
+          const [address, tokens] = orderedEntries[nextEntry++];
+          attemptedAddresses++;
+          try {
+            const result = await processUser(env, address, tokens, {
+              checkDispenser: shouldCheckDispenser(address, scheduledTime),
+              tierAssets,
+            });
+            if (result.stateUpdated) updatedAddresses++;
+            else userFailures++;
+            flapSuppressed += result.flapSuppressed;
+            allMessages.push(...result.messages);
+            for (const token of result.widgetTokens) eventWidgetTokens.add(token);
+          } catch (error) {
+            userFailures++;
+            console.error(`Error processing user ${address}:`, error);
+          }
         }
       }
-    }
+    ));
 
     // 3. Widget refreshes: event-driven (data changed) + blanket fallback.
     //    De-dupe so a token that's both due for the fallback and changed this
@@ -768,14 +774,10 @@ async function processUser(
     return fail; // Defensive only
   }
 
-  // Fetch user data from Parasite Pool (and, on this address's dispenser tick,
-  // its eligibility in parallel so the 45s deadline budget barely moves)
-  const [userResult, eligibilityResult] = await Promise.all([
-    getUser(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS),
-    options.checkDispenser
-      ? getDispenserEligibility(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS)
-      : Promise.resolve(null),
-  ]);
+  // One outgoing operation per worker: parallel eligibility requests would
+  // double six workers into twelve connections and exceed Cloudflare's cap.
+  const networkStartedAt = Date.now();
+  const userResult = await getUser(env.PARASITE_API_URL, address, CRON_USER_TIMEOUT_MS);
   if (!userResult.success || !userResult.data) {
     console.log(`Failed to fetch user ${address}, skipping`);
     return fail;
@@ -792,6 +794,12 @@ async function processUser(
     return fail;
   }
   const fetchedAt = Date.now();
+  // Preserve the previous per-user network budget after making calls serial;
+  // a slow stats response must not add another full timeout at the deadline.
+  const remainingNetworkMs = CRON_USER_TIMEOUT_MS - (Date.now() - networkStartedAt);
+  const eligibilityResult = options.checkDispenser && remainingNetworkMs > 0
+    ? await getDispenserEligibility(env.PARASITE_API_URL, address, remainingNetworkMs)
+    : null;
   await upsertWidgetUserSnapshot(
     env.DB,
     address,

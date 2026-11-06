@@ -83,6 +83,8 @@ export interface LiveAuction {
   id: string;
   inscription_id: string;
   outpoint: string;
+  /** Every item in a bundle; omitted by older single-item auction responses. */
+  items?: { inscription_id: string; outpoint: string }[];
   /** Unix seconds */
   end_time: number;
   /** Highest bid in sats; null = no bids yet */
@@ -97,8 +99,11 @@ export interface LiveAuction {
 export function buildAuctionIndex(auctions: LiveAuction[]): Map<string, LiveAuction> {
   const index = new Map<string, LiveAuction>();
   for (const auction of auctions) {
-    if (auction.inscription_id) index.set(auction.inscription_id, auction);
-    if (auction.outpoint) index.set(auction.outpoint, auction);
+    const items = auction.items?.length ? auction.items : [auction];
+    for (const item of items) {
+      if (item.inscription_id) index.set(item.inscription_id, auction);
+      if (item.outpoint) index.set(item.outpoint, auction);
+    }
   }
   return index;
 }

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAX_MESSAGES, selectHasUnread, useChatStore } from './chatStore';
+import type { ChatMessage } from '@/constants/chat';
 
 // The store persists lastSeenTs via AsyncStorage (native module — unavailable
 // under vitest's node environment); an in-memory stub is all persist needs.
@@ -9,9 +11,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     removeItem: async () => undefined,
   },
 }));
-
-import { selectHasUnread, useChatStore } from './chatStore';
-import type { ChatMessage } from '@/constants/chat';
 
 const msg = (id: string, ts: number): ChatMessage => ({
   id,
@@ -109,5 +108,87 @@ describe('chatStore persistence', () => {
     store.setLatestKnownTs(999);
     const partialize = useChatStore.persist.getOptions().partialize!;
     expect(partialize(useChatStore.getState())).toEqual({ lastSeenTs: 100 });
+  });
+});
+
+describe('English translation derivatives', () => {
+  const english = { text: 'Good morning', sourceLanguage: 'de' };
+
+  it('merges history translations separately and preserves them across original-only refreshes', () => {
+    const original = { ...msg('a', 100), body: 'Guten Morgen' };
+    const store = useChatStore.getState();
+    store.addMessages([{ ...original, englishTranslation: english }]);
+    store.addMessages([original]);
+    const state = useChatStore.getState();
+    expect(state.translations.a).toEqual(english);
+    expect(state.messages[0].body).toBe('Guten Morgen');
+    expect(state.messages[0].englishTranslation).toBeUndefined();
+  });
+
+  it('live translation changes neither messages, reactions, order nor unread state', () => {
+    const store = useChatStore.getState();
+    store.addMessages([msg('a', 100), msg('b', 200)]);
+    store.applyReaction('a', '👍', 2, true);
+    store.markSeen();
+    const before = useChatStore.getState();
+    store.applyTranslation('a', english);
+    const after = useChatStore.getState();
+    expect(after.messages).toBe(before.messages);
+    expect(after.translations.a).toEqual(english);
+    expect(after.lastSeenTs).toBe(before.lastSeenTs);
+    expect(selectHasUnread(after)).toBe(false);
+  });
+
+  it('drops deleted/blocked derivatives and ignores late completions or deleted history', () => {
+    const store = useChatStore.getState();
+    store.addMessages([
+      { ...msg('deleted', 100), address: 'one', englishTranslation: english },
+      { ...msg('blocked', 200), address: 'two', englishTranslation: english },
+    ]);
+    store.removeMessage('deleted');
+    store.removeMessagesFrom('two');
+    store.applyTranslation('deleted', english);
+    store.applyTranslation('blocked', english);
+    store.applyTranslation('unloaded', english);
+    store.addMessages([{ ...msg('deleted', 100), englishTranslation: english }]);
+    expect(useChatStore.getState().translations).toEqual({});
+    expect(useChatStore.getState().messages).toEqual([]);
+  });
+
+  it('bounds translation memory to retained messages and clears it on feed/identity reset', () => {
+    const store = useChatStore.getState();
+    store.addMessages(Array.from({ length: MAX_MESSAGES + 1 }, (_, index) => ({
+      ...msg(String(index), index + 1), englishTranslation: english,
+    })));
+    expect(Object.keys(useChatStore.getState().translations)).toHaveLength(MAX_MESSAGES);
+    expect(useChatStore.getState().translations['0']).toBeUndefined();
+    store.clearFeed();
+    expect(useChatStore.getState().translations).toEqual({});
+    store.addMessages([{ ...msg('a', 100), englishTranslation: english }]);
+    store.setTranslationStatus({ enabled: true, used: 500, monthlyLimit: 500, resetsAt: 2000 });
+    store.reset();
+    expect(useChatStore.getState().translations).toEqual({});
+    expect(useChatStore.getState().translationStatus).toBeNull();
+  });
+
+  it('does not roll back live quota usage with a slower history response; accepts a new month', () => {
+    const store = useChatStore.getState();
+    store.setTranslationStatus({ enabled: true, used: 500, monthlyLimit: 500, resetsAt: 2000 });
+    store.setTranslationStatus({ enabled: true, used: 499, monthlyLimit: 500, resetsAt: 2000 });
+    expect(useChatStore.getState().translationStatus?.used).toBe(500);
+    store.setTranslationStatus({ enabled: true, used: 1, monthlyLimit: 500, resetsAt: 3000 });
+    store.setTranslationStatus({ enabled: true, used: 500, monthlyLimit: 500, resetsAt: 2000 });
+    expect(useChatStore.getState().translationStatus?.used).toBe(1);
+    store.setTranslationStatus({ enabled: false, used: 1, monthlyLimit: 500, resetsAt: 3000 });
+    expect(useChatStore.getState().translationStatus?.enabled).toBe(false);
+  });
+
+  it('preserves a character-budget limit independently of message usage until the next month', () => {
+    const store = useChatStore.getState();
+    store.setTranslationStatus({ enabled: true, used: 12, monthlyLimit: 500, resetsAt: 2000, limitReached: true });
+    store.setTranslationStatus({ enabled: true, used: 11, monthlyLimit: 500, resetsAt: 2000, limitReached: false });
+    expect(useChatStore.getState().translationStatus?.limitReached).toBe(true);
+    store.setTranslationStatus({ enabled: true, used: 0, monthlyLimit: 500, resetsAt: 3000, limitReached: false });
+    expect(useChatStore.getState().translationStatus?.limitReached).toBe(false);
   });
 });

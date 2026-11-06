@@ -60,18 +60,21 @@ export function DiscoveryCard({
   // Progress bar animation - use pixel-based width for iOS compatibility
   const progressWidth = useSharedValue(0);
 
+  const scanned = progress?.scanned;
+  const total = progress?.total;
+
   // Update progress animation when scan progresses or resets
   useEffect(() => {
-    if (progress && progressBarWidth > 0) {
-      const targetWidth = progress.total > 0
-        ? (progress.scanned / progress.total) * progressBarWidth
+    if (scanned !== undefined && total !== undefined && progressBarWidth > 0) {
+      const targetWidth = total > 0
+        ? (scanned / total) * progressBarWidth
         : 0;
       progressWidth.value = withTiming(targetWidth, { duration: 200 });
     } else {
       // Immediately reset when not discovering
       progressWidth.value = 0;
     }
-  }, [progress?.scanned, progress?.total, progressBarWidth]);
+  }, [scanned, total, progressBarWidth, progressWidth]);
 
   const progressBarStyle = useAnimatedStyle(() => ({
     width: progressWidth.value,
@@ -120,7 +123,7 @@ export function DiscoveryCard({
     } finally {
       setIsAddingManual(false);
     }
-  }, [manualIp, onAddManualIp]);
+  }, [manualIp, onAddManualIp, t]);
 
   const handleToggleCustomRange = useCallback(() => {
     haptics.selection();

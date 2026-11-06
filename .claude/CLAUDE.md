@@ -7,7 +7,7 @@ A React Native/Expo mobile app for monitoring Bitcoin mining on Parasite Pool an
 ## Quick Reference
 
 **Tech Stack:**
-- React Native 0.85 + Expo SDK 56 (TypeScript, New Architecture)
+- React Native 0.86 + Expo SDK 57 (TypeScript, New Architecture)
 - NativeWind v4 + Tailwind CSS v3 (styling)
 - Zustand v5 (state management with AsyncStorage persistence)
 - React Navigation v7 (bottom tabs + nested stacks)
@@ -127,7 +127,7 @@ See `IMPLEMENTATION.md` for full phase details.
 ## Known Issues & Fixes
 
 ### Bottom sheets — do NOT use @gorhom/bottom-sheet
-`@gorhom/bottom-sheet` does not render on this RN 0.85 / New-Architecture /
+`@gorhom/bottom-sheet` does not render on this RN 0.85+ / New-Architecture /
 react-native-screens stack — its portal-based `BottomSheetModal` mounts *beneath*
 the native screen and never appears (no sheet, no backdrop), while `onChange`
 still fires (gorhom issues #1644 / #2322; the `FullWindowOverlay` `containerComponent`
@@ -163,7 +163,8 @@ Native iOS `SIGABRT` (`attempt to insert nil object from objects[0]` in
 `TcpSockets.m onConnect:`) when `localHost`/`connectedHost` are nil — fires during
 background→foreground while Avalon connections (`src/api/avalon.ts`, port 4028) are in
 flight. Fixed by `patches/react-native-tcp-socket.patch` (coalesces host fields to `""`).
-- Upstream: Rapsssito/react-native-tcp-socket#127 (open).
+- Upstream v6.4.2 fixed `onConnect:` (#235). The v6.4.3 patch retains guards for
+  `onListen:` and `onSocketConnection:`; see `patches/README.md`.
 - **On upgrade:** re-check `ios/TcpSockets.m`; drop the patch if upstream nil-guards the
   connect/listen/connection dictionaries, else re-create it. See `patches/README.md`.
 

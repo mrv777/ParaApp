@@ -35,6 +35,7 @@ import {
   getMessageSender,
 } from './db';
 import { classifyText, moderateAI } from './moderation';
+import { getTranslationStatus, translateChatMessage } from './translation';
 import type { ChatBadge } from './badges';
 
 interface SocketAttachment {
@@ -181,6 +182,14 @@ export class ChatRoom {
 
     this.state.acceptWebSocket(server);
     server.serializeAttachment({ address, blocked } satisfies SocketAttachment);
+
+    // Optional status is additive: older clients ignore the unfamiliar event.
+    // Do not hold the WebSocket upgrade open for an auxiliary database read.
+    this.state.waitUntil(
+      getTranslationStatus(this.env)
+        .then((status) => server.send(JSON.stringify({ type: 'translation_status', status })))
+        .catch(() => { /* The socket may already have closed; history also carries status. */ })
+    );
 
     this.schedulePresence();
     return new Response(null, { status: 101, webSocket: client });
@@ -348,6 +357,31 @@ export class ChatRoom {
       address,
       replyParentAuthor
     );
+
+    if (this.env.CHAT_TRANSLATION_ENABLED === 'on' && this.env.GOOGLE_TRANSLATE_API_KEY) {
+      // Best effort and bounded: accepted originals are already persisted and
+      // delivered. Neither provider latency nor failure can fail a chat send.
+      // At 500 jobs/month this avoids introducing a separate queue/worker.
+      this.state.waitUntil(this.translateMessage(id, body, address));
+    }
+  }
+
+  private async translateMessage(id: string, body: string, address: string): Promise<void> {
+    try {
+      const englishTranslation = await translateChatMessage(this.env, { id, body });
+      if (englishTranslation) {
+        // A deletion can race the provider request. Recheck before fan-out and
+        // apply precisely the same per-viewer sender blocks as original messages.
+        const live = await this.env.DB.prepare(
+          'SELECT id FROM chat_messages WHERE id = ? AND body = ? AND address = ? AND deleted = 0'
+        ).bind(id, body, address).first();
+        if (live) this.broadcastMessage({ type: 'translation', id, englishTranslation }, address);
+      }
+      this.broadcast({ type: 'translation_status', status: await getTranslationStatus(this.env) });
+    } catch {
+      // Never log message text, API keys, or provider response bodies.
+      console.warn('Chat translation unavailable; original retained');
+    }
   }
 
   private async handleReaction(

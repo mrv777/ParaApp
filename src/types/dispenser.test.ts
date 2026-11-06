@@ -48,6 +48,22 @@ describe('buildAuctionIndex / findSlotAuction', () => {
     expect(findSlotAuction(index, slot({ inscriptionId: 'other', utxo: 'nope:1' }))).toBeNull();
   });
 
+  it('resolves every item in a bundled auction to the same auction', () => {
+    const bundle = { ...auction, items: [
+      { inscription_id: 'first', outpoint: 'first:0' },
+      { inscription_id: 'second', outpoint: 'second:1' },
+    ] };
+    const bundles = buildAuctionIndex([bundle]);
+    expect(findSlotAuction(bundles, slot({ inscriptionId: 'second' }))).toBe(bundle);
+    expect(findSlotAuction(bundles, slot({ utxo: 'second:1' }))).toBe(bundle);
+    expect(findSlotAuction(bundles, slot({ inscriptionId: 'first' }))).toBe(bundle);
+  });
+
+  it('retains single-item compatibility when the optional bundle list is empty', () => {
+    const single = { ...auction, items: [] };
+    expect(findSlotAuction(buildAuctionIndex([single]), slot({ utxo: 'txid123:0' }))).toBe(single);
+  });
+
   it('never matches code slots (empty inscription id) via the empty-string key', () => {
     const weird = buildAuctionIndex([{ ...auction, inscription_id: '', outpoint: '' }]);
     expect(weird.size).toBe(0);

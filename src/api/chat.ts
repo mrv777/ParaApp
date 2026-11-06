@@ -10,6 +10,7 @@ import {
   CHAT_HTTP_BASE,
   type ChatMessage,
   type ChatBadge,
+  type ChatTranslationStatus,
 } from '@/constants/chat';
 
 /**
@@ -40,7 +41,11 @@ interface ChatSessionResponse {
 
 interface ChatHistoryResponse {
   success: boolean;
-  data?: { messages: ChatMessage[]; announcement?: string | null };
+  data?: {
+    messages: ChatMessage[];
+    announcement?: string | null;
+    translationStatus?: ChatTranslationStatus;
+  };
   error?: unknown;
 }
 
